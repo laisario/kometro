@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  @import "base";
+}
+
+
+@layer components {
+  @import "components";
+  @import "navigation";
+  @import "buttons";
+}
+
+@layer utilities {
+  @import "utilities";
+}
+
+.swiper-pagination-bullet {
+  background-color: #D3D3D3; 
+  opacity: 1;
+  transition: background-color 0.3s ease;
+}
+
+.swiper-pagination-bullet-active {
+  background-color: #F57622 !important;
+}

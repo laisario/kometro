@@ -1,0 +1,60 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Detalhes do Pedido de Calibração</title>
+    <style>
+        body {
+            background-color: #e0e0e0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            background: #fff;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .logo {
+            text-align: left;
+        }
+        .content {
+            text-align: left;
+            color: #333;
+        }
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button {
+            background-color: #ff4d00;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #bb3800;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h2 style="color: #ff4d00;">Kometro</h2>
+        </div>
+        <div class="content">
+            <p>Prezado Cliente,</p>
+            <p>Segue em anexo detalhes do seu pedido de calibração.</p>
+            <p>Para aprovar ou revisar a proposta, por favor, clique no botão abaixo.</p>
+            <p>Agradecemos a sua atenção e estamos à disposição para quaisquer dúvidas.</p>
+        </div>
+        <div class="button-container">
+            <a href="{{ link_aprovacao }}" class="button">Ver Proposta</a>
+        </div>
+    </div>
+</body>
+</html>

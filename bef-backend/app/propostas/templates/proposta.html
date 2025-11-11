@@ -1,0 +1,437 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Proposta Comercial B&F</title>
+    <style>
+        @page {
+            size: a4 portrait;
+
+            @frame content_frame {
+                left: 20pt;
+                right: 20pt;
+                width: 100%;
+                height: 100%;
+            }
+        }
+
+        .hr {
+            border-top: 1px solid black;
+            margin: 0;
+            padding: 0;
+        }
+
+        .condition-table {
+            text-align: center;
+            width: 80%;
+            margin: 0 auto;
+            text-align: center;
+            border-collapse: collapse;
+            margin-top: 16pt;
+        }
+
+        .condition-table tr,
+        .condition-table td {
+            text-align: center;
+            border: 1pt solid black;
+            width: 50%;
+        }
+
+        #body {
+            font-family: Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.5;
+        }
+
+        p {
+            font-size: 8pt;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0;
+        }
+
+        th,
+        td {
+            font-size: 8pt;
+            vertical-align: middle;
+            margin: 0;
+            padding-top: 2pt;
+        }
+        
+        
+        .logo {
+            width: 150px;
+            height: 150px;
+            width: 100%;
+            height: auto;
+            max-width: 100px;
+            display: block;
+        }
+        
+        .selo {
+            width: 80px;
+            height: 120px;
+        }
+
+        .header-table {
+            width: 100%;
+            table-layout: fixed;
+        }
+
+        .td-left {
+            width: 15%;
+            text-align: left;
+        }
+
+        .td-middle {
+            width: 50%;
+            text-align: center;
+        }
+
+        .td-selo {
+            width: 15%;
+            text-align: center;
+        }
+
+        .td-right {
+            width: 20%;
+            text-align: right;
+        }
+
+        .header-table h2,
+        .header-table h3,
+        .header-table p {
+            margin: 0;
+            padding: 0;
+        }
+        p {
+            margin: 0;
+            padding: 0;
+        }
+
+
+        h4 {
+            text-align: center;
+            border: 1pt solid black;
+            padding-top: 2pt;
+            margin-top: 2pt;
+            margin-bottom: 2pt;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+
+        .client-table th {
+            text-align: left;
+        }
+
+        .client-table td {
+            text-align: left;
+        }
+
+        .table-content th,
+        .table-content td {
+            border: 1px solid black;
+            text-align: center;
+        }
+
+        .table-content th {
+            background-color: #f2f2f2;
+        }
+
+        .marked {
+            background-color: yellow;
+            color: red;
+            font-weight: bold;
+        }
+
+        #sign-table {
+            margin-top: 40px;
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 50px;
+        }
+
+        #sign-table td {
+            text-align: center;
+            border-top: 1pt solid black;
+            width: 45%;
+            padding-top: 5px;
+        }
+
+        #proposal-number {
+            text-align: right;
+            margin-left: 2px;
+        }
+
+
+
+        #table-section p {
+            margin-top: 4pt;
+        }
+
+        .container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+        }
+
+
+        #tecnical-condition-section {
+            margin-top: 8pt;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="body">
+        <table class="header-table" style="width: 100%; table-layout: fixed;">
+            <tr>
+                <td class="td-left">
+                    <img src="{{ logo }}"  alt="Logo da Empresa" class="logo">
+                </td>
+                <td class="td-middle">
+                    <h2>PROPOSTA DE PRESTAÇÃO DE SERVIÇO</h2>
+                    <h3>B&F Laboratório de Metrologia</h3>
+                    <p>Rod. Benjamin Constant, 4703, Quadra 06, km 5 – Pinheiral – RJ CEP 27197-000</p>
+                    <p>CNPJ: 43.582.665/0001-63 I.E: 12.223.22-6</p>
+                    <p>Telefones: (24) 9 8809 5115 / (24) 9 8828-6579</p>
+                    <p>comercial@kometro.com.br / www.befmetrologia.com.br</p>
+                </td>
+                <td class="td-selo">
+                    <img src="{{ selo }}" alt="Selo inmetro" class="selo">
+                </td>
+                <td class="td-right">
+                    <p>FQ-06</p>
+                    <p>Rev.10</p>
+                    <p>Aprovação: 14/06/2022</p>
+                    <p>Validade: 14/06/2027</p>
+                </td>
+            </tr>
+        </table>
+        <div class="container">
+            <p>Rev. {{rev|default_if_none:""}}</p>
+            <p id="proposal-number">Nº Proposta: {{proposta.numero|default_if_none:""}}</p>
+        </div>
+        <hr class="hr">
+        <table class="client-table">
+            <tr>
+                <td colspan="2"><strong>Cliente: </strong>{% if proposta.cliente.empresa.razao_social %}
+                    {{ proposta.cliente.empresa.razao_social }}
+                    {% else %}
+                    {{ proposta.cliente.nome }}
+                    {% endif %}</td>
+                <td colspan="2"><strong>CNPJ: </strong>{{ proposta.cliente.empresa.cnpj }}</td>
+            </tr>
+            <tr>
+                <td colspan="2"><strong>A/C: </strong> {{ proposta.cliente.nome|default_if_none:"" }}</td>
+                <td colspan="2"><Strong>Data: </Strong>{{ data }}</td>
+            </tr>
+            <tr>
+                <td colspan="2"><strong>E-mail: </strong>{{ proposta.cliente.usuario.email }}</td>
+                <td colspan="2"><strong>Contato na B&F: </strong>{{ proposta.responsavel.username|title|default_if_none:"Ingrid Pires" }}</td>
+            </tr>
+            <tr>
+                <td colspan="4"><strong>Qual meio deseja receber o certificado de calibração:</strong> (x)
+                    Eletrônico (
+                    ) Impresso</td>
+            </tr>
+            <tr>
+                <th colspan="2">Nome e informação de contato que deseja no certificado:</th>
+            </tr>
+            <tr>
+                <td colspan="4"><strong>Obs: </strong>{{proposta.informacoes_adicionais|default_if_none:""}}</td>
+            </tr>
+        </table>
+
+        <hr class="hr">
+
+        <section id="table-section">
+            <p>Conforme solicitação, apresentamos nossa proposta comercial para Calibração de instrumentos com emissão
+                de
+                certificado conforme o Tipo de Serviço descrito na tabela abaixo. Os valores abaixo se referem a
+                serviços
+                executados pelo Laboratório de Metrologia da B&F, e quando mencionado, por laboratórios parceiros de
+                nossa
+                empresa.</p>
+            <table class="table-content">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Descrição</th>
+                        <th>Local</th>
+                        <th>Tipo de serviço</th>
+                        <th>Preço unitário</th>
+                        <th>Prazo de entrega</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for instrumento in instrumentos %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ instrumento.instrumento.tipo_de_instrumento.descricao|default_if_none:"" }}</td>
+                        <td>
+                            {% if proposta.local == "P" %}
+                            Instalação permanente
+                            {% else %}
+                            {% if proposta.local == "C" %}
+                            Instalação cliente
+                            {% else %}
+                            Terceirizada
+                            {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>{% if instrumento.instrumento.tipo_de_servico == "A" %}
+                            Acreditado
+                            {% else %}
+                            Não acreditado
+                            {% endif %}</td>
+                        <td>{% if instrumento.preco_alternativo_calibracao %}
+                            R$ {{ instrumento.preco_alternativo_calibracao|default_if_none:"" }}
+                            {% else %}
+                            {% if proposta.local == "C" %}
+                            R$ {{ instrumento.instrumento.preco_calibracao_no_cliente|default_if_none:"" }}
+                            {% else %}
+                            R$ {{ instrumento.instrumento.preco_calibracao_no_laboratorio|default_if_none:"" }}
+                            {% endif %}
+                            {% endif %}</td>
+                        <td>{% if proposta.local == 'T'  %}
+                                {% if instrumento.dias_uteis > 1 %}
+                                {{ instrumento.dias_uteis|default_if_none:"" }} dias
+                                {% else %}
+                                {{ instrumento.dias_uteis|default_if_none:"" }} dia
+                                {% endif %}
+                            {% else %}
+                                {% if proposta.dias_uteis > 1 %}
+                                {{ proposta.dias_uteis|default_if_none:"" }} dias
+                                {% else %}
+                                {{ proposta.dias_uteis|default_if_none:"" }} dia
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    <tr>
+                        <th>Total:</th>
+                        <td>R$ {{ total|default_if_none:"" }}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section id="tecnical-condition-section">
+            <h4>CONDIÇÕES TÉCNICAS PARA REALIZAÇÃO DAS CALIBRAÇÕES</h4>
+            <p>I. A Calibração será executada por processo de comparação, utilizando-se padrões apropriados para o
+                instrumento a ser calibrado. Cada instrumento será calibrado em pontos ao longo de
+                sua faixa de indicação, com repetições das leituras em cada ponto conforme os procedimentos internos. O
+                serviço será executado por Técnico (a) da B&F, onde o mesmo poderá utilizar a
+                estrutura do Laboratório da B&F ou nas instalações do cliente, quando acordado previamente. Depois de
+                finalizada a calibração, será emitido o Certificado de Calibração individual, contendo
+                todas as informações pertinentes ao processo executado atendendo as normas aplicáveis.</p>
+            <p>II. Para grandezas não contempladas no escopo de serviços da B&F, se acordado previamente com o cliente,
+                o
+                serviço poderá ser executado por Laboratório Contratado, do qual nos
+                responsabilizaremos pela execução, qualidade e idoneidade das calibrações.</p>
+            <p>Nota: Quando o contratante indicar o laboratório executante, a responsabilidade dos serviços será do
+                mesmo.
+            </p>
+        </section>
+
+        <section id="geral-condition-section">
+            <h4>CONDIÇÕES GERAIS</h4>
+            <p>I. Quando o serviço solicitado for calibração e, houver necessidade de manutenção, será emitida uma
+                revisão
+                para este orçamento.</p>
+            <p>II. No Ato da Confirmação de Aceite do Serviço, o cliente deverá nos informar (por escrito), quais os
+                pontos
+                e escalas do(s) instrumento(s) em questão que deverão ser calibrado(s). Na falta
+                desta informação, reservamo-nos o direito de executar a calibração conforme procedimentos de calibração
+                do
+                laboratório.</p>
+            <p>III. Todo instrumento enviado para calibração deve ser identificado com código unívoco (tag) ou com o
+                número
+                de série do mesmo, permitindo assim sua rastreabilidade.</p>
+            <p>Nota: Para garantia da qualidade e rastreabilidade dos serviços realizados, quando observados
+                instrumentos
+                com dupla identificação ou sem identificação, a b&F compromete-se a contatar o
+                gestor desta proposta buscando esclarecimento sobre a real identificação. Quando não for possível, a B&F
+                adotará uma identificação interna de acordo com o procedimento PT-09.
+            </p>
+            <p>IV. Quando realizada a calibração nas dependências do cliente, o mesmo torna-se responsável por
+                disponibilizar sala climatizada, mesa ou bancada apropriada, ponto de energia de 110 V, e
+                ainda pela alimentação da equipe técnica - quando necessário.
+            </p>
+        </section>
+
+        <section id="comercial-condition-section">
+            <h4>CONDIÇÕES COMERCIAIS</h4>
+            <p class="marked">I. A APROVAÇÃO DESTE ORÇAMENTO DEVERÁ SER EVIDENCIADA POR ESCRITO, PREFERENCIALMENTE,
+                UTILIZANDO E-MAIL. A
+                CALIBRAÇÃO SÓ SERÁ REALIZADA APÓS O
+                RECEBIMENTO DA MESMA.</p>
+            <p class="marked">II. EMISSÕES DE 2° VIA DE CERTIFICADO E SUPLEMENTOS POR CAUSAS NÃO IMPUTÁVEIS SERÁ COBRADO
+                UMA TAXA DE R$
+                10,00 POR CERTIFICADO.</p>
+            <p class="marked">III. Para entrega em menor prazo será cobrada uma taxa de urgência de acordo com o prazo
+                solicitado.</p>
+            <p class="marked">IV. Se não houverem reclamações quanto aos dados referentes aos certificados de
+                calibrações em até 48h do
+                recebimento, qualquer alteração terá o custo de R$50.</p>
+            <p>V. Os serviços são orçados conforme descrição do cliente. Caso se verifique divergências com as
+                informações
+                prestadas no recebimento dos instrumentos, a proposta será revisada e
+                enviada ao cliente para aprovação, previamente à execução dos serviços.</p>
+            <p>VI. Quando o contratante se responsabilizar pela retirada do(s) instrumento(s) nas dependências da B&F,
+                será
+                concedido o prazo de 15 dias para retirada após o aviso de término do serviço.
+                Excedido esse prazo, será cobrada taxa diária de 2% do valor total do serviço por dia de permanência do
+                instrumento na B&F.</p>
+            <p>Nota: O(s) instrumentos(s) ficarão sob responsabilidade da B&F pelo prazo máximo de 6 meses após aviso de
+                término do serviço, podendo ser descartado(s) após esse período.</p>
+        </section>
+
+        <section id="proposal-footer">
+            <table class="condition-table">
+                <tr>
+                    <th>Condições de pagamento</th>
+                    <td>{{condicao_pagamento|default_if_none:""}}</td>
+                </tr>
+                <tr>
+                    <th>Transporte</th>
+                    <td>{{proposta.transporte|default_if_none:""}}</td>
+                </tr>
+                <tr>
+                    <th>Endereço de entrega/faturamento</th>
+                    <td>{{proposta.endereco_de_entrega|default_if_none:""}}</td>
+                </tr>
+                <tr>
+                    <th>Validade da proposta</th>
+                    <td>10 dias</td>
+                </tr>
+                <tr>
+                    <th>Aprovação</th>
+                    <td>Para aprovação dos serviços, enviar a proposta assinada e datada ou o aceite da
+                        mesma para o e-mail comercial@kometro.com.br</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="sign-section">
+            <table id="sign-table">
+                <tr>
+                    <td class="sign">Assinatura</td>
+                    <td class="date">Data</td>
+                </tr>
+            </table>
+        </section>
+    </div>
+
+</body>
+
+</html>

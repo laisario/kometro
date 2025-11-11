@@ -1,0 +1,100 @@
+// section style
+.section {
+  @apply pt-[50px] pb-[50px];
+}
+
+// container
+.container {
+  @apply mx-auto max-w-[1140px] px-4;
+}
+
+// form style
+.form-inputs * {
+  @apply mb-5 leading-10;
+}
+
+// social icon style
+.social-icons {
+  @apply space-x-4;
+  li {
+    @apply inline-block;
+    a {
+      @apply block h-9 w-9 rounded-full border border-primary text-center text-white transition hover:bg-primary;
+
+      svg {
+        @apply m-auto h-9 fill-primary;
+      }
+
+      &:hover svg {
+        @apply fill-white;
+      }
+    }
+  }
+}
+
+// form style
+.form-input,
+.form-textarea {
+  @apply border-border py-[6px] focus:border-primary focus:ring-transparent;
+}
+
+// content style
+.content {
+  @apply prose max-w-none prose-headings:font-bold prose-h1:mb-4 prose-h1:text-h1-sm prose-h2:mb-4 prose-h2:mt-4 prose-h2:text-h2-sm prose-h3:mt-4 prose-h3:text-h3-sm prose-h4:mt-4 prose-h5:mb-4 prose-h5:text-base prose-h6:mb-6 prose-h6:text-[15px] prose-a:no-underline hover:prose-a:text-primary prose-blockquote:border-primary prose-blockquote:py-1 prose-blockquote:px-4 prose-ol:pl-4 prose-ul:list-none prose-ul:pl-0 prose-hr:my-5 md:prose-h1:text-h1 md:prose-h2:text-h2 md:prose-h3:text-h3;
+
+  ul {
+    li {
+      @apply relative pl-5 before:absolute before:left-0 before:top-[10px] before:h-2 before:w-2 before:rounded-full before:bg-primary before:content-[''];
+    }
+  }
+}
+
+//feature card
+.feature-card {
+  @apply transition-all duration-200 ease-in-out hover:shadow;
+}
+
+//swiper pagination
+.service-carousel .swiper-pagination {
+  @apply flex justify-center;
+
+  span {
+    @apply mx-[5px] inline-block h-[10px] w-[10px] cursor-pointer rounded-full border  border-primary;
+    &.swiper-pagination-bullet-active {
+      @apply bg-primary;
+    }
+  }
+}
+
+//cta link
+.cta-link {
+  img {
+    transition: margin 0.3s ease;
+  }
+  &:hover {
+    img {
+      @apply ml-2;
+    }
+  }
+}
+
+//card
+.card {
+  @apply mt-10 rounded-[4px] border border-[rgba(0,0,0,.125)] bg-white px-5 px-5 py-12 py-12 shadow md:mt-0;
+}
+
+.col-recommended {
+  @apply relative z-10 md:-mx-8 md:-my-6;
+
+  .card {
+    @apply border-0 shadow-[0_1rem_3rem_rgba(0,0,0,.175)];
+  }
+}
+
+
+//contact
+.contact-list {
+  a {
+    @apply font-semibold text-dark;
+  }
+}

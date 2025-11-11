@@ -1,0 +1,76 @@
+{% load static %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Notificação de Documento</title>
+    <style>
+        body {
+            background-color: #e0e0e0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 600px;
+            background: #fff;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 5px;
+        }
+        .logo {
+            text-align: left;
+        }
+        .content {
+            text-align: left;
+            color: #333;
+        }
+        .button-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .button {
+            background-color: #ff4d00;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .button:hover {
+            background-color: #bb3800;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .unsubscribe {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .unsubscribe a {
+            color: #ff4d00;
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        ul {
+            list-style-type: "✔ "
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h2 style="color: #ff4d00;">Kometro</h2>
+        </div>
+        <div class="content">
+            <p>Prezado(a) {{ funcionario|default:"funcionário" }},</p>
+            <p>A {{ tipo_analise }} do documento <strong>{{ nome_documento }}</strong> necessita da sua aprovação. Sua ação é necessária para garantir que o documento permaneça atualizado e em conformidade.</p>
+            <p>Por favor, acesse o sistema e aprove ou solicite ajustes, se necessário.</p>
+        </div>
+        <div class="button-container">
+            <a href="{{link}}" class="button">Aprovar {{ tipo_analise }}</a>
+        </div>
+    </div>
+</body>
+</html>

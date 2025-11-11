@@ -1,0 +1,29 @@
+{
+  "main": [
+    {
+      "name": "Página inicial",
+      "url": "/"
+    },
+    {
+      "name": "Serviços",
+      "url": "/servicos/"
+    },
+    {
+      "name": "Loja",
+      "url": "/loja/"
+    },
+    {
+      "name": "Conheça",
+      "url": "/conhecimento/"
+    },
+    {
+      "name": "Fale conosco",
+      "url": "/contato/"
+    }
+  ],
+  "footer": [
+    {
+      "name": "Encarregado LGPD"
+    }
+  ]
+}

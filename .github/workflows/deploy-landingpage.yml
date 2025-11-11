@@ -1,0 +1,42 @@
+name: Deploy Landing via FTP
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 20
+
+      - name: 📄 Making .env
+        run: |
+          echo "${{ secrets.NEXT_PUBLIC_API_URL }}" > .env
+
+      - name: Build Next.js
+        run: |
+          npm install
+          npm run export
+        env:
+          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
+
+      - name: Deploy via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.0
+        with:
+          server: ${{ secrets.KINGHOST_FTP_HOST }}
+          username: ${{ secrets.KINGHOST_FTP_USER }}
+          password: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          local-dir: ./out/
+          server-dir: ${{ secrets.KINGHOST_FTP_PATH }}/
+          log-level: verbose
+          dry-run: true

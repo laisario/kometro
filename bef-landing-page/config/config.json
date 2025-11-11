@@ -1,0 +1,36 @@
+{
+  "site": {
+    "title": "Kometro",
+    "base_url": "/",
+    "favicon": "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/logo-title.png",
+    "logo": "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/logo.png",
+    "logo_width": "190",
+    "logo_height": "40",
+    "logo_text": "Kometro - Laboratório de Metrologia"
+  },
+
+  "settings": {
+    "pagination": 4,
+    "summary_length": 150,
+    "service_folder": "servicos"
+  },
+
+  "nav_button": {
+    "enable": true,
+    "label": "Entrar",
+    "link": "https://app.kometro.com.br/#/login"
+  },
+
+  "params": {
+    "contact_form_action": "https://kometro.com.br/api/mail.php",
+    "tag_manager_id": "",
+    "footer_content": "Endereço Rod. Benjamim Constanti, 4703, Lote 06 – km 05 – Pinheiral – RJ – CEP 27197-000",
+    "copyright": "Desenvolvido por [Laísa Rio](https://laisario.github.io/)"
+  },
+
+  "metadata": {
+    "meta_author": "Themefisher",
+    "meta_image": "",
+    "meta_description": "A SAAS template for nextjs"
+  }
+}

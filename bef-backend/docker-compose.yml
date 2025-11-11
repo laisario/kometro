@@ -1,0 +1,95 @@
+services:
+  db:
+    container_name: 'db'
+    image: mysql:8.0.32
+    ports:
+      - '3306:3306'
+    environment:
+      MYSQL_DATABASE: ${MYSQL_NAME}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+    volumes:
+      - 'db:/var/lib/mysql'
+    command: ['mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
+
+  web:
+    container_name: 'web'
+    build: .
+    entrypoint: [""]
+    command: >
+      sh -c "python manage.py wait_for_db &&
+             python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    environment:
+      DEBUG: ${DEBUG}
+      SECRET_KEY: ${SECRET_KEY}
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_NAME: ${MYSQL_NAME}
+      DIGITAL_OCEAN_ACCESS_KEY_ID: ${DIGITAL_OCEAN_ACCESS_KEY_ID}
+      DIGITAL_OCEAN_SECRET_ACCESS_KEY: ${DIGITAL_OCEAN_SECRET_ACCESS_KEY}
+      SITE: ${SITE}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+      GITHUB_REBUILD_LANDINGPAGE_TOKEN: ${GITHUB_REBUILD_LANDINGPAGE_TOKEN}
+    ports:
+      - "8000:8000"
+      - "8953:8953"
+    depends_on:
+      - db
+      - redis
+    restart: always
+    volumes:
+      - ./app:/kometro
+
+  redis:
+    container_name: 'redis'
+    command: redis-server && python -m pip install redis
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    container_name: 'celery_worker'
+    build: .
+    entrypoint: [""]
+    command: celery -A rkp_platform worker  --loglevel=debug
+    environment:
+      DEBUG: ${DEBUG}
+      SECRET_KEY: ${SECRET_KEY}
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_NAME: ${MYSQL_NAME}
+      DIGITAL_OCEAN_ACCESS_KEY_ID: ${DIGITAL_OCEAN_ACCESS_KEY_ID}
+      DIGITAL_OCEAN_SECRET_ACCESS_KEY: ${DIGITAL_OCEAN_SECRET_ACCESS_KEY}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    depends_on:
+      - redis
+      - web
+      - db
+    volumes:
+      - ./app:/kometro
+
+  celery_beat:
+    container_name: 'celery_beat'
+    build: .
+    entrypoint: [""]
+    command: celery -A rkp_platform beat -l info
+    environment:
+      DEBUG: ${DEBUG}
+      SECRET_KEY: ${SECRET_KEY}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND}
+    depends_on:
+      - redis
+      - web
+      - db
+    volumes:
+      - ./app:/kometro
+
+volumes:
+  db:
