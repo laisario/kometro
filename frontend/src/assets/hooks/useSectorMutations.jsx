@@ -6,7 +6,7 @@ import { axios } from '../../api';
 import {getErrorMessage} from '../../utils/error'
 import { buildTreeItems } from './useSectorTree';
 
-function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector) {
+function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector) {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
 
@@ -192,6 +192,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       setOpenCreateSectorId(sector?.id)
       setSelectedItem({id: sector?.id, type: sector?.itemType, parentId: sector?.parentId})
       setExpandedItems(expandedItems => [...expandedItems, newSector?.setorPaiId])
+      setCreatingSector(true)
     },
   });
 

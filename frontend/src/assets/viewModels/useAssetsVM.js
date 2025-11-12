@@ -27,9 +27,9 @@ const useAssetsVm = (id, idSetor) => {
   const [selected, setSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [openCreateSectorId, setOpenCreateSectorId] = useState(null);
-  const [openEditSector, setOpenEditSector] = useState(false);
   const [expandedItems, setExpandedItems] = useState([])
   const [selectedItem, setSelectedItem] = useState(null)
+  const [creatingSector, setCreatingSector] = useState(false);
   
   useEffect(() => {
     if (id && idSetor) {
@@ -65,9 +65,11 @@ const useAssetsVm = (id, idSetor) => {
     handleChangeRowsPerPage,
   } = useAssets();
   
-  const handleCloseCreateSector = () => setOpenCreateSectorId(null);
-  
-  
+  const handleCloseCreateSector = () => {
+    setOpenCreateSectorId(null)
+    setCreatingSector(false)
+  };
+
   const {
     mutateDeleteSectors,
     isDeletingSectors,
@@ -76,7 +78,7 @@ const useAssetsVm = (id, idSetor) => {
     isLoadingUpdateSectors, 
     isLoadingCreateSectors,
     errorSectors,
-  } = useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector)
+  } = useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector)
   
   const { 
     defaultAssets, 
@@ -117,10 +119,6 @@ const useAssetsVm = (id, idSetor) => {
   const handleEdit = (selectedItem) => {
     setOpenCreateSectorId(selectedItem?.id)
   }
-
-  const handleOpenEditSector = () => setOpenEditSector((prev) => !prev);
-
-  const handleCloseEditSector = () => setOpenEditSector(false);
 
 
   const isMobile = useResponsive('down', 'md');
@@ -193,11 +191,8 @@ const useAssetsVm = (id, idSetor) => {
     isLoadingCreateSectors,
     errorSectors,
     openCreateSectorId,
-    openEditSector,
     handleCreate,
-    handleOpenEditSector,
     handleCloseCreateSector,
-    handleCloseEditSector,
     defaultAssets,
     searchDA,
     setSearchDA,
@@ -230,6 +225,8 @@ const useAssetsVm = (id, idSetor) => {
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
+    creatingSector,
+    setCreatingSector,
   }
 }
 

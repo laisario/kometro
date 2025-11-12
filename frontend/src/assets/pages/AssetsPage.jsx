@@ -72,6 +72,7 @@ function AssetsPage() {
     handleChangeRowsPerPage,
     search,
     setSearch,
+    creatingSector,
   } = useAssetsVm(id, idSetor);
 
   const { sectors, isLoadingSectors } = useSectorTree();
@@ -191,6 +192,7 @@ function AssetsPage() {
                       setOpenFormCreateInstrument={setOpenFormCreateInstrument}
                       handleCloseCreateInstrument={handleCloseCreateInstrument}
                       setError={setError}
+                      creatingSector={creatingSector}
                     />
                   </Grid>
 

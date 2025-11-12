@@ -111,10 +111,10 @@ def enviar_emails_instrumentos_expirados():
                         "expiracao": f"expirou dia {instancia_instrumento['data_proxima_calibracao']} e ainda não foi atualizado"
                         if instrumento.ultima_notificacao
                         else "expira hoje",
+                        "link": "https://app.kometro.com.br/#/dashboard/propostas",
                     },
                     "template": "instrumentos_expirados.html",
                     "message": "Sua calibração está vencida – regularize com facilidade pela nossa plataforma!",
-                    "link": "https://app.kometro.com.br/#/dashboard/propostas",
                 }
             )
             instrumento.ultima_notificacao = timezone.now()

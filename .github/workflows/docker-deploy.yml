@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - master
+    paths:
+      - 'bef-backend/**'
+      - '.github/workflows/docker-deploy.yml'
 
 jobs:
   build-and-deploy:

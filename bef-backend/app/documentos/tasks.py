@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from celery import shared_task
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
@@ -11,10 +11,7 @@ import logging
 from django.db.models import Count, F
 from clientes.serializers import UserSerializer
 
-
 logger = logging.getLogger(__name__)
-
-
 
 @shared_task
 def expires_documents():
@@ -60,6 +57,11 @@ def enviar_emails_documentos_expirados():
         ) or documento.ultima_notificacao is None:
             doc = ReadDocumentoSerializer(documento).data
             logo = static("logo.png")
+            data_validade_str = doc['data_validade']
+            if isinstance(data_validade_str, str):
+                data_validade_formatada = datetime.strptime(data_validade_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+            else:
+                data_validade_formatada = data_validade_str.strftime("%d-%m-%Y")
             enviar_email(
                 {
                     "assunto": f"Documento {doc['titulo']} expirado",
@@ -71,13 +73,13 @@ def enviar_emails_documentos_expirados():
                         "data_validade": doc["data_validade"],
                         "nome_documento": doc["titulo"],
                         "logo": logo,
-                        "expiracao": f"expirou dia {doc['data_validade']} e ainda não foi atualizado"
+                        "expiracao": f"expirou dia {data_validade_formatada} e ainda não foi atualizado"
                         if documento.ultima_notificacao
                         else "expira hoje",
+                        "link": f"https://app.kometro.com.br/#/dashboard/documento/{doc['id']}/0",
                     },
                     "template": "documentos_expirados.html",
                     "message": "Este é um lembrete: o documento sob sua responsabilidade expirou e precisa de revisão ou revalidação.",
-                    "link": f"https://app.kometro.com.br/#/admin/documento/{doc['id']}/0",
                 }
             )
             documento.ultima_notificacao = timezone.now()
@@ -120,10 +122,10 @@ def notificar_aprovacao_revisoes():
                             "tipo_analise": "revisão"
                             if rev["tipo"] == "revisar"
                             else "revalidação",
+                            "link": f"https://app.kometro.com.br/#/dashboard/documento/{rev['documento']['id']}/{rev['id']}",
                         },
                         "template": "aprovacoes_pendentes.html",
                         "message": f"Este é um lembrete: há  uma {'revisão' if rev['tipo'] == 'revisar' else 'revalidação'} que precisa ser aprovada.",
-                        "link": f"https://app.kometro.com.br/#/admin/documento/{rev['documento']['id']}/{rev['id']}",
                     }
                 )
         revisao.ultima_notificacao = timezone.now()

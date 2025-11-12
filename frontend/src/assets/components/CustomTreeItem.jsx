@@ -241,6 +241,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
     handleEdit,
     handleCloseCreateSector,
     duplicateInstrument,
+    creatingSector,
     ...other
   } = props;
 
@@ -273,7 +274,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
           <TreeItemIconContainer {...getIconContainerProps()}>
             <TreeItemIcon status={status} />
           </TreeItemIconContainer>
-          {isEditing 
+          {isEditing
             ? <Box pl="20px" width="100%" {...getLabelProps()} display="flex" >
                 <Input
                   sx={{width: "100%"}}
@@ -287,7 +288,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                     }
                     if (e.key === 'Escape') {
                       e.preventDefault();
-                      if (!inputValue?.length) {
+                      if (creatingSector) {
                         onDeleteSetor({id: selectedItem?.id});
                       }
                       setSelectedItem(null)
@@ -305,7 +306,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                         <IconButton
                           size="small"
                           onClick={(e) => {
-                            if (!inputValue?.length) {
+                            if (creatingSector) {
                               onDeleteSetor({id: selectedItem?.id});
                             }
                             handleCloseCreateSector();

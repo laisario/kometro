@@ -20,7 +20,7 @@ app.conf.beat_schedule = {
     },
     "expires_documents": {
         "task": "documentos.tasks.expires_documents",
-        "schedule": crontab(minute=0, hour=6),
+        "schedule": crontab(minute=0, hour=1),
     },
     "expires_instruments": {
         "task": "instrumentos.tasks.expires_instruments",

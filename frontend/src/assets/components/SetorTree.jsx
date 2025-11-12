@@ -101,7 +101,8 @@ function SetorTree(props) {
     openFormCreateInstrument, 
     setOpenFormCreateInstrument,
     setError,
-    handleCloseCreateInstrument
+    handleCloseCreateInstrument,
+    creatingSector,
   } = props;
   const { user, hasCreatePermission, hasEditPermission } = useAuth();
 
@@ -169,6 +170,7 @@ function SetorTree(props) {
               isEditing={Number(props?.itemId) === Number(openCreateSectorId)}
               duplicateInstrument={duplicateInstrument}
               hasCreatePermission={hasCreatePermission}
+              creatingSector={creatingSector}
             />
         )}}
       />
