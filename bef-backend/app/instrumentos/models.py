@@ -645,8 +645,8 @@ class Frequencia(models.Model):
     ]
 
     quantidade = models.PositiveSmallIntegerField(
-        validators=[MinValueValidator(0), MaxValueValidator(100)],
-        help_text="Valor entre 0 e 100"
+        validators=[MinValueValidator(0), MaxValueValidator(366)],
+        help_text="Valor entre 0 e 366"
     )
     periodo = models.CharField(
         max_length=10,
