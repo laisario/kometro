@@ -91,18 +91,25 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         )
 
     def get_queryset(self):
+        # Optimize with select_related and prefetch_related for search fields
+        queryset = InstrumentoDoCliente.objects.select_related(
+            'instrumento__tipo_de_instrumento',
+            'cliente'
+        ).prefetch_related('normativos')
+        
         if self.request.method == 'DELETE':
-            return InstrumentoDoCliente.objects.all()
+            return queryset
 
         if self.request.user.is_staff:
             client = self.request.query_params.get("client")
             if client:
-                return InstrumentoDoCliente.objects.filter(cliente_id=client)
-            return InstrumentoDoCliente.objects.all()
+                return queryset.filter(cliente_id=client)
+            return queryset
 
-        return InstrumentoDoCliente.objects.filter(
-            cliente__usuarios=self.request.user
-        )
+        queryset = queryset.filter(cliente__usuarios=self.request.user)
+        
+        # Ensure consistent ordering for search results
+        return queryset.order_by('tag', 'id')
     
 
     def update(self, request, *args, **kwargs):
@@ -264,43 +271,39 @@ class InstrumentoViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
 
     def get_queryset(self):
-        queryset = Instrumento.objects.all()
-        search = self.request.query_params.get('search')
+        # Optimize with select_related for tipo_de_instrumento (used in search_fields)
+        queryset = Instrumento.objects.select_related('tipo_de_instrumento')
         cliente_id = self.request.query_params.get('cliente_id')
 
-
+        # Optimize cliente filtering with join instead of subquery
         if not self.request.user.is_staff:
             try:
                 cliente = self.request.user.clientes.first()
                 if cliente:
-                    instrumentos_ids = InstrumentoBaseCliente.objects.filter(
-                        cliente=cliente,
-                        ativo=True
-                    ).values_list('instrumento_id', flat=True)
-                    queryset = queryset.filter(id__in=instrumentos_ids)
+                    # Use join instead of values_list + filter(id__in=...)
+                    queryset = queryset.filter(
+                        clientes_acesso__cliente=cliente,
+                        clientes_acesso__ativo=True
+                    ).distinct()
+                else:
+                    queryset = queryset.none()
             except Exception as e:
                 print(e, 'error')
                 queryset = queryset.none()
         else:
             if cliente_id:
                 try:
-                    from clientes.models import Cliente
-                    cliente = Cliente.objects.get(id=cliente_id)
-                    instrumentos_ids = InstrumentoBaseCliente.objects.filter(
-                        cliente=cliente,
-                        ativo=True
-                    ).values_list('instrumento_id', flat=True)
-                    queryset = queryset.filter(id__in=instrumentos_ids)
-                except Cliente.DoesNotExist:
-                    queryset = queryset.none()
+                    # Use join instead of values_list + filter(id__in=...)
+                    queryset = queryset.filter(
+                        clientes_acesso__cliente_id=cliente_id,
+                        clientes_acesso__ativo=True
+                    ).distinct()
                 except Exception as e:
                     print(f"Error filtering by cliente_id: {e}")
                     queryset = queryset.none()
 
-        if not search:
-            return queryset.order_by('id')
-
-        return queryset
+        # Always return ordered queryset - SearchFilter will handle the search
+        return queryset.order_by('tipo_de_instrumento__descricao', 'id')
 
     def get_object(self):
         obj = super().get_object()

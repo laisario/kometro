@@ -200,6 +200,10 @@ class InstrumentoDoCliente(models.Model):
                 name="unique_tag_por_cliente"
             )
         ]
+        indexes = [
+            models.Index(fields=['tag']),
+            models.Index(fields=['cliente', 'tag']), 
+        ]
 
 
 class CriterioAceitacao(models.Model):
@@ -576,7 +580,6 @@ class Instrumento(models.Model):
         verbose_name = "Instrumento"
         verbose_name_plural = "Instrumentos"
 
-
 class TipoInstrumento(models.Model):
     descricao = models.CharField(max_length=512, verbose_name="Descrição")
     modelo = models.CharField(
@@ -598,10 +601,14 @@ class TipoInstrumento(models.Model):
     class Meta:
         verbose_name = "Tipo de instrumento"
         verbose_name_plural = "Tipos de instrumento"
+        indexes = [
+            models.Index(fields=['descricao']),
+            models.Index(fields=['modelo']),
+            models.Index(fields=['fabricante']),
+        ]
 
     def __str__(self):
         return f"{self.descricao}"
-
 
 class Setor(models.Model):
     nome = models.CharField(max_length=255)
@@ -634,8 +641,7 @@ class Setor(models.Model):
         for subsetor in self.subsetores.all():
             subsetor.delete()
 
-        super().delete(*args, **kwargs)
-    
+        super().delete(*args, **kwargs)    
 
 class Frequencia(models.Model):
     PERIODO_CHOICES = [
@@ -656,7 +662,6 @@ class Frequencia(models.Model):
 
     def __str__(self):
         return f"{self.quantidade} {self.periodo}"
-
 
 class Normativo(models.Model):
     nome = models.CharField(max_length=255)
