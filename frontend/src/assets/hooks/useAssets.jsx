@@ -1,7 +1,7 @@
 import { useQuery } from "react-query";
 import { axios } from "../../api";
-import _, {debounce} from 'lodash';
-import { useEffect, useState } from "react";
+import debounce from 'lodash/debounce';
+import { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 
 const useAssets = () => {
@@ -44,8 +44,9 @@ const useAssets = () => {
       page,
       rowsPerPage,
     ], 
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await axios.get('/instrumentos/', {
+        signal,
         params: {
           search: debouncedSearchFilter,
           dateStart,
@@ -62,13 +63,26 @@ const useAssets = () => {
     },
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
+    keepPreviousData: true,
   });
   
-  const handleSearchFilter = debounce((value) => setDebouncedSearchFilter(value), 1500);
-  const handleSearchNormaFilter = debounce((value) => setDebouncedSearchNormaFilter(value), 1500);
+  const handleSearchFilter = useMemo(
+    () => debounce((value) => setDebouncedSearchFilter(value), 400),
+    []
+  );
+  const handleSearchNormaFilter = useMemo(
+    () => debounce((value) => setDebouncedSearchNormaFilter(value), 400),
+    []
+  );
 
-  useEffect(() => { handleSearchFilter(search) }, [search, handleSearchFilter])
-  useEffect(() => { handleSearchNormaFilter(norma) }, [norma, handleSearchNormaFilter])
+  useEffect(() => {
+    handleSearchFilter((search ?? '').trim());
+    return () => handleSearchFilter.cancel();
+  }, [search, handleSearchFilter]);
+  useEffect(() => {
+    handleSearchNormaFilter((norma ?? '').trim());
+    return () => handleSearchNormaFilter.cancel();
+  }, [norma, handleSearchNormaFilter]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);

@@ -12,6 +12,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@next/third-parties": "^16.0.4",
     "github-slugger": "^2.0.0",
     "gray-matter": "^4.0.3",
     "lucide-react": "^0.544.0",
@@ -20,7 +21,6 @@
     "next-mdx-remote": "^4.2.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-gtm-module": "^2.0.11",
     "react-icons": "^4.7.1",
     "react-player": "^3.3.3",
     "rehype-slug": "^5.1.0",

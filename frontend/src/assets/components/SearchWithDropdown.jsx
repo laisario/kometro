@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   List,
@@ -15,15 +15,17 @@ import SearchIcon from '@mui/icons-material/Search';
 
 export default function InstrumentSearch({ data = [], onSelect, search, setSearch, isFetching }) {
   const [open, setOpen] = useState(false);
+  const resultsLength = data?.results?.length ?? 0;
+  const hasResults = useMemo(() => resultsLength > 0, [resultsLength]);
 
   const handleChange = (e) => {
     const value = e.target.value;
-    setSearch(value?.trim() || '');
+    setSearch(value || '');
   };
 
   useEffect(() => {
-    setOpen(!!data?.results?.length);
-  }, [search]);
+    setOpen(Boolean(search && hasResults));
+  }, [search, hasResults]);
 
   const handleClickItem = (item) => {
     onSelect(item);

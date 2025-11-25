@@ -240,7 +240,7 @@ const ClientInformation = ({ data, isMobile }) => {
             },
           }}
         >
-          {!!usuarios?.length ? (
+          {usuarios?.length ? (
             <Stack spacing={1.5}>
               {usuarios?.map((u, idx) => (
                 <Box key={idx}>

@@ -29,6 +29,15 @@ const Document = () => {
         />
       </Head>
       <body>
+        {/* Google Tag Manager (noscript) */}
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=AW-602405826"
+            height="0"
+            width="0"
+            style={{ display: 'none', visibility: 'hidden' }}
+          />
+        </noscript>
         <Main />
         {/* <TwSizeIndicator /> */}
         <NextScript />

@@ -2,7 +2,7 @@ import config from "@config/config.json";
 import theme from "@config/theme.json";
 import Head from "next/head";
 import { useEffect, useState } from "react";
-import TagManager from "react-gtm-module";
+import { GoogleTagManager } from "@next/third-parties/google";
 import "styles/style.scss";
 
 const App = ({ Component, pageProps }) => {
@@ -19,19 +19,6 @@ const App = ({ Component, pageProps }) => {
       }&display=swap`
     ).then((res) => res.text().then((css) => setFontcss(css)));
   }, [pf, sf]);
-
-  // google tag manager (gtm)
-  const tagManagerArgs = {
-    gtmId: config.params.tag_manager_id,
-  };
-  useEffect(() => {
-    setTimeout(() => {
-      process.env.NODE_ENV === "production" &&
-        config.params.tag_manager_id &&
-        TagManager.initialize(tagManagerArgs);
-    }, 5000);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   return (
     <>
@@ -53,6 +40,7 @@ const App = ({ Component, pageProps }) => {
           content="width=device-width, initial-scale=1, maximum-scale=5"
         />
       </Head>
+      <GoogleTagManager gtmId="AW-602405826" />
       <Component {...pageProps} />
     </>
   );

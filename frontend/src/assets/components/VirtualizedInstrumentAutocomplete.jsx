@@ -277,6 +277,9 @@ const VirtualizedInstrumentAutocomplete = ({
     selectedValue: value,
   }), [options, handleSelect, value]);
 
+  // Memoize the hasResults check to prevent unnecessary re-renders
+  const hasResults = useMemo(() => options.length > 0, [options.length]);
+
   const handleItemsRendered = useCallback(({ visibleStopIndex }) => {
     if (hasNextPage && !isFetchingNextPage && visibleStopIndex >= options.length - 2) {
       fetchNextPage?.();
@@ -340,7 +343,7 @@ const VirtualizedInstrumentAutocomplete = ({
             mt: 1,
           }}
         >
-          {options.length === 0 && !loading ? (
+          {!hasResults && !loading ? (
             <Box p={2} textAlign="center">
               <Typography color="text.secondary">
                 Nenhum instrumento encontrado
