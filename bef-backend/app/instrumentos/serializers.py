@@ -655,6 +655,105 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
                 instrumento.normativos.add(normativo)
         return instrumento
 
+    def _preservar_datas_ultimas(self, instance, validated_data, freq_calibracao_data, freq_checagem_data):
+        """Preserva as datas da última calibração/checagem se existirem calibrações reais."""
+        data_ultima_calibracao_from_front = validated_data.pop('data_ultima_calibracao', None)
+        data_ultima_checagem_from_front = validated_data.pop('data_ultima_checagem', None)
+
+        if freq_calibracao_data or freq_checagem_data:
+            ultima_calibracao = instance.calibracoes.filter(checagem=False).order_by('-data').first()
+            if ultima_calibracao and ultima_calibracao.data:
+                validated_data['data_ultima_calibracao'] = ultima_calibracao.data
+                instance.data_ultima_calibracao = ultima_calibracao.data
+            elif data_ultima_calibracao_from_front is not None:
+                validated_data['data_ultima_calibracao'] = data_ultima_calibracao_from_front
+            elif instance.data_ultima_calibracao:
+                validated_data['data_ultima_calibracao'] = instance.data_ultima_calibracao
+
+            ultima_checagem = instance.calibracoes.filter(checagem=True).order_by('-data').first()
+            if ultima_checagem and ultima_checagem.data:
+                validated_data['data_ultima_checagem'] = ultima_checagem.data
+                instance.data_ultima_checagem = ultima_checagem.data
+            elif data_ultima_checagem_from_front is not None:
+                validated_data['data_ultima_checagem'] = data_ultima_checagem_from_front
+            elif instance.data_ultima_checagem:
+                validated_data['data_ultima_checagem'] = instance.data_ultima_checagem
+        else:
+            if data_ultima_calibracao_from_front is not None:
+                validated_data['data_ultima_calibracao'] = data_ultima_calibracao_from_front
+            if data_ultima_checagem_from_front is not None:
+                validated_data['data_ultima_checagem'] = data_ultima_checagem_from_front
+
+    def _atualizar_frequencia(self, instance, frequencia_atual, frequencia_data, campo_frequencia):
+        """Atualiza a frequência e retorna True se mudou."""
+        if not frequencia_data:
+            return False
+
+        if frequencia_atual:
+            for attr, value in frequencia_data.items():
+                setattr(frequencia_atual, attr, value)
+            frequencia_atual.save()
+            frequencia_atual.refresh_from_db()
+            return True
+
+        nova_frequencia = Frequencia.objects.create(**frequencia_data)
+        setattr(instance, campo_frequencia, nova_frequencia)
+        return True
+
+    def _recalcular_data_proxima(self, instance, tipo='calibracao'):
+        """Recalcula a data da próxima calibração ou checagem baseado no critério."""
+        if tipo == 'calibracao':
+            frequencia = instance.frequencia_calibracao
+            data_ultima = instance.data_ultima_calibracao
+            calcular_servico = calcular_data_proxima_calibracao_servico
+            calcular_calendario = calcular_data_proxima_calibracao_calendario
+            campo_proxima = 'data_proxima_calibracao'
+        else:
+            frequencia = instance.frequencia_checagem
+            data_ultima = instance.data_ultima_checagem
+            calcular_servico = calcular_data_proxima_checagem_servico
+            calcular_calendario = calcular_data_proxima_checagem_calendario
+            campo_proxima = 'data_proxima_checagem'
+
+        if not frequencia:
+            setattr(instance, campo_proxima, None)
+            return
+
+        criterio = instance.criterio_frequencia or instance.cliente.criterio_frequencia_padrao
+        posicao_uso = instance.Posicao.EM_USO
+        criterio_servico = CriterioFrequencia.SERVICO
+
+        if criterio == criterio_servico and instance.posicao == posicao_uso:
+            setattr(instance, campo_proxima, calcular_servico(instance, criado=False))
+        elif criterio != criterio_servico:
+            if data_ultima:
+                setattr(instance, campo_proxima, calcular_calendario(instance))
+            else:
+                setattr(instance, campo_proxima, None)
+        else:
+            setattr(instance, campo_proxima, None)
+
+    def _atualizar_relacionamentos(self, instance, normativos_nomes, pontos_data, criterios_data):
+        """Atualiza normativos, pontos de calibração e critérios de aceitação."""
+        normativos_objs = []
+        for nome in normativos_nomes:
+            if isinstance(nome, dict):
+                nome = nome.get('nome')
+            if nome:
+                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
+                normativos_objs.append(normativo)
+        instance.normativos.set(normativos_objs)
+
+        if pontos_data is not None:
+            instance.pontos_de_calibracao.all().delete()
+            for ponto in pontos_data:
+                PontoDeCalibracao.objects.create(instrumento=instance, nome=ponto)
+
+        if criterios_data is not None:
+            instance.criterios_aceitacao.all().delete()
+            for criterio in criterios_data:
+                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
+
 
     def update(self, instance, validated_data):
         # Extrair dados relacionados
