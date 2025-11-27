@@ -25,6 +25,13 @@ from .models import (
 from procedimentos.models import Procedimento
 from decimal import Decimal
 from rest_framework.validators import UniqueTogetherValidator
+from .utils import (
+    calcular_data_proxima_calibracao_calendario,
+    calcular_data_proxima_calibracao_servico,
+    calcular_data_proxima_checagem_calendario,
+    calcular_data_proxima_checagem_servico
+)
+from .models import CriterioFrequencia
 
 
 PERIODOS_RELATIVEDELTA = {
@@ -650,52 +657,63 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
 
 
     def update(self, instance, validated_data):
+        # Extrair dados relacionados
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
         normativos_nomes = validated_data.pop('normativos', [])
         pontos_data = validated_data.pop('pontos_de_calibracao', None)
         criterios_data = validated_data.pop('criterios_aceitacao', None)
         setor = validated_data.pop('setor', None)
-
+        data_ultima_calibracao_original = instance.data_ultima_calibracao
+        data_ultima_checagem_original = instance.data_ultima_checagem
+        
+        # Preservar datas da última calibração/checagem se existirem calibrações reais
+        self._preservar_datas_ultimas(instance, validated_data, freq_calibracao_data, freq_checagem_data)
+        
+        # Obter usuário para movimentações
         user = None
         request = self.context.get("request")
         if request and hasattr(request, "user"):
             user = request.user
-
+        
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
-
-        if setor:
-            if setor.id != instance.setor.id:
-                MovimentacaoSetorInstrumento.objects.create(
-                    instrumento=instance,
-                    antigo_setor=instance.setor.nome if instance.setor else '',
-                    novo_setor=setor,
-                    usuario_alteracao=user
-                )
-
+        
+        # Atualizar setor
+        if setor and setor.id != instance.setor.id:
+            MovimentacaoSetorInstrumento.objects.create(
+                instrumento=instance,
+                antigo_setor=instance.setor.nome if instance.setor else '',
+                novo_setor=setor,
+                usuario_alteracao=user
+            )
             instance.setor_id = setor
-
-        if freq_checagem_data:
-            if instance.frequencia_checagem:
-                for attr, value in freq_checagem_data.items():
-                    setattr(instance.frequencia_checagem, attr, value)
-                instance.frequencia_checagem.save()
-            else:
-                instance.frequencia_checagem = Frequencia.objects.create(**freq_checagem_data)
-
-        if freq_calibracao_data:
-            if instance.frequencia_calibracao:
-                for attr, value in freq_calibracao_data.items():
-                    setattr(instance.frequencia_calibracao, attr, value)
-                instance.frequencia_calibracao.save()
-            else:
-                instance.frequencia_calibracao = Frequencia.objects.create(**freq_calibracao_data)
-
+        
+        # Atualizar frequências e detectar mudanças
+        frequencia_calibracao_mudou = self._atualizar_frequencia(
+            instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
+        )
+        frequencia_checagem_mudou = self._atualizar_frequencia(
+            instance, instance.frequencia_checagem, freq_checagem_data, 'frequencia_checagem'
+        )
+        
+        # Aplicar outros dados validados
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-    
+        # Detectar se data_ultima_calibracao ou data_ultima_checagem mudaram
+        data_ultima_calibracao_mudou = data_ultima_calibracao_original != instance.data_ultima_calibracao
+        data_ultima_checagem_mudou = data_ultima_checagem_original != instance.data_ultima_checagem
+        
+        # Recalcular datas da próxima calibração/checagem se necessário
+        # Recalcula quando: frequência mudou OU data da última calibração/checagem mudou
+        if frequencia_calibracao_mudou or data_ultima_calibracao_mudou:
+            self._recalcular_data_proxima(instance, tipo='calibracao')
+        
+        if frequencia_checagem_mudou or data_ultima_checagem_mudou:
+            self._recalcular_data_proxima(instance, tipo='checagem')
+        
+        # Registrar movimentação de posição
         if new_posicao and new_posicao != old_posicao:
             MovimentacaoInstrumento.objects.create(
                 instrumento=instance,
@@ -703,31 +721,19 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
                 antiga_posicao=old_posicao,
                 usuario_alteracao=user,
             )
-
+        
+        # Forçar tracker a detectar mudanças na frequência
+        if frequencia_calibracao_mudou and instance.frequencia_calibracao:
+            instance.frequencia_calibracao_id = instance.frequencia_calibracao.id
+        
+        if frequencia_checagem_mudou and instance.frequencia_checagem:
+            instance.frequencia_checagem_id = instance.frequencia_checagem.id
+        
         instance.save()
-
-        normativos_objs = []
-        for nome in normativos_nomes:
-            if isinstance(nome, dict):
-                nome = nome.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
-                normativos_objs.append(normativo)
-        instance.normativos.set(normativos_objs)
-
-        if pontos_data is not None:
-            instance.pontos_de_calibracao.all().delete()
-            for ponto in pontos_data:
-                PontoDeCalibracao.objects.create(
-                    instrumento=instance,
-                    nome=ponto
-                )
-
-        if criterios_data is not None:
-            instance.criterios_aceitacao.all().delete()
-            for criterio in criterios_data:
-                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
-
+        
+        # Atualizar relacionamentos
+        self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
+        
         return instance
 
 class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
@@ -851,23 +857,139 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 instrumento.normativos.add(normativo)
         return instrumento
 
+    def _preservar_datas_ultimas(self, instance, validated_data, freq_calibracao_data, freq_checagem_data):
+        """Preserva as datas da última calibração/checagem se existirem calibrações reais."""
+        data_ultima_calibracao_from_front = validated_data.pop('data_ultima_calibracao', None)
+        data_ultima_checagem_from_front = validated_data.pop('data_ultima_checagem', None)
+        
+        # Se está atualizando frequência, preservar data da última calibração/checagem real
+        if freq_calibracao_data or freq_checagem_data:
+            # Buscar última calibração real
+            ultima_calibracao = instance.calibracoes.filter(checagem=False).order_by('-data').first()
+            if ultima_calibracao and ultima_calibracao.data:
+                validated_data['data_ultima_calibracao'] = ultima_calibracao.data
+                instance.data_ultima_calibracao = ultima_calibracao.data
+            elif data_ultima_calibracao_from_front is not None:
+                validated_data['data_ultima_calibracao'] = data_ultima_calibracao_from_front
+            elif instance.data_ultima_calibracao:
+                validated_data['data_ultima_calibracao'] = instance.data_ultima_calibracao
+            
+            # Buscar última checagem real
+            ultima_checagem = instance.calibracoes.filter(checagem=True).order_by('-data').first()
+            if ultima_checagem and ultima_checagem.data:
+                validated_data['data_ultima_checagem'] = ultima_checagem.data
+                instance.data_ultima_checagem = ultima_checagem.data
+            elif data_ultima_checagem_from_front is not None:
+                validated_data['data_ultima_checagem'] = data_ultima_checagem_from_front
+            elif instance.data_ultima_checagem:
+                validated_data['data_ultima_checagem'] = instance.data_ultima_checagem
+        else:
+            # Se não está atualizando frequência, manter comportamento original
+            if data_ultima_calibracao_from_front is not None:
+                validated_data['data_ultima_calibracao'] = data_ultima_calibracao_from_front
+            if data_ultima_checagem_from_front is not None:
+                validated_data['data_ultima_checagem'] = data_ultima_checagem_from_front
+
+    def _atualizar_frequencia(self, instance, frequencia_atual, frequencia_data, campo_frequencia):
+        """Atualiza a frequência e retorna True se mudou."""
+        if not frequencia_data:
+            return False
+        
+        if frequencia_atual:
+            for attr, value in frequencia_data.items():
+                setattr(frequencia_atual, attr, value)
+            frequencia_atual.save()
+            frequencia_atual.refresh_from_db()
+            # Sempre considerar como mudança quando está editando
+            return True
+        else:
+            nova_frequencia = Frequencia.objects.create(**frequencia_data)
+            setattr(instance, campo_frequencia, nova_frequencia)
+            return True
+
+    def _recalcular_data_proxima(self, instance, tipo='calibracao'):
+        """Recalcula a data da próxima calibração ou checagem baseado no critério."""
+        if tipo == 'calibracao':
+            frequencia = instance.frequencia_calibracao
+            data_ultima = instance.data_ultima_calibracao
+            calcular_servico = calcular_data_proxima_calibracao_servico
+            calcular_calendario = calcular_data_proxima_calibracao_calendario
+            campo_proxima = 'data_proxima_calibracao'
+        else:
+            frequencia = instance.frequencia_checagem
+            data_ultima = instance.data_ultima_checagem
+            calcular_servico = calcular_data_proxima_checagem_servico
+            calcular_calendario = calcular_data_proxima_checagem_calendario
+            campo_proxima = 'data_proxima_checagem'
+        
+        if not frequencia:
+            setattr(instance, campo_proxima, None)
+            return
+        
+        criterio = instance.criterio_frequencia or instance.cliente.criterio_frequencia_padrao
+        posicao_uso = instance.Posicao.EM_USO
+        criterio_servico = CriterioFrequencia.SERVICO
+        
+        if criterio == criterio_servico and instance.posicao == posicao_uso:
+            setattr(instance, campo_proxima, calcular_servico(instance, criado=False))
+        elif criterio != criterio_servico:
+            # Critério calendário: precisa ter data_ultima
+            if data_ultima:
+                setattr(instance, campo_proxima, calcular_calendario(instance))
+            else:
+                setattr(instance, campo_proxima, None)
+        else:
+            # Critério serviço mas posição não é EM_USO: não calcular
+            setattr(instance, campo_proxima, None)
+
+    def _atualizar_relacionamentos(self, instance, normativos_nomes, pontos_data, criterios_data):
+        """Atualiza normativos, pontos de calibração e critérios de aceitação."""
+        # Normativos
+        normativos_objs = []
+        for nome in normativos_nomes:
+            if isinstance(nome, dict):
+                nome = nome.get('nome')
+            if nome:
+                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
+                normativos_objs.append(normativo)
+        instance.normativos.set(normativos_objs)
+        
+        # Pontos de calibração
+        if pontos_data is not None:
+            instance.pontos_de_calibracao.all().delete()
+            for ponto in pontos_data:
+                PontoDeCalibracao.objects.create(instrumento=instance, nome=ponto)
+        
+        # Critérios de aceitação
+        if criterios_data is not None:
+            instance.criterios_aceitacao.all().delete()
+            for criterio in criterios_data:
+                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
 
     def update(self, instance, validated_data):
+        # Extrair dados relacionados
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
         normativos_nomes = validated_data.pop('normativos', [])
         pontos_data = validated_data.pop('pontos_de_calibracao', None)
         criterios_data = validated_data.pop('criterios_aceitacao', None)
         setor = validated_data.pop('setor', None)
-
+        data_ultima_calibracao_original = instance.data_ultima_calibracao
+        data_ultima_checagem_original = instance.data_ultima_checagem
+        
+        # Preservar datas da última calibração/checagem se existirem calibrações reais
+        self._preservar_datas_ultimas(instance, validated_data, freq_calibracao_data, freq_checagem_data)
+        
+        # Obter usuário para movimentações
         user = None
         request = self.context.get("request")
         if request and hasattr(request, "user"):
             user = request.user
-
+        
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
-
+        
+        # Atualizar setor (pode ser string ou objeto)
         if setor:
             if isinstance(setor, str):
                 setor = self._get_or_create_setor_from_path(setor, instance.cliente)
@@ -880,28 +1002,32 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                     usuario_alteracao=user,
                 )
                 instance.setor = setor
-
-
-        if freq_checagem_data:
-            if instance.frequencia_checagem:
-                for attr, value in freq_checagem_data.items():
-                    setattr(instance.frequencia_checagem, attr, value)
-                instance.frequencia_checagem.save()
-            else:
-                instance.frequencia_checagem = Frequencia.objects.create(**freq_checagem_data)
-
-        if freq_calibracao_data:
-            if instance.frequencia_calibracao:
-                for attr, value in freq_calibracao_data.items():
-                    setattr(instance.frequencia_calibracao, attr, value)
-                instance.frequencia_calibracao.save()
-            else:
-                instance.frequencia_calibracao = Frequencia.objects.create(**freq_calibracao_data)
-
+        
+        # Atualizar frequências e detectar mudanças
+        frequencia_calibracao_mudou = self._atualizar_frequencia(
+            instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
+        )
+        frequencia_checagem_mudou = self._atualizar_frequencia(
+            instance, instance.frequencia_checagem, freq_checagem_data, 'frequencia_checagem'
+        )
+        
+        # Aplicar outros dados validados
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-    
+        # Detectar se data_ultima_calibracao ou data_ultima_checagem mudaram
+        data_ultima_calibracao_mudou = data_ultima_calibracao_original != instance.data_ultima_calibracao
+        data_ultima_checagem_mudou = data_ultima_checagem_original != instance.data_ultima_checagem
+        
+        # Recalcular datas da próxima calibração/checagem se necessário
+        # Recalcula quando: frequência mudou OU data da última calibração/checagem mudou
+        if frequencia_calibracao_mudou or data_ultima_calibracao_mudou:
+            self._recalcular_data_proxima(instance, tipo='calibracao')
+        
+        if frequencia_checagem_mudou or data_ultima_checagem_mudou:
+            self._recalcular_data_proxima(instance, tipo='checagem')
+        
+        # Registrar movimentação de posição
         if new_posicao and new_posicao != old_posicao:
             MovimentacaoInstrumento.objects.create(
                 instrumento=instance,
@@ -909,31 +1035,19 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 antiga_posicao=old_posicao,
                 usuario_alteracao=user,
             )
-
+        
+        # Forçar tracker a detectar mudanças na frequência
+        if frequencia_calibracao_mudou and instance.frequencia_calibracao:
+            instance.frequencia_calibracao_id = instance.frequencia_calibracao.id
+        
+        if frequencia_checagem_mudou and instance.frequencia_checagem:
+            instance.frequencia_checagem_id = instance.frequencia_checagem.id
+        
         instance.save()
-
-        normativos_objs = []
-        for nome in normativos_nomes:
-            if isinstance(nome, dict):
-                nome = nome.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
-                normativos_objs.append(normativo)
-        instance.normativos.set(normativos_objs)
-
-        if pontos_data is not None:
-            instance.pontos_de_calibracao.all().delete()
-            for ponto in pontos_data:
-                PontoDeCalibracao.objects.create(
-                    instrumento=instance,
-                    nome=ponto
-                )
-
-        if criterios_data is not None:
-            instance.criterios_aceitacao.all().delete()
-            for criterio in criterios_data:
-                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
-
+        
+        # Atualizar relacionamentos
+        self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
+        
         return instance
 
 class SetorInstrumentoAdminSerializer(serializers.ModelSerializer):
