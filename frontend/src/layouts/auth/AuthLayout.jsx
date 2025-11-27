@@ -1,14 +1,22 @@
 import { Outlet } from 'react-router';
-import { Container, Typography, Box } from '@mui/material';
+import { Container, Box } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import Logo from '../../components/Logo';
 
 
+const PageWrapper = styled(Box)(({ theme }) => ({
+  backgroundColor: theme.palette.background.paper,
+  minHeight: '100vh',
+  width: '100%',
+  margin: 0,
+  padding: 0,
+}));
+
 const StyledRoot = styled(Container)(({ theme }) => ({
     display: 'flex',
-    backgroundColor: theme.palette.background.paper,
+    backgroundColor: 'transparent',
     flex: 1,
-    height: '100vh',
+    minHeight: '100vh',
     flexDirection: 'column',
     justifyContent: 'center',
     paddingBottom: 20,
@@ -33,14 +41,13 @@ const StyledRoot = styled(Container)(({ theme }) => ({
 
 export default function AuthLayout() {
   return (
-    <div sx={{ backgroundColor: 'background.paper' }}>
-
-    <StyledRoot >
-      <LogoBox>
-        <Logo sx={{ maxWidth: 300 }} disabledLink />
-      </LogoBox>
-      <Outlet />
-    </StyledRoot>
-    </div>
+    <PageWrapper>
+      <StyledRoot>
+        <LogoBox>
+          <Logo sx={{ maxWidth: 300 }} disabledLink />
+        </LogoBox>
+        <Outlet />
+      </StyledRoot>
+    </PageWrapper>
   );
 }

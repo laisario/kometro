@@ -12,6 +12,7 @@ const StyledRoot = styled('div')({
   display: 'flex',
   minHeight: '100%',
   overflow: 'hidden',
+  position: 'relative',
 });
 
 const Main = styled('div')(({ theme }) => ({
@@ -20,6 +21,7 @@ const Main = styled('div')(({ theme }) => ({
   minHeight: '100%',
   paddingTop: APP_BAR_MOBILE + 12,
   paddingBottom: theme.spacing(2),
+  backgroundColor: theme.palette.background.default,
   [theme.breakpoints.up('lg')]: {
     paddingTop: APP_BAR_DESKTOP + 12,
     paddingLeft: theme.spacing(2),

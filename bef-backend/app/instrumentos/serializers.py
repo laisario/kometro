@@ -756,7 +756,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
 
 
     def update(self, instance, validated_data):
-        # Extrair dados relacionados
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
         normativos_nomes = validated_data.pop('normativos', [])
@@ -766,10 +765,8 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         data_ultima_calibracao_original = instance.data_ultima_calibracao
         data_ultima_checagem_original = instance.data_ultima_checagem
         
-        # Preservar datas da última calibração/checagem se existirem calibrações reais
         self._preservar_datas_ultimas(instance, validated_data, freq_calibracao_data, freq_checagem_data)
         
-        # Obter usuário para movimentações
         user = None
         request = self.context.get("request")
         if request and hasattr(request, "user"):
@@ -778,7 +775,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
         
-        # Atualizar setor
         if setor and setor.id != instance.setor.id:
             MovimentacaoSetorInstrumento.objects.create(
                 instrumento=instance,
@@ -788,7 +784,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
             )
             instance.setor_id = setor
         
-        # Atualizar frequências e detectar mudanças
         frequencia_calibracao_mudou = self._atualizar_frequencia(
             instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
         )
@@ -796,23 +791,18 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
             instance, instance.frequencia_checagem, freq_checagem_data, 'frequencia_checagem'
         )
         
-        # Aplicar outros dados validados
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-        # Detectar se data_ultima_calibracao ou data_ultima_checagem mudaram
         data_ultima_calibracao_mudou = data_ultima_calibracao_original != instance.data_ultima_calibracao
         data_ultima_checagem_mudou = data_ultima_checagem_original != instance.data_ultima_checagem
         
-        # Recalcular datas da próxima calibração/checagem se necessário
-        # Recalcula quando: frequência mudou OU data da última calibração/checagem mudou
         if frequencia_calibracao_mudou or data_ultima_calibracao_mudou:
             self._recalcular_data_proxima(instance, tipo='calibracao')
         
         if frequencia_checagem_mudou or data_ultima_checagem_mudou:
             self._recalcular_data_proxima(instance, tipo='checagem')
         
-        # Registrar movimentação de posição
         if new_posicao and new_posicao != old_posicao:
             MovimentacaoInstrumento.objects.create(
                 instrumento=instance,
@@ -821,7 +811,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
                 usuario_alteracao=user,
             )
         
-        # Forçar tracker a detectar mudanças na frequência
         if frequencia_calibracao_mudou and instance.frequencia_calibracao:
             instance.frequencia_calibracao_id = instance.frequencia_calibracao.id
         
@@ -830,7 +819,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         
         instance.save()
         
-        # Atualizar relacionamentos
         self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
         
         return instance
@@ -908,7 +896,7 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             )
             setor_pai = setor
         
-        return setor_pai  # Returns the final sector in the hierarchy
+        return setor_pai
 
     def create(self, validated_data):
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
@@ -924,7 +912,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         if  freq_calibracao_data and not is_frequencia_vazia(freq_calibracao_data):
             validated_data['frequencia_calibracao'] = Frequencia.objects.create(**freq_calibracao_data)
 
-        # Handle setor hierarchy path
         if setor_path:
             validated_data['setor'] = self._get_or_create_setor_from_path(setor_path, validated_data['cliente'])
 
@@ -961,9 +948,7 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         data_ultima_calibracao_from_front = validated_data.pop('data_ultima_calibracao', None)
         data_ultima_checagem_from_front = validated_data.pop('data_ultima_checagem', None)
         
-        # Se está atualizando frequência, preservar data da última calibração/checagem real
         if freq_calibracao_data or freq_checagem_data:
-            # Buscar última calibração real
             ultima_calibracao = instance.calibracoes.filter(checagem=False).order_by('-data').first()
             if ultima_calibracao and ultima_calibracao.data:
                 validated_data['data_ultima_calibracao'] = ultima_calibracao.data
@@ -973,7 +958,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             elif instance.data_ultima_calibracao:
                 validated_data['data_ultima_calibracao'] = instance.data_ultima_calibracao
             
-            # Buscar última checagem real
             ultima_checagem = instance.calibracoes.filter(checagem=True).order_by('-data').first()
             if ultima_checagem and ultima_checagem.data:
                 validated_data['data_ultima_checagem'] = ultima_checagem.data
@@ -983,7 +967,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             elif instance.data_ultima_checagem:
                 validated_data['data_ultima_checagem'] = instance.data_ultima_checagem
         else:
-            # Se não está atualizando frequência, manter comportamento original
             if data_ultima_calibracao_from_front is not None:
                 validated_data['data_ultima_calibracao'] = data_ultima_calibracao_from_front
             if data_ultima_checagem_from_front is not None:
@@ -999,7 +982,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 setattr(frequencia_atual, attr, value)
             frequencia_atual.save()
             frequencia_atual.refresh_from_db()
-            # Sempre considerar como mudança quando está editando
             return True
         else:
             nova_frequencia = Frequencia.objects.create(**frequencia_data)
@@ -1032,18 +1014,15 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         if criterio == criterio_servico and instance.posicao == posicao_uso:
             setattr(instance, campo_proxima, calcular_servico(instance, criado=False))
         elif criterio != criterio_servico:
-            # Critério calendário: precisa ter data_ultima
             if data_ultima:
                 setattr(instance, campo_proxima, calcular_calendario(instance))
             else:
                 setattr(instance, campo_proxima, None)
         else:
-            # Critério serviço mas posição não é EM_USO: não calcular
             setattr(instance, campo_proxima, None)
 
     def _atualizar_relacionamentos(self, instance, normativos_nomes, pontos_data, criterios_data):
         """Atualiza normativos, pontos de calibração e critérios de aceitação."""
-        # Normativos
         normativos_objs = []
         for nome in normativos_nomes:
             if isinstance(nome, dict):
@@ -1053,20 +1032,17 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 normativos_objs.append(normativo)
         instance.normativos.set(normativos_objs)
         
-        # Pontos de calibração
         if pontos_data is not None:
             instance.pontos_de_calibracao.all().delete()
             for ponto in pontos_data:
                 PontoDeCalibracao.objects.create(instrumento=instance, nome=ponto)
         
-        # Critérios de aceitação
         if criterios_data is not None:
             instance.criterios_aceitacao.all().delete()
             for criterio in criterios_data:
                 CriterioAceitacao.objects.create(instrumento=instance, **criterio)
 
     def update(self, instance, validated_data):
-        # Extrair dados relacionados
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
         normativos_nomes = validated_data.pop('normativos', [])
@@ -1076,10 +1052,8 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         data_ultima_calibracao_original = instance.data_ultima_calibracao
         data_ultima_checagem_original = instance.data_ultima_checagem
         
-        # Preservar datas da última calibração/checagem se existirem calibrações reais
         self._preservar_datas_ultimas(instance, validated_data, freq_calibracao_data, freq_checagem_data)
         
-        # Obter usuário para movimentações
         user = None
         request = self.context.get("request")
         if request and hasattr(request, "user"):
@@ -1088,7 +1062,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
         
-        # Atualizar setor (pode ser string ou objeto)
         if setor:
             if isinstance(setor, str):
                 setor = self._get_or_create_setor_from_path(setor, instance.cliente)
@@ -1102,7 +1075,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 )
                 instance.setor = setor
         
-        # Atualizar frequências e detectar mudanças
         frequencia_calibracao_mudou = self._atualizar_frequencia(
             instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
         )
@@ -1110,23 +1082,18 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             instance, instance.frequencia_checagem, freq_checagem_data, 'frequencia_checagem'
         )
         
-        # Aplicar outros dados validados
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
-        # Detectar se data_ultima_calibracao ou data_ultima_checagem mudaram
         data_ultima_calibracao_mudou = data_ultima_calibracao_original != instance.data_ultima_calibracao
         data_ultima_checagem_mudou = data_ultima_checagem_original != instance.data_ultima_checagem
         
-        # Recalcular datas da próxima calibração/checagem se necessário
-        # Recalcula quando: frequência mudou OU data da última calibração/checagem mudou
         if frequencia_calibracao_mudou or data_ultima_calibracao_mudou:
             self._recalcular_data_proxima(instance, tipo='calibracao')
         
         if frequencia_checagem_mudou or data_ultima_checagem_mudou:
             self._recalcular_data_proxima(instance, tipo='checagem')
         
-        # Registrar movimentação de posição
         if new_posicao and new_posicao != old_posicao:
             MovimentacaoInstrumento.objects.create(
                 instrumento=instance,
@@ -1135,7 +1102,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
                 usuario_alteracao=user,
             )
         
-        # Forçar tracker a detectar mudanças na frequência
         if frequencia_calibracao_mudou and instance.frequencia_calibracao:
             instance.frequencia_calibracao_id = instance.frequencia_calibracao.id
         
@@ -1144,7 +1110,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         
         instance.save()
         
-        # Atualizar relacionamentos
         self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
         
         return instance

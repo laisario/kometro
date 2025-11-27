@@ -1,5 +1,5 @@
 import { Accordion, AccordionDetails, AccordionSummary, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputAdornment, InputLabel, List, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import useResponsive from '../../theme/hooks/useResponsive';
 import { useForm, useWatch } from 'react-hook-form';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -16,6 +16,8 @@ import VirtualizedInstrumentAutocomplete from './VirtualizedInstrumentAutocomple
 import AddArrayField from '../../components/AddArrayField';
 import FormNorms from '../../components/FormNorms';
 import CriteriosDeAceitacao from '../../components/CriteriosDeAceitacao';
+import { useQuery } from 'react-query';
+import { axios } from '../../api';
 
 const PriceSection = ({form, error, setError}) => {
   return (
@@ -72,52 +74,68 @@ function CreateInstrument(props) {
   const isMobile = useResponsive('down', 'md');
   const options = useMemo(() => flattenSectors(setores), [setores]);
   
-  const [instrumentoSelecionado, setInstrumentoSelecionado] = useState(asset ? {
-    descricao: asset?.instrumento?.tipoDeInstrumento?.descricao ? asset?.instrumento?.tipoDeInstrumento?.descricao : '',
-    modelo: asset?.instrumento?.tipoDeInstrumento?.modelo ? asset?.instrumento?.tipoDeInstrumento?.modelo : '',
-    fabricante: asset?.instrumento?.tipoDeInstrumento?.fabricante ? asset?.instrumento?.tipoDeInstrumento?.fabricante : '',
-    procedimentoRelacionado: asset?.instrumento?.procedimentoRelacionado?.codigo ? asset?.instrumento?.procedimentoRelacionado?.codigo :'',
-    tipoDeServico: asset?.instrumento?.tipoDeServico ? asset?.instrumento?.tipoDeServico : '',
-    minimo:  asset?.instrumento?.minimo ? asset?.instrumento?.minimo : null,
-    maximo:  asset?.instrumento?.maximo ? asset?.instrumento?.maximo : null,
-    unidade:  asset?.instrumento?.unidade ? asset?.instrumento?.unidade : '',
-    resolucao:  asset?.instrumento?.tipoDeInstrumento?.resolucao ? asset?.instrumento?.tipoDeInstrumento?.resolucao : null,
-    tipoSinal:  asset?.instrumento?.tipoSinal ? asset?.instrumento?.tipoSinal : '',
-    capacidadeMedicao: asset?.instrumento?.capacidadeDeMedicao?.valor ? asset?.instrumento?.capacidadeDeMedicao?.valor : null,
-    unidadeCapacidade: asset?.instrumento?.capacidadeDeMedicao?.unidade ? asset?.instrumento?.capacidadeDeMedicao?.unidade : '',
-    precoCalibracaoNoLaboratorio: asset?.instrumento?.precoCalibracaoNoLaboratorio ? asset?.instrumento?.precoCalibracaoNoLaboratorio : null,
-    precoCalibracaoNoCliente: asset?.instrumento?.precoCalibracaoCliente ? asset?.instrumento?.precoCalibracaoCliente : null,
+  // Buscar instrumento atualizado quando o formulário estiver aberto (para edição)
+  // Isso aproveita o cache do React Query e atualiza automaticamente após invalidateQueries
+  const { data: updatedAsset } = useQuery({
+    queryKey: ['instrumentos', asset?.id],
+    queryFn: async () => {
+      const response = await axios.get(`/instrumentos/${asset?.id}/`);
+      return response?.data;
+    },
+    enabled: !!asset?.id && open, // Só busca quando está editando e o diálogo está aberto
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+  });
+
+  // Usar o asset atualizado da query se disponível, senão usar o prop
+  const currentAsset = updatedAsset || asset;
+  
+  const [instrumentoSelecionado, setInstrumentoSelecionado] = useState(currentAsset ? {
+    descricao: currentAsset?.instrumento?.tipoDeInstrumento?.descricao ? currentAsset?.instrumento?.tipoDeInstrumento?.descricao : '',
+    modelo: currentAsset?.instrumento?.tipoDeInstrumento?.modelo ? currentAsset?.instrumento?.tipoDeInstrumento?.modelo : '',
+    fabricante: currentAsset?.instrumento?.tipoDeInstrumento?.fabricante ? currentAsset?.instrumento?.tipoDeInstrumento?.fabricante : '',
+    procedimentoRelacionado: currentAsset?.instrumento?.procedimentoRelacionado?.codigo ? currentAsset?.instrumento?.procedimentoRelacionado?.codigo :'',
+    tipoDeServico: currentAsset?.instrumento?.tipoDeServico ? currentAsset?.instrumento?.tipoDeServico : '',
+    minimo:  currentAsset?.instrumento?.minimo ? currentAsset?.instrumento?.minimo : null,
+    maximo:  currentAsset?.instrumento?.maximo ? currentAsset?.instrumento?.maximo : null,
+    unidade:  currentAsset?.instrumento?.unidade ? currentAsset?.instrumento?.unidade : '',
+    resolucao:  currentAsset?.instrumento?.tipoDeInstrumento?.resolucao ? currentAsset?.instrumento?.tipoDeInstrumento?.resolucao : null,
+    tipoSinal:  currentAsset?.instrumento?.tipoSinal ? currentAsset?.instrumento?.tipoSinal : '',
+    capacidadeMedicao: currentAsset?.instrumento?.capacidadeDeMedicao?.valor ? currentAsset?.instrumento?.capacidadeDeMedicao?.valor : null,
+    unidadeCapacidade: currentAsset?.instrumento?.capacidadeDeMedicao?.unidade ? currentAsset?.instrumento?.capacidadeDeMedicao?.unidade : '',
+    precoCalibracaoNoLaboratorio: currentAsset?.instrumento?.precoCalibracaoNoLaboratorio ? currentAsset?.instrumento?.precoCalibracaoNoLaboratorio : null,
+    precoCalibracaoNoCliente: currentAsset?.instrumento?.precoCalibracaoCliente ? currentAsset?.instrumento?.precoCalibracaoCliente : null,
   } : null);
-  const [norms, setNorms] = useState(asset?.normativos?.length ? asset?.normativos : []);
+  const [norms, setNorms] = useState(currentAsset?.normativos?.length ? currentAsset?.normativos : []);
   const [showFormNewAsset, setShowFormNewAsset] = useState(false);
   const [showFormNewNorm, setShowFormNewNorm] = useState(false);
   const [inputNorm, setInputNorm] = useState('');
-  const [setorId, setSetorId] = useState(asset?.setor?.id ? asset?.setor?.id : null);
+  const [setorId, setSetorId] = useState(currentAsset?.setor?.id ? currentAsset?.setor?.id : null);
   const { normas } = useNorms(cliente);
   
-  const selectedOption = useMemo(() => options?.find((opt) => opt?.id === setorId) || null, [asset?.setor?.id, setorId, options]);
+  const selectedOption = useMemo(() => options?.find((opt) => opt?.id === setorId) || null, [currentAsset?.setor?.id, setorId, options]);
 
   const form = useForm({
     defaultValues: {
-      tag: asset?.tag ? asset.tag : '',
-      numeroDeSerie: asset?.numeroDeSerie ? asset.numeroDeSerie : '',
-      classe: asset?.classe ? asset.classe : '',
-      posicao: asset?.posicao ? asset.posicao : "I",
-      observacao: asset?.observacao ? asset.observacao : '',
+      tag: currentAsset?.tag ? currentAsset.tag : '',
+      numeroDeSerie: currentAsset?.numeroDeSerie ? currentAsset.numeroDeSerie : '',
+      classe: currentAsset?.classe ? currentAsset.classe : '',
+      posicao: currentAsset?.posicao ? currentAsset.posicao : "I",
+      observacao: currentAsset?.observacao ? currentAsset.observacao : '',
       frequenciaChecagem: {
-        quantidade: asset?.frequenciaChecagem?.quantidade ? asset.frequenciaChecagem.quantidade : null,
-        periodo: asset?.frequenciaChecagem?.periodo ? asset.frequenciaChecagem.periodo : 'dia',
+        quantidade: currentAsset?.frequenciaChecagem?.quantidade ? currentAsset.frequenciaChecagem.quantidade : null,
+        periodo: currentAsset?.frequenciaChecagem?.periodo ? currentAsset.frequenciaChecagem.periodo : 'dia',
       },
       frequenciaCalibracao: {
-        quantidade: asset?.frequenciaCalibracao?.quantidade ? asset.frequenciaCalibracao.quantidade : null,
-        periodo: asset?.frequenciaCalibracao?.periodo ? asset.frequenciaCalibracao.periodo : 'dia',
+        quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
+        periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
       },
-      pontosDeCalibracao: asset?.pontosDeCalibracao?.length ? asset?.pontosDeCalibracao?.map((p) => p?.nome) : [],
-      dataUltimaCalibracao: asset?.dataUltimaCalibracao ? asset?.dataUltimaCalibracao : null,
-      dataUltimaChecagem: asset?.dataUltimaChecagem ? asset?.dataUltimaChecagem : null,
-      criteriosAceitacao: asset?.criteriosAceitacao?.length ? asset?.criteriosAceitacao : [],
-      criterioFrequencia: asset?.criterioFrequencia || '',
-      setor: asset?.setor?.caminhoHierarquia || '',
+      pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao?.map((p) => p?.nome) : [],
+      dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
+      dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
+      criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
+      criterioFrequencia: currentAsset?.criterioFrequencia || '',
+      setor: currentAsset?.setor?.caminhoHierarquia || '',
     }
   });
 
@@ -125,6 +143,49 @@ function CreateInstrument(props) {
     dataUltimaChecagem,
     dataUltimaCalibracao,
   } = useWatch({ control: form?.control })
+
+  useEffect(() => {
+    if (currentAsset && open) {
+      form.reset({
+        tag: currentAsset?.tag ? currentAsset.tag : '',
+        numeroDeSerie: currentAsset?.numeroDeSerie ? currentAsset.numeroDeSerie : '',
+        classe: currentAsset?.classe ? currentAsset.classe : '',
+        posicao: currentAsset?.posicao ? currentAsset.posicao : "I",
+        observacao: currentAsset?.observacao ? currentAsset.observacao : '',
+        frequenciaChecagem: {
+          quantidade: currentAsset?.frequenciaChecagem?.quantidade ? currentAsset.frequenciaChecagem.quantidade : null,
+          periodo: currentAsset?.frequenciaChecagem?.periodo ? currentAsset.frequenciaChecagem.periodo : 'dia',
+        },
+        frequenciaCalibracao: {
+          quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
+          periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
+        },
+        pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao?.map((p) => p?.nome) : [],
+        dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
+        dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
+        criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
+        criterioFrequencia: currentAsset?.criterioFrequencia || '',
+        setor: currentAsset?.setor?.caminhoHierarquia || '',
+      });
+
+      if (currentAsset?.instrumento) {
+        setInstrumentoSelecionado({
+          id: currentAsset.instrumento.id,
+          ...currentAsset.instrumento,
+        });
+      } else {
+        setInstrumentoSelecionado(null);
+      }
+
+      if (currentAsset?.normativos?.length) {
+        setNorms(currentAsset.normativos);
+      }
+
+      if (currentAsset?.setor?.id) {
+        setSetorId(currentAsset.setor.id);
+      }
+    }
+  }, [currentAsset, open]);
 
   const onSubmit = (data) => {
     const payload = {
@@ -145,17 +206,17 @@ function CreateInstrument(props) {
     }
     
     
-    if (asset?.id) {
+    if (currentAsset?.id) {
       const adminPayload = {
         ...payload,
-        id: asset?.id,
+        id: currentAsset?.id,
       }
       
       const clientPayload = {
         ...payload,
-        id: asset?.id,
+        id: currentAsset?.id,
         setor: setorId,
-        previousSetorId: asset?.setor?.id,
+        previousSetorId: currentAsset?.setor?.id,
       }
 
       
@@ -177,39 +238,32 @@ function CreateInstrument(props) {
   } = useWatch({ control: form?.control })
   
 
-  const podeMostrarCalibracao = useMemo(() =>  criterioFrequencia === 'S' || asset?.criterioFrequencia === "S"
+  const podeMostrarCalibracao = useMemo(() =>  criterioFrequencia === 'S' || currentAsset?.criterioFrequencia === "S"
     ? posicao === 'U'
-    : !asset?.calibracoes?.length, [posicao, criterioFrequencia])
+    : !currentAsset?.calibracoes?.length, [posicao, criterioFrequencia, currentAsset])
    
 
-  const podeMostrarChecagem = useMemo(() => criterioFrequencia === 'S' || asset?.criterioFrequencia === "S"
+  const podeMostrarChecagem = useMemo(() => criterioFrequencia === 'S' || currentAsset?.criterioFrequencia === "S"
     ? posicao === 'U'
-    : !asset?.checagens?.length, [criterioFrequencia, posicao])
+    : !currentAsset?.checagens?.length, [criterioFrequencia, posicao, currentAsset])
   return (
     <Dialog onClose={() => {handleClose()}} open={open} fullScreen={isMobile}>
-      <DialogTitle>{asset ? 'Editar instrumento' : 'Crie seu instrumento'}</DialogTitle>
+      <DialogTitle>{currentAsset ? 'Editar instrumento' : 'Crie seu instrumento'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column' }}>
         <Accordion defaultExpanded>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Instrumento base
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
-            {!asset?.id && <Typography
+            {!currentAsset?.id && <Typography
               variant="body2"
               color="text.secondary"
               sx={{ mb: 2 }}
             >
               Escolha um instrumento base (obrigatório). Preencha os detalhes agora nas seções abaixo ou continue depois.
             </Typography>}
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mb: 1 }}
-            >
-              Busque pelo nome do instrumento (ex: paquímetro, balança...)
-            </Typography>
             <VirtualizedInstrumentAutocomplete
               options={defaultAssets?.results || []}
               value={instrumentoSelecionado}
@@ -231,9 +285,17 @@ function CreateInstrument(props) {
               clientId={cliente || null}
               setInstrumentoSelecionado={setInstrumentoSelecionado}
             />
-            {asset?.instrumento && (
-              <Typography color='warning' variant="body1" sx={{ mt: 1 }}>
-                Instrumento escolhido: <strong>{asset?.instrumento?.tipoDeInstrumento?.descricao} {!!asset?.instrumento?.tipoDeInstrumento?.modelo && asset?.instrumento?.tipoDeInstrumento?.modelo} {!!asset?.instrumento?.tipoDeInstrumento?.fabricante && asset?.instrumento?.tipoDeInstrumento?.fabricante}</strong>
+            {currentAsset?.instrumento && !instrumentoSelecionado && (
+              <Typography 
+                variant="body2" 
+                color="text.secondary" 
+                sx={{ mt: 1.5, p: 1.5, bgcolor: 'action.hover', borderRadius: 1 }}
+              >
+                Instrumento atual: <strong>
+                  {currentAsset?.instrumento?.tipoDeInstrumento?.descricao}
+                  {currentAsset?.instrumento?.tipoDeInstrumento?.modelo && ` ${currentAsset?.instrumento?.tipoDeInstrumento?.modelo}`}
+                  {currentAsset?.instrumento?.tipoDeInstrumento?.fabricante && ` / ${currentAsset?.instrumento?.tipoDeInstrumento?.fabricante}`}
+                </strong>
               </Typography>
             )}
             <Typography
@@ -294,7 +356,7 @@ function CreateInstrument(props) {
         </Accordion>
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Critérios de Aceitação
             </Typography>
           </AccordionSummary>
@@ -307,7 +369,7 @@ function CreateInstrument(props) {
         </Accordion>
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Status do Instrumento
             </Typography>
           </AccordionSummary>
@@ -333,7 +395,7 @@ function CreateInstrument(props) {
         </Accordion>
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Frequência
             </Typography>
           </AccordionSummary>
@@ -348,6 +410,7 @@ function CreateInstrument(props) {
                     <Select
                       labelId="passagem-tempo-label"
                       label="Critério de frequência"
+                      size='small'
                       value={form.watch('criterioFrequencia')}
                       onChange={(e) => form.setValue('criterioFrequencia', e.target.value)}
                     >
@@ -355,12 +418,12 @@ function CreateInstrument(props) {
                       <MenuItem value="S">Tempo de serviço</MenuItem>
                     </Select>
                   </FormControl>
-                  <Typography variant='body2' color='secondary'>Preferência atual: {asset?.criterioFrequencia ? frequenceCriterion[asset?.criterioFrequencia] : frequenceCriterion[client?.criterioFrequenciaPadrao]}</Typography>
+                  <Typography variant='body2' color='secondary'>Preferência atual: {currentAsset?.criterioFrequencia ? frequenceCriterion[currentAsset?.criterioFrequencia] : frequenceCriterion[client?.criterioFrequenciaPadrao]}</Typography>
                 </Grid>
                 <Grid item xs={12}>
                   <Grid container alignItems="center" spacing={2}>
                     <Grid item xs={12} sm={2}>
-                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      <Typography variant="subtitle2" color="text.secondary" >
                         Checagem
                       </Typography>
                     </Grid>
@@ -368,8 +431,8 @@ function CreateInstrument(props) {
                       <TextField
                         label="Quantidade"
                         type="number"
+                        size='small'
                         inputProps={{ min: 0, max: 365 }}
-                        size="small"
                         fullWidth
                         {...form.register('frequenciaChecagem.quantidade')}
                       />
@@ -378,8 +441,8 @@ function CreateInstrument(props) {
                       <TextField
                         label="Frequência"
                         select
-                        size="small"
                         fullWidth
+                        size='small'
                         value={form.watch('frequenciaChecagem.periodo')}
                         {...form.register('frequenciaChecagem.periodo')}
                       >
@@ -396,7 +459,11 @@ function CreateInstrument(props) {
                             value={form?.watch('dataUltimaChecagem') ? dayjs(form?.watch('dataUltimaChecagem')) : null}
                             onChange={newValue => form?.setValue("dataUltimaChecagem", newValue)}
                             fullWidth
-                            size='small'
+                            slotProps={{
+                              textField: {
+                                size: 'small',
+                              },
+                            }}
                           />
                       </Grid>
                     )}
@@ -406,7 +473,7 @@ function CreateInstrument(props) {
                 <Grid item xs={12}>
                   <Grid container alignItems="center"  spacing={2}>
                     <Grid item xs={12} sm={2}>
-                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      <Typography variant="subtitle2" color="text.secondary" >
                         Calibração
                       </Typography>
                     </Grid>
@@ -414,8 +481,8 @@ function CreateInstrument(props) {
                       <TextField
                         label="Quantidade"
                         type="number"
+                        size='small'
                         inputProps={{ min: 0, max: 100 }}
-                        size="small"
                         fullWidth
                         {...form.register('frequenciaCalibracao.quantidade')}
                         />
@@ -424,8 +491,8 @@ function CreateInstrument(props) {
                       <TextField
                         label="Frequência"
                         select
-                        size="small"
                         fullWidth
+                        size='small'
                         value={form.watch('frequenciaCalibracao.periodo')}
                         {...form.register('frequenciaCalibracao.periodo')}
                         >
@@ -442,7 +509,11 @@ function CreateInstrument(props) {
                           value={form?.watch('dataUltimaCalibracao') ? dayjs(form?.watch('dataUltimaCalibracao')) : null}
                           onChange={newValue => form?.setValue("dataUltimaCalibracao", newValue)}
                           fullWidth
-                          size='small'
+                          slotProps={{
+                            textField: {
+                              size: 'small',
+                            },
+                          }}
                           />
                       </Grid>
                     )}
@@ -454,7 +525,7 @@ function CreateInstrument(props) {
         </Accordion>
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Pontos de Calibração
             </Typography>
           </AccordionSummary>
@@ -464,7 +535,7 @@ function CreateInstrument(props) {
         </Accordion>     
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Normativos legais
             </Typography>
           </AccordionSummary>
@@ -533,9 +604,9 @@ function CreateInstrument(props) {
            <FormNorms open={showFormNewNorm} setNorms={setNorms} onClose={() => setShowFormNewNorm(false)} />
           </AccordionDetails>
         </Accordion>
-        {!!asset?.id && !adminPreview && <Accordion>
+        {!!currentAsset?.id && !adminPreview && <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+              <Typography variant="subtitle1" color="text.secondary">
                 Trocar instrumento de setor
               </Typography>
             </AccordionSummary>
@@ -572,16 +643,16 @@ function CreateInstrument(props) {
                   </li>
                 )}
               />
-              {asset?.setor?.id && (
+              {currentAsset?.setor?.id && (
                 <Typography variant="body2" sx={{ mt: 1 }}>
-                  Setor atual: <strong>{asset?.setor?.nome}</strong>
+                  Setor atual: <strong>{currentAsset?.setor?.nome}</strong>
                 </Typography>
               )}
             </AccordionDetails>
         </Accordion>}
         {adminPreview && <Accordion>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+              <Typography variant="subtitle1" color="text.secondary">
                 Setor
               </Typography>
             </AccordionSummary>
@@ -593,16 +664,16 @@ function CreateInstrument(props) {
                 {...form.register('setor')}
                 helperText="Caminho hierárquico completo do setor, separado por '/' (ex: Produção/Qualidade/Controle)"
               />
-              {asset?.setor?.id && (
+              {currentAsset?.setor?.id && (
                 <Typography variant="body2" sx={{ mt: 1 }}>
-                  Setor atual: <strong>{asset?.setor?.caminhoHierarquia}</strong>
+                  Setor atual: <strong>{currentAsset?.setor?.caminhoHierarquia}</strong>
                 </Typography>
               )}
             </AccordionDetails>
         </Accordion>}
         <Accordion>
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-            <Typography variant="subtitle1" color="text.secondary" gutterBottom mt={2}>
+            <Typography variant="subtitle1" color="text.secondary">
               Observação
             </Typography>
           </AccordionSummary>

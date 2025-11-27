@@ -277,7 +277,6 @@ const VirtualizedInstrumentAutocomplete = ({
     selectedValue: value,
   }), [options, handleSelect, value]);
 
-  // Memoize the hasResults check to prevent unnecessary re-renders
   const hasResults = useMemo(() => options.length > 0, [options.length]);
 
   const handleItemsRendered = useCallback(({ visibleStopIndex }) => {
@@ -306,6 +305,7 @@ const VirtualizedInstrumentAutocomplete = ({
         {...props}
         value={displayValue}
         fullWidth
+        placeholder="Busque pelo nome do instrumento (ex: paquímetro, balança...)"
         onChange={handleInputChange}
         onFocus={handleOpen}
         error={!!error}
