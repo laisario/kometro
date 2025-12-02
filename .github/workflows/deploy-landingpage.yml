@@ -5,9 +5,9 @@ on:
   push:
     branches:
       - main
-  paths:
-    - 'bef-landing-page/**'
-    - '.github/workflows/deploy-landingpage.yml'
+    paths:
+      - 'bef-landing-page/**'
+      - '.github/workflows/deploy-landingpage.yml'
 
 jobs:
   build-and-deploy:
