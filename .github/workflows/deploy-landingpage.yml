@@ -24,10 +24,12 @@ jobs:
 
       - name: 📄 Making .env
         run: |
+          cd bef-landing-page
           echo "${{ secrets.NEXT_PUBLIC_API_URL }}" > .env
 
       - name: Build Next.js
         run: |
+          cd bef-landing-page
           npm install
           npm run export
         env:
@@ -39,7 +41,7 @@ jobs:
           server: ${{ secrets.KINGHOST_FTP_HOST }}
           username: ${{ secrets.KINGHOST_FTP_USER }}
           password: ${{ secrets.KINGHOST_FTP_PASSWORD }}
-          local-dir: ./out/
+          local-dir: ./bef-landing-page/out/
           server-dir: ${{ secrets.KINGHOST_FTP_PATH }}/
           log-level: verbose
           dry-run: true
