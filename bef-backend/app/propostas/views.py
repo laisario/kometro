@@ -1,16 +1,13 @@
-import os
 from datetime import date
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
-from django.templatetags.static import static
 from django_filters.rest_framework import DjangoFilterBackend
 
 from rest_framework import mixins, response, status, viewsets, filters, permissions
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
-from .task import enviar_proposta_cliente_email
+from .task import enviar_proposta_cliente_email, gerar_pdf_proposta
 from .models import Proposta, Revisao, Anexo
-from .pdf import render_to_pdf
 from .serializers import (
     PropostaAdminSerializer,
     PropostaFaturamentoSerializer,
@@ -62,35 +59,16 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                 proposta.status = "AA"
                 proposta.save()
 
-                instrumentos = proposta.instrumentos.all()
                 proposta.cliente.propostas_aguardando_aprovacao += 1
-
-                logo = static("logo.png")
-                selo = static("selo-acreditado-inmetro.jpg")
-
-                rev = Revisao.objects.create(proposta=proposta)
-                pdf = render_to_pdf(
-                    f"{os.path.dirname(__file__)}/templates/proposta.html",
-                    {
-                        "instrumentos": instrumentos,
-                        "proposta": proposta,
-                        "data": date.today().strftime("%d/%m/%Y"),
-                        "condicao_pagamento": proposta.condicao_de_pagamento,
-                        "logo": logo.split("?")[0],
-                        "selo": selo,
-                        "rev": rev.rev,
-                        "total": serializer.data["total_com_desconto"],
-                    },
-                )
-                if not pdf:
-                    raise ValidationError(f"Falha ao gerar o PDF para a proposta {proposta.id}")
-
-                file_name = f"proposta{proposta.id}.pdf"
-                content_file = ContentFile(pdf, name=file_name)
-                rev.pdf = content_file
-                rev.save()
-
                 proposta.cliente.save()
+
+                # Criar revisão sem PDF inicialmente
+                rev = Revisao.objects.create(proposta=proposta)
+                
+                # Gerar PDF de forma síncrona (espera a conclusão)
+                total_com_desconto = serializer.data.get("total_com_desconto", 0)
+                # Chamar a task diretamente para execução síncrona
+                gerar_pdf_proposta(proposta.id, rev.id, total_com_desconto)
 
             return response.Response(
                 {"message": "Proposta elaborada com sucesso!"},
@@ -234,6 +212,7 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
             serializer.save()
             return response.Response({"status": "faturamento atualizado com sucesso"})
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 
 class PropostaFileViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin):

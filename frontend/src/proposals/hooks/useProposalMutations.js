@@ -197,6 +197,10 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
     mutationFn: elaborate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['propostas'] })
+      // Invalidar também a query individual da proposta para atualizar os dados
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: ['propostas', id] })
+      }
       enqueueSnackbar('Proposta elaborada com sucesso!', {
         variant: 'success'
       });

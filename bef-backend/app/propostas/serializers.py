@@ -1,11 +1,12 @@
 from django.core.files import File
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db import models
 from clientes.models import Cliente
 from clientes.serializers import ClienteSerializer, UserSerializer
 from enderecos.models import Endereco
 from enderecos.serializers import ReadEnderecoSerializer, WriteEnderecoSerializer
-from instrumentos.models import InstrumentoDoCliente
+from instrumentos.models import InstrumentoDoCliente, Local
 from instrumentos.serializers import InstrumentoDoClienteReadSerializer
 from .models import Proposta, Revisao, Anexo
 from decimal import Decimal, InvalidOperation
@@ -130,7 +131,36 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                 **endereco_de_entrega_add
             )
 
-        return super().update(instance=instance, validated_data=validated_data)
+        # Salvar primeiro para ter os instrumentos atualizados
+        instance = super().update(instance=instance, validated_data=validated_data)
+        
+        # Recalcular o total baseado nos instrumentos e no local da proposta
+        if instance.instrumentos.exists():
+            local = instance.local or Local.PERMANENTE
+            if local == Local.CLIENTE:
+                preco_field = "instrumento__preco_calibracao_no_cliente"
+            else:
+                preco_field = "instrumento__preco_calibracao_no_laboratorio"
+            
+            total_calculado = (
+                instance.instrumentos.aggregate(
+                    total=models.Sum(
+                        models.Case(
+                            models.When(
+                                preco_alternativo_calibracao__isnull=False,
+                                then=models.F("preco_alternativo_calibracao"),
+                            ),
+                            default=models.F(preco_field),
+                        )
+                    )
+                )["total"]
+                or Decimal("0")
+            )
+            
+            instance.total = total_calculado
+            instance.save(update_fields=['total'])
+
+        return instance
 
     def get_total_com_desconto(self, proposta):
         try:

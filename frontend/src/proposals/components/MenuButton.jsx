@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Menu, MenuItem, IconButton, CircularProgress } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
+import ConfirmDeleteDialog from "../../assets/components/ConfirmDeleteDialog";
 
 export default function MenuButton(props) {
   const {
@@ -14,6 +15,7 @@ export default function MenuButton(props) {
     isApprovingBilling,
   } = props;
   const [anchorEl, setAnchorEl] = useState(null);
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const open = Boolean(anchorEl);
 
   const handleClick = (event) => {
@@ -24,13 +26,22 @@ export default function MenuButton(props) {
     setAnchorEl(null);
   };
 
+  const handleDeleteClick = () => {
+    handleClose();
+    setOpenDeleteDialog(true);
+  };
+
+  const handleConfirmDelete = () => {
+    deleteOrderAndNavigate();
+  };
+
   return (
     <>
       {isDeleting || isLoadingElaborateProposal || isApprovingBilling ? <CircularProgress size="20px" color="inherit" /> : <IconButton onClick={handleClick}>
         <MoreVertIcon />
       </IconButton>}
       <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-        <MenuItem onClick={() => { handleClose(); deleteOrderAndNavigate(); }}>
+        <MenuItem onClick={handleDeleteClick}>
           Deletar proposta
         </MenuItem>
 
@@ -48,6 +59,13 @@ export default function MenuButton(props) {
           Liberar para faturamento
         </MenuItem>
       </Menu>
+
+      <ConfirmDeleteDialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+        onConfirm={handleConfirmDelete}
+        type="proposal"
+      />
     </>
   );
 }

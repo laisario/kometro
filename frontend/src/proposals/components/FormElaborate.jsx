@@ -44,6 +44,7 @@ function FormElaborate(props) {
     setElaborate, 
     elaborateProposal,
     isLoadingElaborateProposal,
+    isSuccessElaborate,
   } = props;
   const [anexos, setAnexos] = useState([])
   const [loadingAnexo, setLoadingAnexo] = useState(false)
@@ -130,6 +131,15 @@ function FormElaborate(props) {
     setLoadingAnexo(false)
   }
 
+  // Fechar dialog quando a elaboração for bem-sucedida
+  useEffect(() => {
+    if (isSuccessElaborate) {
+      setElaborate(false)
+      form.reset()
+      setLoadingAnexo(false)
+    }
+  }, [isSuccessElaborate, setElaborate, form])
+
   const descontoPercentual = form.watch("descontoPercentual")
 
   const handleCalcularDesconto = () => {
@@ -201,6 +211,7 @@ function FormElaborate(props) {
               value={validade ? dayjs(validade) : null}
               onChange={newValue => form.setValue("validade", newValue)}
               sx={{ width: '50%' }}
+              slotProps={{ textField: { size: 'small' } }}
             />
             <TextField
               id="condicaoDePagamento"
@@ -209,6 +220,7 @@ function FormElaborate(props) {
               variant="outlined"
               sx={{ width: '50%' }}
               {...form.register("condicaoDePagamento")}
+              size="small"
             />
           </Box>
           <Box display="flex" gap={2}>
@@ -315,25 +327,33 @@ function FormElaborate(props) {
         </DialogContent>
       </LocalizationProvider>
       <DialogActions>
-        <Box width="100%" display="flex" alignItems="center" justifyContent="space-between">
-          <Button color="secondary" onClick={handleClose}>Cancelar</Button>
-          {isLoadingElaborateProposal ? <CircularProgress /> : <Button
-            endIcon={<Iconify icon={'eva:arrow-ios-forward-fill'} />}
-            sx={{ maxWidth: '45%' }}
-            type="submit"
-            fullWidth
-            variant="contained"
-            onClick={() => {
-              form.handleSubmit((submitData) => elaborateProposal({
-                addressClient: data?.cliente?.endereco?.id,
-                responsavel: submitData?.responsavel,
-                data: submitData, 
-              }))()
-              handleClose()
-            }}
-          >
-            Salvar
-          </Button>}
+        <Box width="100%" display="flex" flexDirection="column" gap={1}>
+          <Box width="100%" display="flex" alignItems="center" justifyContent="space-between">
+            <Button color="secondary" onClick={handleClose} disabled={isLoadingElaborateProposal}>Cancelar</Button>
+            <Button
+              endIcon={isLoadingElaborateProposal ? <CircularProgress size={16} /> : <Iconify icon={'eva:arrow-ios-forward-fill'} />}
+              sx={{ maxWidth: '45%' }}
+              type="submit"
+              fullWidth
+              variant="contained"
+              onClick={() => {
+                form.handleSubmit((submitData) => {
+                  const dataToSubmit = {
+                    ...submitData,
+                    total,
+                  };
+                  
+                  elaborateProposal({
+                    addressClient: data?.cliente?.endereco?.id,
+                    responsavel: submitData?.responsavel,
+                    data: dataToSubmit, 
+                  });
+                })()
+              }}
+            >
+              {isLoadingElaborateProposal ? 'Gerando proposta PDF' : 'Salvar'}
+            </Button>
+          </Box>
         </Box>
       </DialogActions>
     </Dialog>

@@ -1,10 +1,9 @@
-
 {% load static %}
 <!DOCTYPE html>
-<html lang="pt-br">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Detalhes do Pedido de Calibração</title>
+    <title>Proposta Elaborada</title>
     <style>
         body {
             background-color: #e0e0e0;
@@ -24,6 +23,11 @@
             text-align: left;
             color: #333;
         }
+        .content p {
+            margin: 0;
+            padding: 0;
+            margin-bottom: 12px;
+        }
         .button-container {
             text-align: center;
             margin: 20px 0;
@@ -38,6 +42,24 @@
         }
         .button:hover {
             background-color: #bb3800;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .unsubscribe {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .unsubscribe a {
+            color: #ff4d00;
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        ul {
+            list-style-type: "✔ "
         }
     </style>
 </head>

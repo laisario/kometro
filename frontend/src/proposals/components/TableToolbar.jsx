@@ -43,6 +43,8 @@ function TableToolbar(props) {
     form.reset()
   }
 
+  const status = form.watch("status")
+
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
       <Toolbar
@@ -98,13 +100,11 @@ function TableToolbar(props) {
                             row
                             aria-labelledby="status-filter"
                             name="status"
-                            value={form?.watch(status)}
-                            onChange={(e) => form?.setValue('status', e?.target?.value)}
                           >
-                            <FormControlLabel value="E" control={<Radio {...form.register("status")} />} label="Em elaboração" />
-                            <FormControlLabel value="AA" control={<Radio {...form.register("status")} />} label="Aguardando aprovação" />
-                            <FormControlLabel value="A" control={<Radio {...form.register("status")} />} label="Aprovada" />
-                            <FormControlLabel value="R" control={<Radio {...form.register("status")} />} label="Reprovada" />
+                            <FormControlLabel value="E" control={<Radio checked={status === "E"} {...form.register("status")} />} label="Em elaboração" />
+                            <FormControlLabel value="AA" control={<Radio checked={status === "AA"} {...form.register("status")} />} label="Aguardando aprovação" />
+                            <FormControlLabel value="A" control={<Radio checked={status === "A"} {...form.register("status")} />} label="Aprovada" />
+                            <FormControlLabel value="R" control={<Radio checked={status === "R"} {...form.register("status")} />} label="Reprovada" />
                           </RadioGroup>
                         </FormControl>
                       </div>

@@ -28,6 +28,12 @@ export default function ConfirmDeleteDialog({
           message:
             'Essa ação não poderá ser desfeita. Todos os dados relacionados a este instrumento serão perdidos permanentemente.',
         };
+      case 'proposal':
+        return {
+          title: 'Tem certeza que deseja excluir esta proposta?',
+          message:
+            'Essa ação não poderá ser desfeita. Todos os dados relacionados a esta proposta serão perdidos permanentemente.',
+        };
       default:
         return {
           title: 'Tem certeza dessa ação?',
