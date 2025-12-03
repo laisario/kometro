@@ -30,7 +30,7 @@ jobs:
 
       - name: Build Vite project
         working-directory: frontend
-        run: npm run export
+        run: npm run build
 
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
