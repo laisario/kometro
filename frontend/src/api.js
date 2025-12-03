@@ -1,10 +1,16 @@
 import _axios from 'axios';
 import humps from 'humps';
 
+const getApiUrl = () => {
+  // Em produção, usa window.env (carregado via env.js)
+  // Em desenvolvimento, usa process.env (injetado pelo Vite)
+  return window.env?.API_URL || process.env.API_URL;
+};
+
 const createAxiosInstance = ({ file = false } = {}) => {
   const instance = _axios.create({
     withCredentials: true,
-    baseURL: process.env.API_URL,
+    baseURL: getApiUrl(),
   });
 
 
