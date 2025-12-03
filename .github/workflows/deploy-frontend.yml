@@ -40,4 +40,5 @@ jobs:
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./frontend/dist/
           server-dir: ${{ secrets.FTP_PATH }}/
+          log-level: verbose
           dry-run: false

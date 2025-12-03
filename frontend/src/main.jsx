@@ -24,6 +24,3 @@ createRoot(document.getElementById('root')).render(
       </HashRouter>
     </HelmetProvider>
 );
-
-
-// to test deploy
