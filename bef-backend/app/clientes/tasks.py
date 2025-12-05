@@ -1,7 +1,7 @@
 from .models import Cliente
 from celery import shared_task
 from datetime import date
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 from django.conf import settings
 import logging
@@ -106,7 +106,6 @@ def enviar_email_reset_senha(email, nome, reset_url):
     """
     Send password reset email to user
     """
-    logger.info(f"=== TASK INICIADA === Email: {email}, Nome: {nome}")
     
     try:
         html_content = render_to_string(
@@ -116,18 +115,15 @@ def enviar_email_reset_senha(email, nome, reset_url):
                 "reset_url": reset_url,
             }
         )
-        logger.info(f"Template renderizado com sucesso")
-        
-        logger.info(f"Tentando enviar email de {settings.DEFAULT_FROM_EMAIL} para {email}")
-        send_mail(
+        email_msg = EmailMessage(
             subject="Redefinição de Senha - Kometro",
-            message=f"Olá {nome},\n\nVocê solicitou a redefinição de senha. Clique no link para redefinir: {reset_url}",
-            html_message=html_content,
+            body=html_content,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            fail_silently=False,
+            to=[email],
         )
-        logger.info(f"✓ Email de reset de senha enviado com sucesso para {email}")
+        email_msg.content_subtype = "html"
+        result = email_msg.send(fail_silently=False)
+        logger.info("Email enviado" if result == 1 else "Falha ao enviar email")
         return f"Email enviado para {email}"
     except Exception as e:
         logger.error(f"✗ Erro ao enviar email de reset de senha para {email}: {str(e)}")

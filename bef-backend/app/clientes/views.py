@@ -105,10 +105,15 @@ class UserAdminViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        if self.request.user.is_staff:
-            return User.objects.filter(is_staff=True).order_by()
-        else:
-            return User.objects.all()
+        queryset = User.objects.all()
+        
+        # Filtrar por is_staff se o parâmetro for passado
+        is_staff = self.request.query_params.get('is_staff', None)
+        if is_staff is not None:
+            is_staff_bool = is_staff.lower() in ('true', '1', 'yes')
+            queryset = queryset.filter(is_staff=is_staff_bool)
+        
+        return queryset.order_by('first_name', 'username')
 
 
 class DashboardViewSet(viewsets.ViewSet):

@@ -95,7 +95,7 @@ function FormElaborate(props) {
     }, 0))
   }, [local, data])
   
-  const { users } = useUsers();
+  const { users } = useUsers(null, { isStaff: true });
   
   const ref = useRef(null)
 

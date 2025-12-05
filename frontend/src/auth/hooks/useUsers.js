@@ -1,17 +1,26 @@
 import { useQuery } from 'react-query';
 import {axios} from '../../api'
 
-const useUsers = (id) => {
+const useUsers = (id, options = {}) => {
+  const { isStaff } = options;
+  
   const { 
     data: users, 
     erro: errorUsers, 
     isLoading: isLoadingUsers, 
-  } = useQuery(['users', id], async () => {
+  } = useQuery(['users', id, isStaff], async () => {
+    const params = { page_size: 9999 };
+    
+    // Adiciona filtro de staff se especificado
+    if (isStaff !== undefined) {
+      params.is_staff = isStaff;
+    }
+    
     if (id) {
-      const response = await axios.get(`/users/${id}/`, { params: { page_size: 9999 } });
+      const response = await axios.get(`/users/${id}/`, { params });
       return response?.data;
     }
-    const response = await axios.get('/users/', { params: { page_size: 9999 } });
+    const response = await axios.get('/users/', { params });
     return response?.data?.results;
   }, { 
     refetchOnReconnect: false,
