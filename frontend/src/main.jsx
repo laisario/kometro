@@ -24,5 +24,3 @@ createRoot(document.getElementById('root')).render(
       </HashRouter>
     </HelmetProvider>
 );
-
-// teste
