@@ -83,10 +83,7 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
         proposta = self.get_object()
         emails = request.data.get("emails", [])
         try:
-            enviar_proposta_cliente_email.apply(None, {
-                "proposta_id": proposta.id,
-                "emails": emails
-            })
+            enviar_proposta_cliente_email.apply_async(args=[proposta.id, emails])
             return response.Response(
                 {"message": "Email enviado com sucesso!"}, status=status.HTTP_200_OK
             )
@@ -212,7 +209,6 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
             serializer.save()
             return response.Response({"status": "faturamento atualizado com sucesso"})
         return response.Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
 
 
 class PropostaFileViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin):

@@ -102,10 +102,21 @@ def update_dashboard_stats(cliente_id):
 
 
 @shared_task
-def enviar_email_reset_senha(email, nome, reset_url):
+def enviar_email_reset_senha(destinatario, nome, reset_url):
     """
     Send password reset email to user
     """
+    logger.info("=" * 50)
+    logger.info("DEBUG EMAIL - INÍCIO")
+    logger.info(f"EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
+    logger.info(f"EMAIL_HOST: {settings.EMAIL_HOST}")
+    logger.info(f"EMAIL_PORT: {settings.EMAIL_PORT}")
+    logger.info(f"EMAIL_USE_TLS: {settings.EMAIL_USE_TLS}")
+    logger.info(f"EMAIL_USE_SSL: {settings.EMAIL_USE_SSL}")
+    logger.info(f"EMAIL_HOST_USER: {settings.EMAIL_HOST_USER}")
+    logger.info(f"DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
+    logger.info(f"Destinatário: {destinatario}")
+    logger.info("=" * 50)
     
     try:
         html_content = render_to_string(
@@ -115,19 +126,31 @@ def enviar_email_reset_senha(email, nome, reset_url):
                 "reset_url": reset_url,
             }
         )
+        
         email_msg = EmailMessage(
             subject="Redefinição de Senha - Kometro",
             body=html_content,
             from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[email],
+            to=[destinatario],
         )
         email_msg.content_subtype = "html"
+        
+        logger.info(f"Objeto EmailMessage criado: from={email_msg.from_email}, to={email_msg.to}")
+        
         result = email_msg.send(fail_silently=False)
-        logger.info("Email enviado" if result == 1 else "Falha ao enviar email")
-        return f"Email enviado para {email}"
+        
+        logger.info(f"Resultado do send(): {result}")
+        
+        if result == 1:
+            logger.info(f"✓ Email enviado com sucesso para {destinatario}")
+            return f"Email enviado para {destinatario}"
+        else:
+            logger.error(f"✗ Falha ao enviar email - result={result}")
+            return f"Falha ao enviar email para {destinatario}"
+            
     except Exception as e:
-        logger.error(f"✗ Erro ao enviar email de reset de senha para {email}: {str(e)}")
+        logger.error(f"✗ Exceção ao enviar email para {destinatario}: {str(e)}")
         import traceback
-        traceback.print_exc()
+        logger.error(traceback.format_exc())
         return f"Erro ao enviar email: {str(e)}"
 

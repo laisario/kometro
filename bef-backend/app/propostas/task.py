@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def enviar_proposta_cliente_email(proposta_id, emails):
+    logger.info("=" * 50)
+    logger.info("DEBUG EMAIL PROPOSTA - INÍCIO")
+    logger.info(f"EMAIL_BACKEND: {settings.EMAIL_BACKEND}")
+    logger.info(f"EMAIL_HOST: {settings.EMAIL_HOST}")
+    logger.info(f"EMAIL_PORT: {settings.EMAIL_PORT}")
+    logger.info(f"EMAIL_USE_TLS: {settings.EMAIL_USE_TLS}")
+    logger.info(f"EMAIL_USE_SSL: {settings.EMAIL_USE_SSL}")
+    logger.info(f"EMAIL_HOST_USER: {settings.EMAIL_HOST_USER}")
+    logger.info(f"DEFAULT_FROM_EMAIL: {settings.DEFAULT_FROM_EMAIL}")
+    logger.info(f"Destinatários: {emails}")
+    logger.info("=" * 50)
+    
     proposta = Proposta.objects.get(id=proposta_id)
 
     html_content = render_to_string(
@@ -38,13 +50,22 @@ def enviar_proposta_cliente_email(proposta_id, emails):
         with ultima_revisao.pdf.open() as file:
             email.attach(f"proposta{proposta_id}.pdf", file.read(), "application/pdf")
             try:
+                logger.info(f"Tentando enviar email: from={email.from_email}, to={email.to}")
                 result = email.send(fail_silently=False)
-                print("Email enviado" if result == 1 else "Falha ao enviar email")
+                logger.info(f"Resultado do send(): {result}")
+                
+                if result == 1:
+                    logger.info(f"✓ Email de proposta enviado com sucesso para {emails}")
+                else:
+                    logger.error(f"✗ Falha ao enviar email de proposta - result={result}")
             except Exception as e:
-                print("Aconteu o erro de email:", e)
-
+                logger.error(f"✗ Exceção ao enviar email de proposta: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
             finally:
                 file.close()
+    else:
+        logger.error(f"✗ Proposta {proposta_id} não tem revisão com PDF")
 
 
 @shared_task

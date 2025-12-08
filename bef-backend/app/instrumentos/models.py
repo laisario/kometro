@@ -92,7 +92,7 @@ class InstrumentoDoCliente(models.Model):
     ultima_notificacao = models.DateTimeField(null=True, blank=True)
     setor = models.ForeignKey(
         "Setor",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="instrumentos",
@@ -635,13 +635,74 @@ class Setor(models.Model):
         verbose_name = "Setor"
         verbose_name_plural = "Setores"
 
-    def delete(self, *args, **kwargs):
-        self.instrumentos.all().delete()
-
-        for subsetor in self.subsetores.all():
-            subsetor.delete()
-
-        super().delete(*args, **kwargs)    
+    def delete(
+        self,
+        action=None,
+        instruments_to_move=None,
+        instruments_to_delete=None,
+        target_setor=None,
+        new_setor_name=None,
+    ):
+        if self.nome == "Padrão":
+            return {'success': False, 'error': 'Não é possível excluir o setor Padrão.'}
+        
+        instruments_to_move = instruments_to_move or []
+        instruments_to_delete = instruments_to_delete or []
+        
+        if action is None:
+            setor_padrao, _ = Setor.objects.get_or_create(
+                nome="Padrão",
+                cliente=self.cliente
+            )
+            self.instrumentos.all().update(setor=setor_padrao)
+            for subsetor in self.subsetores.all():
+                subsetor.instrumentos.all().update(setor=setor_padrao)
+                Setor.objects.filter(id=subsetor.id).delete()
+        
+        elif action == 'delete_all':
+            self.instrumentos.all().delete()
+            for subsetor in self.subsetores.all():
+                subsetor.instrumentos.all().delete()
+                Setor.objects.filter(id=subsetor.id).delete()
+        
+        elif action == 'transfer_existing':
+            if not target_setor:
+                return {'success': False, 'error': 'Setor de destino é obrigatório.'}
+            
+            if instruments_to_move:
+                InstrumentoDoCliente.objects.filter(id__in=instruments_to_move).update(setor=target_setor)
+            
+            if instruments_to_delete:
+                InstrumentoDoCliente.objects.filter(id__in=instruments_to_delete).delete()
+            
+            for subsetor in self.subsetores.all():
+                subsetor.instrumentos.all().update(setor=target_setor)
+                Setor.objects.filter(id=subsetor.id).delete()
+        
+        elif action == 'transfer_new':
+            if not new_setor_name:
+                return {'success': False, 'error': 'Nome do novo setor é obrigatório.'}
+            
+            new_setor = Setor.objects.create(
+                nome=new_setor_name,
+                cliente=self.cliente
+            )
+            
+            if instruments_to_move:
+                InstrumentoDoCliente.objects.filter(id__in=instruments_to_move).update(setor=new_setor)
+            
+            if instruments_to_delete:
+                InstrumentoDoCliente.objects.filter(id__in=instruments_to_delete).delete()
+            
+            for subsetor in self.subsetores.all():
+                subsetor.instrumentos.all().update(setor=new_setor)
+                Setor.objects.filter(id=subsetor.id).delete()
+            
+            Setor.objects.filter(id=self.id).delete()
+            return {'success': True, 'new_setor': new_setor}
+        
+        Setor.objects.filter(id=self.id).delete()
+        return {'success': True}    
 
 class Frequencia(models.Model):
     PERIODO_CHOICES = [

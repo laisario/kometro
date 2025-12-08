@@ -18,9 +18,9 @@ export default function ConfirmDeleteDialog({
     switch (type) {
       case 'sector':
         return {
-          title: 'Tem certeza que deseja excluir este setor?',
+          title: 'Confirmar exclusão do setor',
           message:
-            'Essa ação não poderá ser desfeita. Todos os instrumentos associados a este setor também serão apagados permanentemente.',
+            'Essa ação não poderá ser desfeita. Deseja continuar com a exclusão?',
         };
       case 'instrument':
         return {
@@ -50,7 +50,12 @@ export default function ConfirmDeleteDialog({
   const { title, message } = getMessage();
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog 
+      open={open} 
+      onClose={onClose}
+      onClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+    >
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <DialogContentText>{message}</DialogContentText>

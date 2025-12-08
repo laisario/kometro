@@ -171,6 +171,7 @@ function SetorTree(props) {
               duplicateInstrument={duplicateInstrument}
               hasCreatePermission={hasCreatePermission}
               creatingSector={creatingSector}
+              setores={setores}
             />
         )}}
       />

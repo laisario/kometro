@@ -39,6 +39,6 @@ jobs:
           username: ${{ secrets.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./frontend/dist/
-          server-dir: /home/www/app/
+          server-dir: /www/app/
           log-level: verbose
           dry-run: false

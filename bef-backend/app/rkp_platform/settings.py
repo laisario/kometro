@@ -265,18 +265,19 @@ CELERY_TASK_TIME_LIMIT = 30 * 60
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Process one task at a time
+CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completes
 
 # smtp
 
-DJMAIL_REAL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_BACKEND = "djmail.backends.default.EmailBackend"
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "kinghost.smtpkl.com.br"
-EMAIL_PORT = 465
+EMAIL_PORT = 587  # Porta TLS/STARTTLS
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
-EMAIL_USE_TLS = False
-EMAIL_USE_SSL = True
+EMAIL_USE_TLS = True   # STARTTLS for port 587
+EMAIL_USE_SSL = False  # SSL is for port 465
 EMAIL_USE_LOCALTIME = True
 EMAIL_TIMEOUT = 30 
 

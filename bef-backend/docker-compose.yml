@@ -49,8 +49,8 @@ services:
 
   redis:
     container_name: 'redis'
-    command: redis-server && python -m pip install redis
     image: redis:alpine
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
 
@@ -58,7 +58,7 @@ services:
     container_name: 'celery_worker'
     build: .
     entrypoint: [""]
-    command: celery -A rkp_platform worker  --loglevel=debug
+    command: celery -A rkp_platform worker --loglevel=info --concurrency=2
     environment:
       DEBUG: ${DEBUG}
       SECRET_KEY: ${SECRET_KEY}

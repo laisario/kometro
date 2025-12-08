@@ -65,7 +65,18 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
   }
 
   const deleteSector = async (data) => {
-    await axios.delete(`/setores/${Number(data?.id)}/`);
+    await axios.delete(`/setores/${Number(data?.id)}/`, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      data: {
+        action: data?.action || 'transfer_existing',
+        instrumentsToMove: data?.instrumentsToMove || [],
+        instrumentsToDelete: data?.instrumentsToDelete || [],
+        targetSetorId: data?.targetSetorId || null,
+        newSetorName: data?.newSetorName || null,
+      }
+    });
   };
   
   const { 
@@ -84,12 +95,31 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       return { previousSectors };
     },
 
-    onError: (erro) => {
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      queryClient.invalidateQueries({ queryKey: ['instrumentos'] });
+      
+      const actionMessages = {
+        'delete_all': 'Setor e instrumentos excluídos com sucesso!',
+        'transfer_existing': 'Setor excluído e instrumentos transferidos com sucesso!',
+        'transfer_new': 'Setor excluído e instrumentos transferidos para novo setor com sucesso!',
+      };
+      const message = actionMessages[variables?.action] || 'Setor excluído com sucesso!';
+      
+      enqueueSnackbar(message, {
+        variant: 'success',
+        autoHideDuration: 3000,
+      });
+    },
+
+    onError: (erro, _sectorToDelete, context) => {
       if (context?.previousSectors) {
         queryClient.setQueryData(['setores'], context.previousSectors);
       }
       setError(erro?.response?.data)
-      enqueueSnackbar(getErrorMessage(erro?.response?.status), {
+      
+      const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
+      enqueueSnackbar(errorMessage, {
         variant: 'error',
         autoHideDuration: 2000,
       });

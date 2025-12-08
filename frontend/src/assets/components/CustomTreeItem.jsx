@@ -21,6 +21,7 @@ import EditIcon from '@mui/icons-material/Edit';
 import CloseIcon from '@mui/icons-material/Close';
 import CheckIcon from '@mui/icons-material/Check';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
+import DeleteSectorDialog from './DeleteSectorDialog';
 import { NO_PERMISSION_ACTION } from '../../utils/messages';
 import useAuth from '../../auth/hooks/useAuth';
 
@@ -138,10 +139,24 @@ function CustomLabel({
     setSelectedItem, 
     handleEdit,
     duplicateInstrument,
+    setores,
     ...other
   }) {
   const [open, setOpen] = React.useState(false)
   const { hasCreatePermission, hasEditPermission, hasDeletePermission } = useAuth();
+  
+  // Find the sector name for the dialog
+  const findSectorName = (items, id) => {
+    for (const item of items || []) {
+      if (String(item.id) === String(id)) return item.label;
+      if (item.children?.length) {
+        const found = findSectorName(item.children, id);
+        if (found) return found;
+      }
+    }
+    return '';
+  };
+  const sectorName = findSectorName(setores, selectedItem?.id);
 
   return (
     <TreeItemLabel
@@ -189,11 +204,16 @@ function CustomLabel({
             </span>
           </Tooltip>
 
-          <ConfirmDeleteDialog
+          <DeleteSectorDialog
             open={open}
             onClose={() => setOpen(false)}
-            type="sector"
-            onConfirm={() => {onDeleteSetor({id: selectedItem?.id}); setSelectedItem(null)}}
+            sectorId={selectedItem?.id}
+            sectorName={sectorName}
+            setores={setores}
+            onConfirm={(data) => {
+              onDeleteSetor({ id: selectedItem?.id, ...data }); 
+              setSelectedItem(null);
+            }}
           />
           
         </Box>}
@@ -242,6 +262,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
     handleCloseCreateSector,
     duplicateInstrument,
     creatingSector,
+    setores,
     ...other
   } = props;
 
@@ -338,6 +359,7 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                 handleEdit={handleEdit}
                 itemId={itemId}
                 duplicateInstrument={duplicateInstrument}
+                setores={setores}
                 {...getLabelProps({
                   icon,
                   expandable: status.expandable && status.expanded,

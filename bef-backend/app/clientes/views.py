@@ -338,7 +338,7 @@ class RequestPasswordReset(generics.GenericAPIView):
             logger.info(f"Enviando email de reset para {email}, nome: {nome}, url: {reset_url}")
             
             try:
-                enviar_email_reset_senha.delay(email, nome, reset_url)
+                enviar_email_reset_senha.apply_async(args=[email, nome, reset_url])
                 logger.info(f"Email enviado com sucesso para {email}")
             except Exception as e:
                 logger.error(f"Erro ao enviar email: {str(e)}")

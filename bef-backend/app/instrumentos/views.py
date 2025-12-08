@@ -733,10 +733,43 @@ class SetorViewSet(viewsets.ModelViewSet):
         if old_cliente_id != obj.cliente_id:
             cache.delete(f"hierarquia:{old_cliente_id}")
 
-    def perform_destroy(self, instance):
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
         cliente_id = instance.cliente_id
-        super().perform_destroy(instance)
+        
+        # Get delete options from request body (supports both camelCase and snake_case)
+        action_type = request.data.get('action', 'transfer_existing')
+        instruments_to_move = request.data.get('instrumentsToMove') or request.data.get('instruments_to_move', [])
+        instruments_to_delete = request.data.get('instrumentsToDelete') or request.data.get('instruments_to_delete', [])
+        target_setor_id = request.data.get('targetSetorId') or request.data.get('target_setor_id')
+        new_setor_name = request.data.get('newSetorName') or request.data.get('new_setor_name')
+        
+        target_setor = None
+        if action_type == 'transfer_existing' and target_setor_id:
+            try:
+                target_setor = Setor.objects.get(id=target_setor_id)
+            except Setor.DoesNotExist:
+                return response.Response(
+                    {"detail": "Setor de destino não encontrado."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        
+        result = instance.delete(
+            action=action_type,
+            instruments_to_move=instruments_to_move,
+            instruments_to_delete=instruments_to_delete,
+            target_setor=target_setor,
+            new_setor_name=new_setor_name,
+        )
+        
+        if not result['success']:
+            return response.Response(
+                {"detail": result['error']},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         cache.delete(f"hierarquia:{cliente_id}")
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"])
     def hierarquia(self, request):
