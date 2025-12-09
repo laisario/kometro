@@ -737,7 +737,6 @@ class SetorViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         cliente_id = instance.cliente_id
         
-        # Get delete options from request body (supports both camelCase and snake_case)
         action_type = request.data.get('action', 'transfer_existing')
         instruments_to_move = request.data.get('instrumentsToMove') or request.data.get('instruments_to_move', [])
         instruments_to_delete = request.data.get('instrumentsToDelete') or request.data.get('instruments_to_delete', [])

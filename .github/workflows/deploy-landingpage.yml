@@ -42,6 +42,6 @@ jobs:
           username: ${{ secrets.KINGHOST_FTP_USER }}
           password: ${{ secrets.KINGHOST_FTP_PASSWORD }}
           local-dir: ./bef-landing-page/out/
-          server-dir: ${{ secrets.KINGHOST_FTP_PATH }}/
+          server-dir: /www/
           log-level: verbose
           dry-run: true

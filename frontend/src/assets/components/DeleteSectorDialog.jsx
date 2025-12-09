@@ -144,12 +144,15 @@ export default function DeleteSectorDialog({
   };
 
   const handleFinalConfirm = () => {
+    // If no instruments, just delete the setor without any action
+    const effectiveAction = instruments?.length === 0 ? 'delete_all' : action;
+    
     const data = {
-      action,
+      action: effectiveAction,
       instrumentsToMove: instrumentsToMove.map((i) => i.id),
       instrumentsToDelete: instrumentsToDelete.map((i) => i.id),
-      targetSetorId: action === 'transfer_existing' ? targetSetor?.id : null,
-      newSetorName: action === 'transfer_new' ? newSetorName.trim() : null,
+      targetSetorId: effectiveAction === 'transfer_existing' ? targetSetor?.id : null,
+      newSetorName: effectiveAction === 'transfer_new' ? newSetorName.trim() : null,
     };
     onConfirm(data);
     setShowConfirmDialog(false);

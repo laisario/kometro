@@ -70,7 +70,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
         'Content-Type': 'application/json',
       },
       data: {
-        action: data?.action || 'transfer_existing',
+        action: data?.action,
         instrumentsToMove: data?.instrumentsToMove || [],
         instrumentsToDelete: data?.instrumentsToDelete || [],
         targetSetorId: data?.targetSetorId || null,
