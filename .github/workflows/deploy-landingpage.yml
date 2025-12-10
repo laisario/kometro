@@ -38,9 +38,9 @@ jobs:
       - name: Deploy via FTP
         uses: SamKirkland/FTP-Deploy-Action@4.3.0
         with:
-          server: ${{ secrets.KINGHOST_FTP_HOST }}
-          username: ${{ secrets.KINGHOST_FTP_USER }}
-          password: ${{ secrets.KINGHOST_FTP_PASSWORD }}
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
           local-dir: ./bef-landing-page/out/
           server-dir: /www/
           log-level: verbose
