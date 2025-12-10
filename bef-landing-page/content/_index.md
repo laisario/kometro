@@ -90,7 +90,7 @@ call_to_action:
   button:
     enable: true
     label: "Site do inmetro"
-    link: "http://autodiscoverredirect.inmetro.gov.br/laboratorios/rbc/lista_laboratorios.asp?acao=consulta"
+    link: "http://www.inmetro.gov.br/laboratorios/rbc/lista_laboratorios.asp?num_certificado=0686&"
 
 videos:
 - src: https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/videos/audio-1.MOV
