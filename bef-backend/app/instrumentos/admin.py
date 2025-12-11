@@ -240,10 +240,17 @@ class FrequenciaWidget(Widget):
         if quantidade is None or periodo is None:
             return None
         
-        obj, _ = Frequencia.objects.get_or_create(
+        obj = Frequencia.objects.filter(
             quantidade=int(quantidade),
             periodo=periodo
-        )
+        ).first()
+        
+        if obj is None:
+            obj = Frequencia.objects.create(
+                quantidade=int(quantidade),
+                periodo=periodo
+            )
+        
         return obj
 
     def render(self, value, obj=None):
