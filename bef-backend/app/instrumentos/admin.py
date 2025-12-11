@@ -547,6 +547,7 @@ class InstrumentoResource(ModelResource):
         row = {
             key.strip(): value if value not in ["-", ""] else None
             for key, value in row.items()
+            if key is not None
         }
         local = row["local"]
         data = row["data"]
@@ -555,7 +556,7 @@ class InstrumentoResource(ModelResource):
         checagem = row["checagem"]
         criterio_calibracao = row['criterio calibracao']
 
-        checagem_valor = str(row.get("checagem", "")).strip().lower()
+        checagem_valor = str(row.get("checagem") or "").strip().lower()
         if checagem_valor in ["sim", "s", "yes", "y", "true", "1"]:
             checagem = True
         elif checagem_valor in ["não", "nao", "n", "no", "false", "0"]:
