@@ -162,9 +162,10 @@ function InstrumentDetails({
   openFormCreateInstrument, 
   setOpenFormCreateInstrument,
   handleCloseCreateInstrument,
-  mutateCreateClient
+  mutateCreateClient,
 }) {
   const { user } = useAuth();
+  
   if (!instrumento) {
     return (
       <>

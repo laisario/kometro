@@ -1209,6 +1209,7 @@ class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
             "normativos",
             "data_proxima_checagem",
             "data_ultima_checagem",
+            "expirado",
         )
 
 class InstrumentoBaseClienteSerializer(serializers.ModelSerializer):

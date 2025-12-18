@@ -13,6 +13,7 @@ from .models import (
     MovimentacaoInstrumento,
     PontoDeCalibracao,
     CriterioAceitacao,
+    TipoInstrumento,
 )
 from .serializers import (
     InstrumentoDoClienteWriteSerializer,
@@ -31,6 +32,7 @@ from .serializers import (
     ChecagemReadSerializer,
     ChecagemWriteSerializer,
     InstrumentoDoClienteListReadSerializer,
+    TipoInstrumentoSerializer,
 )
 from .admin import InstrumentoExportResource, RelatorioMovimentacoesResource
 from django_filters.rest_framework import DjangoFilterBackend
@@ -103,13 +105,12 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         if self.request.user.is_staff:
             client = self.request.query_params.get("client")
             if client:
-                return queryset.filter(cliente_id=client)
-            return queryset
+                return queryset.filter(cliente_id=client).order_by('-id')
+            return queryset.order_by('-id')
 
         queryset = queryset.filter(cliente__usuarios=self.request.user)
         
-        # Ensure consistent ordering for search results
-        return queryset.order_by('tag', 'id')
+        return queryset.order_by('-id')
     
 
     def update(self, request, *args, **kwargs):
@@ -841,4 +842,35 @@ class NormativoViewSet(viewsets.ModelViewSet):
             return Normativo.objects.filter(cliente=cliente_id).order_by('nome')
         return Normativo.objects.all().order_by('nome')
 
-    
+
+class TipoInstrumentoViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet para listar tipos de instrumentos para filtros"""
+    serializer_class = TipoInstrumentoSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    pagination_class = None
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['descricao', 'modelo', 'fabricante']
+
+    def get_queryset(self):
+        """
+        Returns TipoInstrumento objects that are used by the client's instruments.
+        For staff users, can filter by client_id parameter.
+        """
+        queryset = TipoInstrumento.objects.all()
+        
+        if self.request.user.is_staff:
+            cliente_id = self.request.query_params.get('cliente_id')
+            if cliente_id:
+                queryset = queryset.filter(
+                    intrumento__instrumentos__cliente_id=cliente_id
+                ).distinct()
+        else:
+            cliente = self.request.user.clientes.first()
+            if cliente:
+                queryset = queryset.filter(
+                    intrumento__instrumentos__cliente=cliente
+                ).distinct()
+            else:
+                queryset = queryset.none()
+        
+        return queryset.order_by('descricao')

@@ -19,6 +19,7 @@ const useDocuments = () => {
     defaultValues: {
       search: "",
       status: "",
+      vencido: vencidoParam || "",
     }
   })
 
@@ -38,11 +39,12 @@ const useDocuments = () => {
   const {
     search,
     status: statusFilter,
+    vencido: vencidoFilter,
   } = useWatch({ control: formFilter.control })
 
 
   const { data, isFetching, } = useQuery(
-    ['documentos', page, rowsPerPage, debouncedSearch, statusFilter, vencidoParam],
+    ['documentos', page, rowsPerPage, debouncedSearch, statusFilter, vencidoFilter],
     async () => {
       let params = {
         page: page + 1, 
@@ -51,8 +53,8 @@ const useDocuments = () => {
         status: statusFilter, 
       }
 
-      if (vencidoParam !== null) {
-        params.vencido = vencidoParam;
+      if (vencidoFilter) {
+        params.vencido = vencidoFilter;
       }
 
       const response = await axios.get('/documentos/', { params });
@@ -73,7 +75,7 @@ const useDocuments = () => {
     formFilter,
     form,
     handleSearch,
-    vencidoParam,
+    vencidoFilter,
     debouncedSearch,
     setDebouncedSearch,
     setPage,

@@ -39,21 +39,25 @@ export default function DashboardPage() {
               </Button>
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
-              <AppWidgetSummary
-                title="Instrumentos vencidos"
-                color="error"
-                total={data?.instrumentosVencidos || 0}
-                icon="ant-design:close-outlined"
-              />
+              <Link to="/dashboard/instrumentos?tab=table&expirado=true" style={{ textDecoration: 'none' }}>
+                <AppWidgetSummary
+                  title="Instrumentos vencidos"
+                  color="error"
+                  total={data?.instrumentosVencidos || 0}
+                  icon="ant-design:close-outlined"
+                />
+              </Link>
             </Grid>
 
             <Grid item xs={12} sm={6} md={3}>
-              <AppWidgetSummary
-                title="Instrumentos calibrados em dia"
-                color="success"
-                total={data?.instrumentosEmDia || 0}
-                icon={'ant-design:check-outlined'}
-              />
+              <Link to="/dashboard/instrumentos?tab=table&expirado=false" style={{ textDecoration: 'none' }}>
+                <AppWidgetSummary
+                  title="Instrumentos calibrados em dia"
+                  color="success"
+                  total={data?.instrumentosEmDia || 0}
+                  icon={'ant-design:check-outlined'}
+                />
+              </Link>
             </Grid>
 
             <Grid item xs={12} sm={6} md={3}>

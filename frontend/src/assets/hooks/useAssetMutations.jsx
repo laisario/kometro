@@ -21,6 +21,7 @@ function useAssetMutations(handleClose, adminPreview) {
     mutationFn: deleteAsset,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       enqueueSnackbar('Instrumento deletado com sucesso!', {
         variant: 'success'
       });
@@ -115,6 +116,7 @@ function useAssetMutations(handleClose, adminPreview) {
     mutationFn: createInstrument,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       queryClient.invalidateQueries({ queryKey: ['clientes'] })
       handleCleanCreateForm()
       handleClose()
@@ -141,8 +143,13 @@ function useAssetMutations(handleClose, adminPreview) {
   } = useMutation({
     mutationFn: createInstrumentClient,
     onSuccess: () => {
-      const queryKey = adminPreview ? ['instrumentos'] : ['setores'];
-      queryClient.invalidateQueries({ queryKey, })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
+      
+      if (!adminPreview) {
+        queryClient.invalidateQueries({ queryKey: ['setores'] })
+        queryClient.invalidateQueries({ queryKey: ['tipos-instrumento'] })
+      }
       handleClose('create')
       enqueueSnackbar('Instrumento criado com sucesso!', {
         variant: 'success'
@@ -195,6 +202,7 @@ function useAssetMutations(handleClose, adminPreview) {
         variant: 'success'
       });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       queryClient.invalidateQueries({ queryKey: ['setores'] })
       
       handleClose('edit')
@@ -215,6 +223,7 @@ function useAssetMutations(handleClose, adminPreview) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['setores'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       enqueueSnackbar('Instrumento deletado com sucesso!', {
         variant: 'success'
       });
@@ -233,6 +242,7 @@ function useAssetMutations(handleClose, adminPreview) {
     mutationFn: async(data) => await axios.patch(`/instrumentos/${data?.id}/mudar_posicao/`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       enqueueSnackbar('Mudança posição realizada com sucesso!', {
         variant: 'success'
       });

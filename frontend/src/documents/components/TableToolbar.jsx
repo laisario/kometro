@@ -42,6 +42,7 @@ function TableToolbar(props) {
   }
 
   const status = form.watch("status")
+  const vencido = form.watch("vencido")
 
   return (
     <Toolbar
@@ -99,6 +100,20 @@ function TableToolbar(props) {
                         <FormControlLabel value="V" control={<Radio checked={status === "V"} {...form.register("status")} />} label="Vigente" />
                         <FormControlLabel value="O" control={<Radio checked={status === "O"} {...form.register("status")} />} label="Obsoleto" />
                         <FormControlLabel value="C" control={<Radio checked={status === "C"} {...form.register("status")} />} label="Cancelado" />
+                      </RadioGroup>
+                    </FormControl>
+                  </div>
+                  <Divider />
+                  <div>
+                    <FormControl>
+                      <FormLabel id="vencido-filter">Validade</FormLabel>
+                      <RadioGroup
+                        aria-labelledby="vencido-filter"
+                        name="vencido"
+                      >
+                        <FormControlLabel value="" control={<Radio checked={vencido === ""} {...form.register("vencido")} />} label="Todos" />
+                        <FormControlLabel value="True" control={<Radio checked={vencido === "True"} {...form.register("vencido")} />} label="Expirado" />
+                        <FormControlLabel value="False" control={<Radio checked={vencido === "False"} {...form.register("vencido")} />} label="Em dia" />
                       </RadioGroup>
                     </FormControl>
                   </div>

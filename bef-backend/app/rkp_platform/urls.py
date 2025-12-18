@@ -25,7 +25,8 @@ from instrumentos.views import (
     InstrumentoViewSet,
     CalibracaoViewSet,
     SetorViewSet,
-    NormativoViewSet
+    NormativoViewSet,
+    TipoInstrumentoViewSet,
 )
 from propostas.views import PropostaFileViewSet, PropostaViewSet
 from documentos.views import DocumentoViewSet, RevisaoViewSet
@@ -55,6 +56,7 @@ router.register(r'grupos', GrupoViewSet, basename="grupo")
 router.register(r'convites', ConviteViewSet, basename="convite")
 router.register(r'categorias-equipamentos', CategoriaEquipamentosViewSet, basename='categoria-equipamento')
 router.register(r'equipamentos', EquipamentosViewSet, basename='equipamentos')
+router.register(r'tipos-instrumento', TipoInstrumentoViewSet, basename='tipo-instrumento')
 
 urlpatterns = i18n_patterns(
     path("admin/", admin.site.urls),

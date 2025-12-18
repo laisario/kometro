@@ -181,6 +181,13 @@ class InstrumentoDoCliente(models.Model):
 
             self.atualizar_datas(['posicao', 'frequencia_calibracao', 'frequencia_checagem', 'data_ultima_calibracao', 'data_ultima_checagem'])
             
+            # Update expirado based on data_proxima_calibracao
+            if self.data_proxima_calibracao:
+                from datetime import date
+                self.expirado = self.data_proxima_calibracao < date.today()
+            else:
+                self.expirado = False
+            
             super().save(*args, **kwargs)
             
             if is_new:

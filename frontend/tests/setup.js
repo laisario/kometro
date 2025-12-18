@@ -1,5 +1,10 @@
 import '@testing-library/jest-dom';
 import { configure } from '@testing-library/react';
+import { TextEncoder, TextDecoder } from 'util';
+
+// Polyfill TextEncoder/TextDecoder for react-router
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;
 
 // Configure testing library
 configure({ testIdAttribute: 'data-testid' });

@@ -182,6 +182,76 @@ export const mockCliente = {
   criterioFrequenciaPadrao: 'C',
 };
 
+export const mockCalibrations = [
+  {
+    id: 100,
+    data: '2024-01-15',
+    ordemDeServico: 'OS-001',
+    local: 'P',
+    observacoes: 'Calibração de teste',
+    checagem: false,
+    certificados: [],
+    resultados: [],
+    preco: 150.00,
+    laboratorio: 'Lab Test',
+  },
+  {
+    id: 101,
+    data: '2024-02-20',
+    ordemDeServico: 'OS-002',
+    local: 'C',
+    observacoes: 'Segunda calibração',
+    checagem: false,
+    certificados: [],
+    resultados: [],
+    preco: 200.00,
+    laboratorio: 'Lab Test 2',
+  }
+];
+
+export const mockAssetWithCalibrations = {
+  ...mockAsset,
+  calibracoes: mockCalibrations,
+  checagens: [
+    {
+      id: 200,
+      data: '2024-01-20',
+      ordemDeServico: 'CH-001',
+      local: 'P',
+      observacoes: 'Checagem de teste',
+      checagem: true,
+      certificados: [],
+      resultados: [],
+    }
+  ],
+  historicoPosicoes: [
+    {
+      id: 1,
+      posicaoAnterior: 'E',
+      posicaoAtual: 'U',
+      dataAlteracao: '2024-01-10',
+    }
+  ],
+  historicoSetores: [
+    {
+      id: 1,
+      setorAnterior: { id: 1, nome: 'Produção' },
+      setorAtual: { id: 2, nome: 'Qualidade' },
+      dataAlteracao: '2024-01-15',
+    }
+  ],
+  criteriosAceitacao: [
+    {
+      id: 1,
+      tipo: 'Critério 1',
+      criterioDeAceitacao: '0.01',
+      unidade: 'mm',
+      referenciaDoCriterio: 'NBR 10005',
+      observacaoCriterioAceitacao: 'Observação teste',
+    }
+  ],
+};
+
 // Helper functions
 export const createMockProps = (overrides = {}) => ({
   handleClose: jest.fn(),

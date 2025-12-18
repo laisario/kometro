@@ -2,6 +2,7 @@ import { Route, Navigate, Routes } from 'react-router';
 import CommonLayout from '../layouts/common/CommonLayout.jsx';
 import SimpleLayout from '../layouts/simple/SimpleLayout.jsx';
 import AssetsPage from '../assets/pages/AssetsPage.jsx';
+import InstrumentoDetailPage from '../assets/pages/InstrumentoDetailPage.jsx';
 import DashboardPage from '../dashboard/pages/DashboardPage.jsx';
 import ProposalsPage from '../proposals/pages/ProposalsPage.jsx';
 import ProposalDetailsPage from '../proposals/pages/ProposalDetailsPage.jsx';
@@ -51,6 +52,7 @@ export default function MainRouter() {
         <Route path="app" element={<DashboardPage />} />
         <Route path="instrumentos" element={<AssetsPage />} />
         <Route path="instrumentos/:id/:idSetor" element={<AssetsPage />} />
+        <Route path="instrumento/:id" element={<InstrumentoDetailPage />} />
         <Route path="propostas" element={<ProposalsPage />} />
         <Route path="proposta/:id" element={<ProposalDetailsPage />} />
         <Route path="documentos" element={<DocumentsPage />} />

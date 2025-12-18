@@ -1,5 +1,5 @@
 from django_filters import rest_framework as filters
-from .models import Calibracao, InstrumentoDoCliente, Normativo
+from .models import Calibracao, InstrumentoDoCliente, Normativo, TipoInstrumento
 from datetime import timedelta
 from django.utils import timezone
 from datetime import datetime
@@ -18,7 +18,10 @@ class CalibracaoFilter(filters.FilterSet):
 class InstrumentoDoClienteFilter(filters.FilterSet):
     status = filters.CharFilter(method='filter_by_status')
     norma = filters.CharFilter(method="filter_by_norma")
-
+    expirado = filters.BooleanFilter(field_name='expirado')
+    tipo_instrumento = filters.NumberFilter(
+        field_name='instrumento__tipo_de_instrumento__id'
+    )
 
     def filter_by_status(self, queryset, name, value):
         today = timezone.now().date()
@@ -53,4 +56,4 @@ class InstrumentoDoClienteFilter(filters.FilterSet):
 
     class Meta:
         model = InstrumentoDoCliente
-        fields = []
+        fields = ['expirado', 'tipo_instrumento']
