@@ -126,6 +126,7 @@ function InstrumentoDetailPage() {
             openFormCreateInstrument={openFormCreateInstrument}
             setOpenFormCreateInstrument={setOpenFormCreateInstrument}
             handleCloseCreateInstrument={handleCloseCreateInstrument}
+            onDeleteSuccess={handleGoBack}
           />
 
           {instrumento && (

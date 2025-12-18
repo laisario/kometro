@@ -60,6 +60,7 @@ const OptionsMenu = ({
   fetchNextPage,
   hasNextPage,
   isFetchingNextPage,
+  onDeleteSuccess,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null);
   
@@ -116,7 +117,11 @@ const OptionsMenu = ({
         open={openFormCreateInstrument?.type === 'delete' && openFormCreateInstrument?.status}
         onClose={() => setOpenFormCreateInstrument({status: false, type: 'delete'})}
         type="instrument"
-        onConfirm={() => {mutateDeleteClient(asset?.id); setSelectedItem(null)}}
+        onConfirm={() => {
+          mutateDeleteClient(asset?.id);
+          setSelectedItem(null);
+          if (onDeleteSuccess) onDeleteSuccess();
+        }}
       />
 
       <CreateInstrument
@@ -163,6 +168,7 @@ function InstrumentDetails({
   setOpenFormCreateInstrument,
   handleCloseCreateInstrument,
   mutateCreateClient,
+  onDeleteSuccess,
 }) {
   const { user } = useAuth();
   
@@ -230,6 +236,7 @@ function InstrumentDetails({
               hasNextPage={hasNextPage}
               isFetchingNextPage={isFetchingNextPage}
               handleCloseCreateInstrument={handleCloseCreateInstrument}
+              onDeleteSuccess={onDeleteSuccess}
             />
           </Box>
         </Stack>
