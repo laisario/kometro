@@ -159,6 +159,7 @@ export default function useAuth() {
 
   const logout = () => {
     window.localStorage.removeItem('token');
+    window.localStorage.removeItem('user');
     setUser(null);
   };
 
