@@ -271,8 +271,8 @@ CELERY_TASK_ACKS_LATE = True  # Acknowledge after task completes
 # smtp
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.sendgrid.net"
-EMAIL_PORT = 587
+EMAIL_HOST = "mail.smtp2go.com"
+EMAIL_PORT = 2525
 EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
