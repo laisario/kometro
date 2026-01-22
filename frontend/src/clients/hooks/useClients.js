@@ -1,6 +1,6 @@
 import { useQuery } from "react-query";
 import { axios } from "../../api";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import _, {debounce} from 'lodash';
 
@@ -15,9 +15,15 @@ const useClients = (user) => {
     search,
   } = useWatch({ control: formFilter.control });
 
-  const handleSearch = debounce((search) => setDebouncedSearch(search), 1500);
+  const handleSearch = useMemo(
+    () => debounce((search) => setDebouncedSearch(search), 1500),
+    []
+  );
 
-  useEffect(() => { handleSearch(search) }, [search, handleSearch]);
+  useEffect(() => {
+    handleSearch(search);
+    return () => handleSearch.cancel();
+  }, [search, handleSearch]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);

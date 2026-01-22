@@ -309,10 +309,17 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                     }
                     if (e.key === 'Escape') {
                       e.preventDefault();
-                      if (creatingSector) {
-                        onDeleteSetor({id: selectedItem?.id});
+                      if (creatingSector && selectedItem?.id) {
+                        onDeleteSetor({
+                          id: selectedItem.id,
+                          action: 'delete_all',
+                          instrumentsToMove: [],
+                          instrumentsToDelete: [],
+                          targetSetorId: null,
+                          newSetorName: null,
+                        });
                       }
-                      setSelectedItem(null)
+                      setSelectedItem(null);
                       handleCloseCreateSector();
                     }
                   }}
@@ -326,10 +333,21 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                       <InputAdornment position="end">
                         <IconButton
                           size="small"
+                          type="button"
                           onClick={(e) => {
-                            if (creatingSector) {
-                              onDeleteSetor({id: selectedItem?.id});
+                            e.stopPropagation();
+                            // Cancel creation: delete draft setor with delete_all action (no instruments in new setor)
+                            if (creatingSector && selectedItem?.id) {
+                              onDeleteSetor({
+                                id: selectedItem.id,
+                                action: 'delete_all',
+                                instrumentsToMove: [],
+                                instrumentsToDelete: [],
+                                targetSetorId: null,
+                                newSetorName: null,
+                              });
                             }
+                            setSelectedItem(null);
                             handleCloseCreateSector();
                           }}
                         >

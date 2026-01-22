@@ -1,5 +1,5 @@
 import { enqueueSnackbar } from 'notistack';
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import 'dayjs/locale/pt-br';
 import { axios } from '../../api';
@@ -9,6 +9,15 @@ import { buildTreeItems } from './useSectorTree';
 function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector) {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
+
+  // Track mount/unmount to prevent setState after unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const insertChildByParentId = (tree, parentId, child) => {
     if (!parentId) {
@@ -116,13 +125,15 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       if (context?.previousSectors) {
         queryClient.setQueryData(['setores'], context.previousSectors);
       }
-      setError(erro?.response?.data)
-      
-      const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
-      enqueueSnackbar(errorMessage, {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
+      if (mountedRef.current) {
+        setError(erro?.response?.data)
+        
+        const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
+        enqueueSnackbar(errorMessage, {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
+      }
     },
   })
 
@@ -147,18 +158,22 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       return { previousSectors };
     },
     onSuccess: () => {
-      handleCloseCreateSector()
+      if (mountedRef.current) {
+        handleCloseCreateSector()
+      }
     },
-    onError: (erro) => {
+    onError: (erro, _newSector, context) => {
       if (context?.previousSectors) {
         queryClient.setQueryData(['setores'], context.previousSectors);
       }
 
-      setError(erro?.response?.data)
-      enqueueSnackbar(getErrorMessage(erro?.response?.status), {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
+      if (mountedRef.current) {
+        setError(erro?.response?.data)
+        enqueueSnackbar(getErrorMessage(erro?.response?.status), {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
+      }
     }
   })
 
@@ -204,25 +219,60 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
         queryClient.setQueryData(['setores'], context.previousSectors);
       }
   
-      setError(err?.response?.data);
-      enqueueSnackbar(getErrorMessage(err?.response?.status), {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
+      if (mountedRef.current) {
+        setError(err?.response?.data);
+        enqueueSnackbar(getErrorMessage(err?.response?.status), {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
+      }
     },
   
     onSuccess: (res, newSector, context) => {
-      const sector = buildTreeItems(res?.data)
-      const updatedSectors = insertChildByParentId(
-        context.previousSectors || [],
-        newSector?.setorPaiId,
-        sector,
-      );
-      queryClient.setQueryData(['setores'], updatedSectors);
-      setOpenCreateSectorId(sector?.id)
-      setSelectedItem({id: sector?.id, type: sector?.itemType, parentId: sector?.parentId})
-      setExpandedItems(expandedItems => [...expandedItems, newSector?.setorPaiId])
-      setCreatingSector(true)
+      if (!mountedRef.current) {
+        console.warn('[useSectorMutations] Component unmounted, skipping setState in onSuccess');
+        return;
+      }
+
+      try {
+        const sector = buildTreeItems(res?.data)
+        if (!sector) {
+          console.error('[useSectorMutations] Failed to build tree items from response:', res?.data);
+          return;
+        }
+        
+        const updatedSectors = insertChildByParentId(
+          context?.previousSectors || [],
+          newSector?.setorPaiId,
+          sector,
+        );
+        queryClient.setQueryData(['setores'], updatedSectors);
+        
+        // Guard against setState after unmount
+        if (mountedRef.current) {
+          // Use functional updates to avoid stale closures
+          setOpenCreateSectorId(sector?.id);
+          setSelectedItem({id: sector?.id, type: sector?.itemType, parentId: sector?.parentId});
+          
+          // Fix: Use functional update with proper parameter name to avoid closure stale
+          setExpandedItems(prevExpandedItems => {
+            const parentId = newSector?.setorPaiId;
+            if (!parentId) return prevExpandedItems;
+            const parentIdStr = String(parentId);
+            if (prevExpandedItems?.includes(parentIdStr)) {
+              return prevExpandedItems;
+            }
+            return [...(prevExpandedItems || []), parentIdStr];
+          });
+          
+          setCreatingSector(true);
+        }
+      } catch (error) {
+        console.error('[useSectorMutations] Error in onSuccess:', error);
+        if (context?.previousSectors) {
+          queryClient.setQueryData(['setores'], context.previousSectors);
+        }
+      }
     },
   });
 

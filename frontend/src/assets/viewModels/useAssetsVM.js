@@ -34,9 +34,15 @@ const useAssetsVm = (id, idSetor) => {
   useEffect(() => {
     if (id && idSetor) {
       setSelectedItem({id: `instrument-${id}`, type: 'instrument', parentId: idSetor})
-      setExpandedItems(expandedItems => [...expandedItems, idSetor])
+      setExpandedItems(prevExpandedItems => {
+        const idSetorStr = String(idSetor);
+        if (prevExpandedItems?.includes(idSetorStr)) {
+          return prevExpandedItems;
+        }
+        return [...(prevExpandedItems || []), idSetorStr];
+      })
     }
-  }, [])
+  }, [id, idSetor])
 
   const [openFormCreateInstrument, setOpenFormCreateInstrument] = useState({
     status: false,

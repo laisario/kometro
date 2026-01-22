@@ -1,4 +1,5 @@
 import { useQuery } from "react-query";
+import { useMemo } from 'react';
 import { axios } from "../../api";
 import _, {debounce} from 'lodash';
 import { useState, useEffect } from 'react';
@@ -60,9 +61,15 @@ const useProposals = () => {
   
 
   
-  const handleSearchFilter = debounce((value) => setDebouncedSearchFilter(value), 2000);
+  const handleSearchFilter = useMemo(
+    () => debounce((value) => setDebouncedSearchFilter(value), 2000),
+    []
+  );
   
-  useEffect(() => { handleSearchFilter(search) }, [search, handleSearchFilter])
+  useEffect(() => {
+    handleSearchFilter(search);
+    return () => handleSearchFilter.cancel();
+  }, [search, handleSearchFilter]);
   
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);

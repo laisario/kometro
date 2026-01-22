@@ -20,9 +20,15 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   useEffect(() => { setSelectedCalibration({}) }, [instrumento])
 
   
-  const handleSearchOS = debounce((value) => setDebouncedSearch(value));
+  const handleSearchOS = useMemo(
+    () => debounce((value) => setDebouncedSearch(value), 500),
+    []
+  );
 
-  useEffect(() => { handleSearchOS(search) }, [search, handleSearchOS])
+  useEffect(() => {
+    handleSearchOS(search);
+    return () => handleSearchOS.cancel();
+  }, [search, handleSearchOS]);
   
   const defaultValues = useMemo(() => ({
     local: selectedCalibration?.local ? selectedCalibration?.local : 'P',
