@@ -14,7 +14,7 @@ import Clients from "@layouts/components/Clients";
 import Feedbacks from "@layouts/components/Feedbacks";
 
 
-const Home = ({ frontmatter, feedbacks, posts, }) => {
+const Home = ({ frontmatter, feedbacks, }) => {
   const { banner, service, timeline, call_to_action, videos, pillars, client } = frontmatter;
   const { title } = config.site;
   return (
