@@ -16,9 +16,7 @@ export const getStaticProps = async () => {
     },
     revalidate: 60, 
   };
-  return {
 
-  }
 };
 
 export default loja
