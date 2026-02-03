@@ -47,6 +47,12 @@ class InstrumentoDoCliente(models.Model):
     numero_de_serie = models.CharField(
         max_length=1024, null=True, blank=True, verbose_name="Número de série"
     )
+    numero_certificado = models.CharField(
+        blank=True,
+        max_length=30,
+        null=True,
+        verbose_name="Número do certificado",
+    )
     cliente = models.ForeignKey(
         "clientes.Cliente", on_delete=models.CASCADE, related_name="instrumentos"
     )

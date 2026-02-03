@@ -3,8 +3,9 @@ import { Grid, Container, CircularProgress, Button } from '@mui/material';
 import { 
   AppOrderTimeline, 
   AppWidgetSummary, 
-  AppListItems
- } from '../components';
+  AppListItems,
+  AppRecentOS
+} from '../components';
 import { fDate } from '../../utils/formatTime';
 import { useDashboardVM } from '../viewModels/useDashboardVM';
 import { Link } from 'react-router';
@@ -16,6 +17,9 @@ export default function DashboardPage() {
     instruments,
     user,
     documents,
+    recentOS,
+    isLoadingRecentOS,
+    shouldShowOSWidget,
     mutateUpdateStats, 
     isLoadingUpdateStats
   } = useDashboardVM()
@@ -127,6 +131,25 @@ export default function DashboardPage() {
                 instrumentsCount={data?.instrumentosCadastrados || 0}
               />
             </Grid>}
+
+            {/* Show widget only for staff users */}
+            {shouldShowOSWidget && (
+              <Grid item xs={12} md={5} lg={4}>
+                <AppRecentOS
+                  title="Minhas Ordens de Serviço"
+                  subheader="Últimas 5 OS atribuídas"
+                  list={recentOS?.map((os) => ({
+                    id: os.id,
+                    numero: os.numero,
+                    clienteNome: os.clienteNome,
+                    propostaNumero: os.propostaNumero,
+                    instrumentosCount: os.instrumentosCount,
+                    dataCriacao: os.dataCriacao,
+                  }))}
+                  isLoading={isLoadingRecentOS}
+                />
+              </Grid>
+            )}
           </Grid>
         )}
       </Container>

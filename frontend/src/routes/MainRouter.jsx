@@ -21,6 +21,9 @@ import UserAccessPage from '../access/pages/UserAccessPage.jsx';
 import RegisterFromInvite from '../auth/pages/ResgisterFromInvite.jsx';
 import ResetPasswordRequestPage from '../auth/pages/ResetPasswordRequestPage.jsx';
 import ResetPasswordPage from '../auth/pages/ResetPasswordPage.jsx';
+import MinhasOSPage from '../equipe/pages/MinhasOSPage.jsx';
+import EquipePage from '../equipe/pages/EquipePage.jsx';
+import EquipeMemberPage from '../equipe/pages/EquipeMemberPage.jsx';
 
 
 export default function MainRouter() {
@@ -72,6 +75,9 @@ export default function MainRouter() {
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="cliente/:id" element={<ClientDetailsPage />} />
         <Route path="acessos" element={<UserAccessPage />} />
+        <Route path="equipe" element={<EquipePage />} />
+        <Route path="equipe/:userId" element={<EquipeMemberPage />} />
+        <Route path="eu" element={<MinhasOSPage />} />
       </Route>
 
       <Route element={<SimpleLayout />}>
