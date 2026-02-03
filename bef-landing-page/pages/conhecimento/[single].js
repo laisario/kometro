@@ -63,35 +63,69 @@ export default function KnowledgePost({ post }) {
 }
 
 export const getStaticPaths = async () => {
-  let allPosts = [];
-  let nextUrl = `${process.env.NEXT_PUBLIC_API_URL}/posts/`;
+  try {
+    let allPosts = [];
+    let nextUrl = `${process.env.NEXT_PUBLIC_API_URL}/posts/`;
 
-  while (nextUrl) {
-    const res = await fetch(nextUrl);
-    const data = await res.json();
+    while (nextUrl) {
+      const res = await fetch(nextUrl);
+      
+      if (!res.ok) {
+        console.error(`API returned status ${res.status}`);
+        break;
+      }
+      
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        console.error(`API returned non-JSON content: ${contentType}`);
+        break;
+      }
+      
+      const data = await res.json();
+      allPosts = [...allPosts, ...(data.results || [])];
+      nextUrl = data.next;
+    }
 
-    allPosts = [...allPosts, ...data.results];
-    nextUrl = data.next;
+    const paths = allPosts?.map((post) => ({
+      params: { single: post?.id?.toString() },
+    }));
+
+    return {
+      paths: paths.length > 0 ? paths : [],
+      fallback: false,
+    };
+  } catch (error) {
+    console.error('Error in getStaticPaths:', error);
+    return {
+      paths: [],
+      fallback: false,
+    };
   }
-
-  const paths = allPosts?.map((post) => ({
-    params: { single: post?.id?.toString() },
-  }));
-
-  return {
-    paths,
-    fallback: false,
-  };
 };
 
 export const getStaticProps = async ({ params }) => {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/posts/${params?.single}/`);
-  const post = await res.json();
+  try {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/posts/${params?.single}/`);
+    
+    if (!res.ok) {
+      console.error(`API returned status ${res.status} for post ${params?.single}`);
+      return {
+        notFound: true,
+      };
+    }
+    
+    const post = await res.json();
 
-  return {
-    props: {
-      post,
-    },
-    revalidate: 60,
-  };
+    return {
+      props: {
+        post,
+      },
+      revalidate: 60,
+    };
+  } catch (error) {
+    console.error(`Error fetching post ${params?.single}:`, error);
+    return {
+      notFound: true,
+    };
+  }
 };
