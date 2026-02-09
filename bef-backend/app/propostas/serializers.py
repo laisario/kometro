@@ -8,7 +8,7 @@ from enderecos.models import Endereco
 from enderecos.serializers import ReadEnderecoSerializer, WriteEnderecoSerializer
 from instrumentos.models import InstrumentoDoCliente, Local
 from instrumentos.serializers import InstrumentoDoClienteReadSerializer
-from .models import Proposta, Revisao, Anexo
+from .models import Proposta, Revisao, Anexo, PropostaInstrumento
 from decimal import Decimal, InvalidOperation
 
 
@@ -24,21 +24,83 @@ class AnexoSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
+class PropostaInstrumentoSerializer(serializers.ModelSerializer):
+    instrumento_id = serializers.IntegerField(source='instrumento.id', read_only=True)
+    
+    class Meta:
+        model = PropostaInstrumento
+        fields = [
+            'id',
+            'instrumento_id',
+            'service_kind',
+            'local',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate(self, data):
+        proposta = self.context.get('proposta')
+        instrumento = data.get('instrumento')
+        
+        if proposta and instrumento:
+            # Validate instrument belongs to proposal client
+            if instrumento.cliente != proposta.cliente:
+                raise serializers.ValidationError(
+                    "Instrumento must belong to proposal client"
+                )
+        
+        # Validate service_kind
+        if data.get('service_kind') not in ['calibracao', 'manutencao']:
+            raise serializers.ValidationError(
+                "service_kind must be 'calibracao' or 'manutencao'"
+            )
+        
+        return data
+
+
 class WritePropostaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Proposta
-        fields = ("instrumentos", "informacoes_adicionais")
-        extra_kwargs = {"instrumentos": {"required": True}}
+        fields = ("informacoes_adicionais",)
+        # Don't include instrumentos in fields - we handle it manually
 
     def validate(self, data):
         user = self.context["request"].user
         cliente = Cliente.objects.get(usuarios=user)
         data["cliente"] = cliente
         return data
+    
+    def create(self, validated_data):
+        instrumentos_data = validated_data.pop('instrumentos', [])
+        print(instrumentos_data, "AAAAAAAAAAA")
+        # Create proposta without instrumentos (will be added after)
+        proposta = super().create(validated_data)
+        
+        # Handle instrument selections (new format) or simple IDs (old format)
+        if instrumentos_data and len(instrumentos_data) > 0:
+            if isinstance(instrumentos_data[0], dict):
+                # New format: list of dicts with selections
+                for inst_data in instrumentos_data:
+                    instrumento_id = inst_data.get('id')
+                    if instrumento_id:
+                        PropostaInstrumento.objects.create(
+                            proposta=proposta,
+                            instrumento_id=instrumento_id,
+                            service_kind=inst_data.get('service_kind', 'calibracao'),
+                            local=inst_data.get('local', proposta.local),
+                        )
+                        proposta.instrumentos.add(instrumento_id)
+            else:
+                # Old format: simple list of IDs
+                proposta.instrumentos.set(instrumentos_data)
+        
+        return proposta
 
 
 class ReadPropostaSerializer(serializers.ModelSerializer):
     instrumentos = InstrumentoDoClienteReadSerializer(many=True)
+    instrumentos_selecoes = PropostaInstrumentoSerializer(many=True, read_only=True)
     endereco_de_entrega = ReadEnderecoSerializer()
     cliente = ClienteSerializer()
     responsavel = UserSerializer()
@@ -50,6 +112,7 @@ class ReadPropostaSerializer(serializers.ModelSerializer):
         model = Proposta
         fields = (
             "instrumentos",
+            "instrumentos_selecoes",
             "cliente",
             "informacoes_adicionais",
             "total",
@@ -125,6 +188,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         endereco_de_entrega_add = validated_data.pop("endereco_de_entrega_add", None)
+        instrumentos_data = validated_data.pop("instrumentos", None)
 
         if endereco_de_entrega_add is not None:
             validated_data["endereco_de_entrega"] = Endereco.objects.create(
@@ -133,6 +197,32 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
 
         # Salvar primeiro para ter os instrumentos atualizados
         instance = super().update(instance=instance, validated_data=validated_data)
+        
+        # Update instrument selections if provided
+        if instrumentos_data is not None:
+            # Clear existing selections
+            instance.instrumentos_selecoes.all().delete()
+            
+            if isinstance(instrumentos_data, list) and len(instrumentos_data) > 0:
+                if isinstance(instrumentos_data[0], dict):
+                    # New format: list of dicts with selections
+                    instrument_ids = []
+                    for inst_data in instrumentos_data:
+                        instrument_id = inst_data.get('id') or inst_data.get('instrumento_id')
+                        if instrument_id:
+                            instrument_ids.append(instrument_id)
+                            PropostaInstrumento.objects.update_or_create(
+                                proposta=instance,
+                                instrumento_id=instrument_id,
+                                defaults={
+                                    'service_kind': inst_data.get('service_kind', 'calibracao'),
+                                    'local': inst_data.get('local', instance.local),
+                                }
+                            )
+                    instance.instrumentos.set(instrument_ids)
+                else:
+                    # Old format: simple list of IDs
+                    instance.instrumentos.set(instrumentos_data)
         
         # Recalcular o total baseado nos instrumentos e no local da proposta
         if instance.instrumentos.exists():
@@ -182,6 +272,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
 class ReadPropostaAdminSerializer(serializers.ModelSerializer):
     cliente = ClienteSerializer()
     instrumentos = InstrumentoDoClienteReadSerializer(many=True)
+    instrumentos_selecoes = PropostaInstrumentoSerializer(many=True, read_only=True)
     endereco_de_entrega = ReadEnderecoSerializer()
     responsavel = UserSerializer()
     instruments_available = serializers.SerializerMethodField()
@@ -193,6 +284,7 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
         model = Proposta
         fields = (
             "instrumentos",
+            "instrumentos_selecoes",
             "cliente",
             "informacoes_adicionais",
             "total",

@@ -7,10 +7,17 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
   const queryClient = useQueryClient();
 
   const createProposal = async (data) => {
+    // New format: send instrument selections
+    const instrumentos = data?.instrumentos?.map(inst => ({
+      id: inst.id,
+      service_kind: inst.service_kind || 'calibracao',
+      local: inst.local || 'P',
+    })) || [];
+    
     await axios.post('/propostas/', { 
-      instrumentos: data?.instrumentos?.length ? data?.instrumentos?.map(instrumento => instrumento?.id) : null, 
+      instrumentos: !!instrumentos.length ? instrumentos : null,
       cliente: data?.cliente?.id ? data?.cliente?.id : null, 
-      informacoesAdicionais: data?.informacoesAdicionais
+      informacoes_adicionais: data?.informacoesAdicionais
     });
   }
 
@@ -112,9 +119,32 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
     mutationFn: async() => await axios.post(`/propostas/${id}/aprovar/`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['propostas'] })
-      enqueueSnackbar('Proposta aprovada com sucesso!', {
+      enqueueSnackbar('Proposta aprovada com sucesso! Ordens de serviço sendo geradas...', {
         variant: 'success'
       });
+      
+      // Start polling for OS generation status
+      const pollInterval = setInterval(async () => {
+        try {
+          const response = await axios.get(`/propostas/${id}/ordens_servico_status/`);
+          const { status: osStatus, os_count } = response.data;
+          
+          if (osStatus === 'complete') {
+            clearInterval(pollInterval);
+            enqueueSnackbar(`${os_count} ordem(ns) de serviço criada(s) com sucesso!`, {
+              variant: 'success'
+            });
+            queryClient.invalidateQueries({ queryKey: ['propostas'] });
+          }
+        } catch (error) {
+          // Ignore polling errors
+        }
+      }, 2000); // Poll every 2 seconds
+      
+      // Timeout after 60 seconds
+      setTimeout(() => {
+        clearInterval(pollInterval);
+      }, 60000);
     },
     onError: () => {
       enqueueSnackbar('Falha ao aprovar proposta, tente novamente!', {

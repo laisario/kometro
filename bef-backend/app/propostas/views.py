@@ -133,6 +133,8 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=["POST"], permission_classes=[IsAuthenticated])
     def aprovar(self, request, pk=None):
+        from ordem_servico.tasks import criar_ordens_servico_proposta
+        
         proposta = self.get_object()
         proposta.status = "A"
         proposta.data_aprovacao = date.today()
@@ -140,9 +142,40 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
         if proposta.cliente.propostas_aguardando_aprovacao != 0:
             proposta.cliente.propostas_aguardando_aprovacao -= 1
         proposta.cliente.save()
+        
+        # Trigger OS generation task
+        criar_ordens_servico_proposta.delay(proposta.id)
+        
         return response.Response(
-            {"message": "Proposta aprovada com sucesso!"}, status=status.HTTP_200_OK
+            {"message": "Proposta aprovada com sucesso! Ordens de serviço sendo geradas..."}, 
+            status=status.HTTP_200_OK
         )
+    
+    @action(detail=True, methods=["GET"], permission_classes=[IsAuthenticated])
+    def ordens_servico_status(self, request, pk=None):
+        """Check OS generation status for a proposal"""
+        proposta = self.get_object()
+        os_count = proposta.ordens_servico.count()
+        
+        if proposta.status != "A":
+            return response.Response({
+                "status": "not_approved",
+                "os_count": os_count,
+                "message": "Proposta não aprovada"
+            })
+        
+        if os_count > 0:
+            return response.Response({
+                "status": "complete",
+                "os_count": os_count,
+                "message": f"{os_count} ordem(ns) de serviço criada(s)"
+            })
+        else:
+            return response.Response({
+                "status": "generating",
+                "os_count": 0,
+                "message": "Ordens de serviço sendo geradas..."
+            })
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def reprovar(self, request, pk=None):

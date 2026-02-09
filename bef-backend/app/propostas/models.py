@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 from model_utils import FieldTracker
 import datetime
-from instrumentos.models import Local
+from instrumentos.models import Local, TipoServico
 from decimal import Decimal
 
 
@@ -43,6 +43,54 @@ class Anexo(models.Model):
     proposta = models.ForeignKey(
         "Proposta", on_delete=models.CASCADE, related_name="anexos"
     )
+
+
+class PropostaInstrumento(models.Model):
+    """
+    Stores per-instrument service selections for a proposal.
+    Replaces the single Proposta.local field with per-instrument granularity.
+    """
+    proposta = models.ForeignKey(
+        "Proposta",
+        on_delete=models.CASCADE,
+        related_name="instrumentos_selecoes",
+        verbose_name="Proposta"
+    )
+    instrumento = models.ForeignKey(
+        "instrumentos.InstrumentoDoCliente",
+        on_delete=models.CASCADE,
+        related_name="propostas_selecoes",
+        verbose_name="Instrumento"
+    )
+    
+    # Service selection fields
+    service_kind = models.CharField(
+        max_length=20,
+        choices=[
+            ("calibracao", _("Calibração")),
+            ("manutencao", _("Manutenção")),
+        ],
+        verbose_name="Tipo de serviço"
+    )
+    local = models.CharField(
+        max_length=1,
+        choices=Local.choices,
+        verbose_name="Local"
+    )
+    # Note: tipo_servico (acreditado/nao_acreditado) is stored in Instrumento.tipo_de_servico
+    # and does not need to be stored here. It will be read from the instrument during OS generation.
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Data de criação")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Data de atualização")
+    
+    class Meta:
+        unique_together = [['proposta', 'instrumento']]
+        verbose_name = "Seleção de Serviço do Instrumento"
+        verbose_name_plural = "Seleções de Serviço dos Instrumentos"
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"{self.proposta.numero} - {self.instrumento.tag or self.instrumento.id}"
 
 
 class Proposta(models.Model):
@@ -154,6 +202,59 @@ class Proposta(models.Model):
         new_sequence_str = f"{new_sequence:04d}"
         new_numero = f"{new_sequence_str}{month_letter}{last_two_digits_year}"
         return new_numero
+
+    def get_instrumentos_selecoes(self):
+        """
+        Returns dict of instrument selections:
+        {
+            instrumento_id: {
+                'instrumento': InstrumentoDoCliente instance,
+                'service_kind': 'calibracao' | 'manutencao',
+                'local': 'C' | 'P' | 'T',
+                'tipo_servico': 'A' | 'NA'  # Read from instrumento.instrumento.tipo_de_servico
+            }
+        }
+        """
+        selecoes = self.instrumentos_selecoes.select_related(
+            'instrumento__instrumento__tipo_de_instrumento'
+        ).all()
+        
+        return {
+            sel.instrumento_id: {
+                'instrumento': sel.instrumento,
+                'service_kind': sel.service_kind,
+                'local': sel.local,
+                'tipo_servico': sel.instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+            }
+            for sel in selecoes
+        }
+    
+    def get_instrumento_selecao(self, instrumento_id):
+        """Get selection for specific instrument"""
+        try:
+            sel = self.instrumentos_selecoes.select_related(
+                'instrumento__instrumento'
+            ).get(instrumento_id=instrumento_id)
+            return {
+                'service_kind': sel.service_kind,
+                'local': sel.local,
+                'tipo_servico': sel.instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+            }
+        except PropostaInstrumento.DoesNotExist:
+            # Fallback to proposta.local for backward compatibility
+            try:
+                instrumento = self.instrumentos.get(id=instrumento_id)
+                return {
+                    'service_kind': 'calibracao',  # Default assumption
+                    'local': self.local,
+                    'tipo_servico': instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+                }
+            except:
+                return {
+                    'service_kind': 'calibracao',
+                    'local': self.local,
+                    'tipo_servico': TipoServico.NAO_ACREDITADO,
+                }
 
     def save(self, *args, **kwargs) -> None:
         if not self.numero:

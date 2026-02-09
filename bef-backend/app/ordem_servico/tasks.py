@@ -1,71 +1,82 @@
 import logging
-from collections import defaultdict
 from celery import shared_task
 from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def criar_ordens_servico_proposta(proposta_id):
+@shared_task(bind=True, max_retries=3)
+def criar_ordens_servico_proposta(self, proposta_id):
     """
-    Creates OrdemServico records grouped by tipo_de_instrumento
-    and generates numero_certificado for each instrument.
+    Create OrdemServico records for approved proposal.
     
-    Triggered when a Proposta status changes to "A" (Aprovada).
+    Idempotent: checks if OS already exist before creating.
+    Retries: 3 times with exponential backoff.
     
-    Numero generation:
-    - OrdemServico.numero: {proposta.numero}-OS{sequence}
-    - InstrumentoDoCliente.numero_certificado: {ordem.numero}-{sequence:03d}
+    Grouping logic:
+    - Location (cliente / permanente / terceirizado) - from proposal selection
+    - Service type (acreditado / nao_acreditado) - from instrument.tipo_de_servico
+    - Service kind (calibracao / manutencao) - from proposal selection
+    - Special case: if instrument is a scale (balança), group into OS Balanças
     """
     from propostas.models import Proposta
     from ordem_servico.models import OrdemServico
+    from ordem_servico.utils import agrupar_instrumentos_os, criar_os_do_grupo
     
     try:
-        proposta = Proposta.objects.get(id=proposta_id)
+        proposta = Proposta.objects.select_related('cliente').get(id=proposta_id)
     except Proposta.DoesNotExist:
         logger.error(f"Proposta {proposta_id} not found")
-        return
+        raise
     
-    if OrdemServico.objects.filter(proposta=proposta).exists():
-        logger.warning(f"OrdemServico already exists for Proposta {proposta.numero}")
-        return
+    # Idempotency check
+    if proposta.ordens_servico.exists():
+        logger.info(f"OS already exist for proposta {proposta_id}")
+        return {"status": "already_exists", "os_count": proposta.ordens_servico.count()}
     
-    instrumentos = proposta.instrumentos.select_related(
-        'instrumento__tipo_de_instrumento'
-    ).all()
+    # Get instrument selections from proposta
+    instrumentos_data = proposta.get_instrumentos_selecoes()
     
-    if not instrumentos.exists():
-        logger.warning(f"No instruments found for Proposta {proposta.numero}")
-        return
+    if not instrumentos_data:
+        logger.warning(f"No instrument selections found for proposta {proposta_id}")
+        # Fallback: try to use old format (backward compatibility)
+        instrumentos = proposta.instrumentos.select_related(
+            'instrumento__tipo_de_instrumento'
+        ).all()
+        
+        if not instrumentos.exists():
+            logger.warning(f"No instruments found for proposta {proposta_id}")
+            return {"status": "no_instruments"}
+        
+        # Create default selections from proposta.local
+        instrumentos_data = {}
+        for instrumento in instrumentos:
+            instrumentos_data[instrumento.id] = {
+                'instrumento': instrumento,
+                'service_kind': 'calibracao',  # Default
+                'local': proposta.local,
+                'tipo_servico': instrumento.instrumento.tipo_de_servico or 'NA',
+            }
     
-    # Group instruments by tipo_de_instrumento
-    grupos = defaultdict(list)
-    for inst in instrumentos:
-        tipo_id = inst.instrumento.tipo_de_instrumento_id
-        grupos[tipo_id].append(inst)
+    # Group instruments
+    grupos = agrupar_instrumentos_os(list(instrumentos_data.values()))
     
-    logger.info(f"Creating {len(grupos)} OrdemServico for Proposta {proposta.numero}")
+    if not grupos:
+        logger.warning(f"No groups created for proposta {proposta_id}")
+        return {"status": "no_groups"}
     
-    with transaction.atomic():
-        # Create OrdemServico for each group
-        for seq, (tipo_id, insts) in enumerate(grupos.items(), start=1):
-            numero = f"{proposta.numero}-OS{seq}"
-            
-            ordem = OrdemServico.objects.create(
-                proposta=proposta,
-                numero=numero,
-                data_expiracao=proposta.validade,  # Copy from Proposta.validade
-                responsavel=None
-            )
-            ordem.instrumentos.set(insts)
-            
-            # Generate numero_certificado for each instrument
-            for cert_seq, inst in enumerate(insts, start=1):
-                inst.numero_certificado = f"{numero}-{cert_seq:03d}"
-                inst.save(update_fields=['numero_certificado'])
-            
-            logger.info(f"Created OrdemServico {numero} with {len(insts)} instruments")
-    
-    logger.info(f"Successfully created all OrdemServico for Proposta {proposta.numero}")
-    return True
+    # Create OS for each group
+    os_created = []
+    try:
+        with transaction.atomic():
+            for grupo_key, instrumentos in grupos.items():
+                os = criar_os_do_grupo(proposta, grupo_key, instrumentos)
+                os_created.append(os.id)
+                logger.info(f"Created OS {os.numero} for group {grupo_key}")
+        
+        logger.info(f"Created {len(os_created)} OS for proposta {proposta_id}")
+        return {"status": "success", "os_ids": os_created}
+        
+    except Exception as exc:
+        logger.error(f"Error creating OS for proposta {proposta_id}: {exc}")
+        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))

@@ -7,9 +7,11 @@ import {
   DialogActions,
   Dialog,
   Autocomplete,
+  Typography,
 } from '@mui/material';
 import { verifyError } from '../../utils/error';
 import VirtualizedInstrumentAutocomplete from './VirtualizedInstrumentAutocomplete';
+import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
 
 function FormCreateProposal(props) {
   const { 
@@ -68,7 +70,14 @@ function FormCreateProposal(props) {
           value={instruments}
           onChange={(event, newValue) => {
             verifyError("instrumentos", error, setError);
-            formCreateProposal?.setValue('instrumentos', newValue);
+            // Transform to new format with default selections
+            const formattedInstruments = newValue?.map(inst => ({
+              id: inst.id,
+              service_kind: 'calibracao',
+              local: 'P',
+              ...inst, // Keep original instrument data
+            })) || [];
+            formCreateProposal?.setValue('instrumentos', formattedInstruments);
           }}
           error={!!error['instrumentos']?.length}
           helperText={!!error['instrumentos']?.length && error['instrumentos'][0]}
@@ -76,6 +85,26 @@ function FormCreateProposal(props) {
           placeholder="Pesquisar instrumento"
           sx={{ my: 2 }}
         />
+        
+        {instruments && instruments.length > 0 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+              Configurar serviços para cada instrumento:
+            </Typography>
+            <InstrumentServiceSelectionTable
+              instruments={instruments}
+              onChange={(updatedInstruments) => {
+                formCreateProposal?.setValue('instrumentos', updatedInstruments);
+              }}
+              onRemove={(instrumentId) => {
+                const updated = instruments.filter(inst => inst.id !== instrumentId);
+                formCreateProposal?.setValue('instrumentos', updated);
+              }}
+              errors={error}
+            />
+          </>
+        )}
+        
         <TextField
           type="text"
           multiline
@@ -84,7 +113,7 @@ function FormCreateProposal(props) {
           placeholder="Informações adicionais"
           fullWidth
           {...formCreateProposal.register("informacoesAdicionais")}
-
+          sx={{ mt: 2 }}
         />
       </DialogContent>
       <DialogActions sx={{ mt: 3, mb: 2 }} >
