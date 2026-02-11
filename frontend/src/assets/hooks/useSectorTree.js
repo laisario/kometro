@@ -33,40 +33,43 @@ export const buildTreeItems = (sector, parentId = null) => {
 
 
 const useSectorTree = () => {
-    const { user } = useAuth();
+  const { user } = useAuth();
 
-    const { 
-      data: sectors,
-      isFetching: isLoadingSectors,
-    } = useQuery(
-      {
-        queryKey: ['setores'], 
-        queryFn: async () => {
-          const params = {
-            cliente_id: user?.cliente,
-          };
-  
-          const response = await axios.get('/setores/hierarquia/', { params });
-  
-          const items = response?.data?.map((sect) => buildTreeItems(sect));
-  
-          return items
-  
-        },
-        refetchOnWindowFocus: false,
-        refetchOnReconnect:false,    
-        enabled: !!user?.cliente,
-        refetchOnMount: true
-      }
-  
-    );
+  const { 
+    data: sectors,
+    isFetching: isLoadingSectors,
+    isSuccess: isSuccessSectors,
+  } = useQuery(
+    {
+      queryKey: ['setores', user?.cliente], 
+      queryFn: async () => {
+        const params = {
+          cliente_id: user?.cliente,
+        };
 
-    return {
-        sectors,
-        isLoadingSectors,
+        const response = await axios.get('/setores/hierarquia/', { params });
+
+        const items = response?.data?.map((sect) => buildTreeItems(sect));
+        console.log(items, 'AAAAAAAAAAA')
+
+        return items
+
+      },
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,    
+      enabled: !!user?.cliente,
+      refetchOnMount: true,
+      staleTime: 5 * 60 * 1000, // 5 minutos
+      cacheTime: 10 * 60 * 1000, // 10 minutos
     }
 
-  
+  );
+
+  return {
+    sectors,
+    isLoadingSectors,
+    hasSectors: !!sectors?.length,
+  }
 };
 
 export default useSectorTree;

@@ -27,6 +27,7 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import DriveFileMoveIcon from '@mui/icons-material/DriveFileMove';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog';
+import { useSectorTreeContext } from '../contexts/SectorTreeContext';
 
 // Helper to flatten setor tree and get all instruments
 const flattenSetores = (setores, excludeId = null) => {
@@ -81,8 +82,52 @@ export default function DeleteSectorDialog({
   onConfirm,
   sectorId,
   sectorName,
-  setores = [],
 }) {
+  // Usar Context para acessar setores
+  const { nodes, rootIds } = useSectorTreeContext();
+  
+  // Converter nodes normalizados para formato hierárquico (para compatibilidade com funções helper)
+  const setores = useMemo(() => {
+    const buildHierarchy = (nodeId) => {
+      const node = nodes[nodeId];
+      if (!node) return null;
+      
+      const children = [];
+      
+      // Adicionar setores filhos
+      if (node.childIds && node.childIds.length > 0) {
+        node.childIds.forEach(childId => {
+          const child = buildHierarchy(childId);
+          if (child) children.push(child);
+        });
+      }
+      
+      // Adicionar instrumentos
+      if (node.instrumentIds && node.instrumentIds.length > 0) {
+        node.instrumentIds.forEach(instrId => {
+          const instrNode = nodes[instrId];
+          if (instrNode) {
+            children.push({
+              id: instrId,
+              label: instrNode.label,
+              itemType: 'instrument',
+              children: []
+            });
+          }
+        });
+      }
+      
+      return {
+        id: node.id,
+        label: node.label,
+        itemType: node.type,
+        children
+      };
+    };
+    
+    return rootIds.map(id => buildHierarchy(id)).filter(Boolean);
+  }, [nodes, rootIds]);
+  
   const [action, setAction] = useState('transfer_existing'); // 'delete_all', 'transfer_existing', 'transfer_new'
   const [selectedInstruments, setSelectedInstruments] = useState([]);
   const [targetSetor, setTargetSetor] = useState(null);

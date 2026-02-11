@@ -7,6 +7,7 @@ import FormDefaultAsset from './FormDefaultAsset';
 import useNorms from '../hooks/useNorms';
 import useClient from '../../clients/hooks/useClient';
 import { frequenceCriterion, flattenSectors } from '../../utils/assets';
+import { useSectorTreeContext } from '../contexts/SectorTreeContext';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import 'dayjs/locale/pt-br';
 import dayjs from 'dayjs';
@@ -73,7 +74,28 @@ function CreateInstrument(props) {
   } = props;
   const { client } = useClient(cliente)
   const isMobile = useResponsive('down', 'md');
-  const options = useMemo(() => flattenSectors(setores), [setores]);
+
+  // Tentar usar o contexto se disponível, senão usar setores da prop (para tableViewCreate)
+  let sectors = setores;
+  try {
+    const context = useSectorTreeContext();
+    if (context && context.nodes) {
+      // Converter nodes para formato hierárquico simplificado para flattenSectors
+      const rootIds = context.rootIds || [];
+      sectors = rootIds.map(id => {
+        const node = context.nodes[id];
+        return node ? {
+          id: node.id,
+          nome: node.label,
+          subsetores: (node.childIds || []).map(childId => context.nodes[childId]).filter(Boolean)
+        } : null;
+      }).filter(Boolean);
+    }
+  } catch (e) {
+    // Context não disponível, usar setores da prop
+  }
+  
+  const options = useMemo(() => flattenSectors(sectors), [sectors]);
 
   // Buscar instrumento atualizado quando o formulário estiver aberto (para edição)
   // Isso aproveita o cache do React Query e atualiza automaticamente após invalidateQueries

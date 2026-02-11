@@ -51,7 +51,6 @@ const OptionsMenu = ({
   openFormCreateInstrument, 
   setOpenFormCreateInstrument,
   isFetching,
-  setores, 
   error,
   handleCloseCreateInstrument,
   setError,
@@ -138,7 +137,6 @@ const OptionsMenu = ({
         mutate={mutateUpdateClient}
         asset={asset}
         isFetching={isFetching}
-        setores={setores}
         error={error}
         setError={setError}
       />
@@ -160,7 +158,6 @@ function InstrumentDetails({
   mutateDeleteClient,
   setSelectedItem,
   isFetching,
-  setores,
   mutateChangePosition,
   error,
   setError,
@@ -227,7 +224,6 @@ function InstrumentDetails({
               openFormCreateInstrument={openFormCreateInstrument}
               setOpenFormCreateInstrument={setOpenFormCreateInstrument}
               isFetching={isFetching}
-              setores={setores}
               error={error}
               setError={setError}
               search={search}

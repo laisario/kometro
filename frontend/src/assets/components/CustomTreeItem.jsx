@@ -24,6 +24,7 @@ import ConfirmDeleteDialog from './ConfirmDeleteDialog';
 import DeleteSectorDialog from './DeleteSectorDialog';
 import { NO_PERMISSION_ACTION } from '../../utils/messages';
 import useAuth from '../../auth/hooks/useAuth';
+import { useSectorsRequired } from './SectorContext';
 
 function DotIcon() {
   return (
@@ -139,24 +140,30 @@ function CustomLabel({
     setSelectedItem, 
     handleEdit,
     duplicateInstrument,
-    setores,
     ...other
   }) {
   const [open, setOpen] = React.useState(false)
   const { hasCreatePermission, hasEditPermission, hasDeletePermission } = useAuth();
   
-  // Find the sector name for the dialog
-  const findSectorName = (items, id) => {
-    for (const item of items || []) {
-      if (String(item.id) === String(id)) return item.label;
-      if (item.children?.length) {
-        const found = findSectorName(item.children, id);
-        if (found) return found;
+  // Usar Context apenas quando necessário (quando selectedItem está definido e é setor)
+  const {sectors: setores} = useSectorsRequired();
+  
+  // Find the sector name for the dialog - usar useMemo para evitar recálculos
+  const sectorName = React.useMemo(() => {
+    if (!selectedItem?.id || selectedItem?.type !== 'sector') return '';
+    
+    const findSectorName = (items, id) => {
+      for (const item of items || []) {
+        if (String(item.id) === String(id)) return item.label;
+        if (item.children?.length) {
+          const found = findSectorName(item.children, id);
+          if (found) return found;
+        }
       }
-    }
-    return '';
-  };
-  const sectorName = findSectorName(setores, selectedItem?.id);
+      return '';
+    };
+    return findSectorName(setores, selectedItem.id);
+  }, [setores, selectedItem?.id, selectedItem?.type]);
 
   return (
     <TreeItemLabel
@@ -209,7 +216,6 @@ function CustomLabel({
             onClose={() => setOpen(false)}
             sectorId={selectedItem?.id}
             sectorName={sectorName}
-            setores={setores}
             onConfirm={(data) => {
               onDeleteSetor({ id: selectedItem?.id, ...data }); 
               setSelectedItem(null);
@@ -262,10 +268,9 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
     handleCloseCreateSector,
     duplicateInstrument,
     creatingSector,
-    setores,
     ...other
   } = props;
-
+  
   const [inputValue, setInputValue] = React.useState('');
 
   const {
@@ -377,7 +382,6 @@ const CustomTreeItem = React.forwardRef(function CustomTreeItem(props, ref) {
                 handleEdit={handleEdit}
                 itemId={itemId}
                 duplicateInstrument={duplicateInstrument}
-                setores={setores}
                 {...getLabelProps({
                   icon,
                   expandable: status.expandable && status.expanded,

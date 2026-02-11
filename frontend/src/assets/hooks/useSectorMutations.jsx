@@ -19,60 +19,6 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     };
   }, []);
 
-  const insertChildByParentId = (tree, parentId, child) => {
-    if (!parentId) {
-      return [...tree, child];
-    }
-    return tree.map((node) => {
-      if (String(node.id) === String(parentId)) {
-        return {
-          ...node,
-          children: [...(node.children || []), child],
-        };
-      }
-  
-      if (node.children?.length) {
-        return {
-          ...node,
-          children: insertChildByParentId(node.children, parentId, child),
-        };
-      }
-  
-      return node;
-    });
-  }
-
-  function updateLabelById(treeData, targetId, newLabel) {
-    return treeData.map((item) => {
-      if (item.id === targetId) {
-        return { ...item, label: newLabel };
-      }
-  
-      if (item.children && item.children.length > 0) {
-        return {
-          ...item,
-          children: updateLabelById(item.children, targetId, newLabel),
-        };
-      }
-  
-      return item;
-    });
-  }
-
-  function removeItemById(treeData, targetId) {
-    return treeData
-      .filter((item) => item.id !== targetId)
-      .map((item) => {
-        if (item.children && item.children.length > 0) {
-          return {
-            ...item,
-            children: removeItemById(item.children, targetId),
-          };
-        }
-        return item;
-      });
-  }
-
   const deleteSector = async (data) => {
     await axios.delete(`/setores/${Number(data?.id)}/`, {
       headers: {
@@ -93,18 +39,9 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isDeleting 
   } = useMutation({
     mutationFn: deleteSector,
-    onMutate: async (sectorToDelete) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-      const previousSectors = queryClient.getQueryData(['setores']);
-
-      const updatedTree = removeItemById(previousSectors, sectorToDelete?.id)
-
-      queryClient.setQueryData(['setores'], updatedTree);
-  
-      return { previousSectors };
-    },
-
+    
     onSuccess: (_, variables) => {
+      // ✅ Nova estratégia: invalidate para forçar refetch
       queryClient.invalidateQueries({ queryKey: ['setores'] });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] });
       
@@ -121,13 +58,9 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       });
     },
 
-    onError: (erro, _sectorToDelete, context) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
-      }
+    onError: (erro) => {
       if (mountedRef.current) {
         setError(erro?.response?.data)
-        
         const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
         enqueueSnackbar(errorMessage, {
           variant: 'error',
@@ -147,26 +80,17 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isLoadingUpdate, 
   } = useMutation({
     mutationFn: updateSector,
-    onMutate: async (newSector) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-      const previousSectors = queryClient.getQueryData(['setores']);
-      const optimisticSector = buildTreeItems(newSector);
-
-      const updatedTree = updateLabelById(previousSectors, optimisticSector?.id, optimisticSector?.label);
-      queryClient.setQueryData(['setores'], updatedTree);
-  
-      return { previousSectors };
-    },
+    
     onSuccess: () => {
+      // ✅ Nova estratégia: invalidate para forçar refetch
+      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      
       if (mountedRef.current) {
         handleCloseCreateSector()
       }
     },
-    onError: (erro, _newSector, context) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
-      }
-
+    
+    onError: (erro) => {
       if (mountedRef.current) {
         setError(erro?.response?.data)
         enqueueSnackbar(getErrorMessage(erro?.response?.status), {
@@ -193,85 +117,36 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isLoadingCreate,
   } = useMutation({
     mutationFn: createSector,
-    onMutate: async (newSector) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-  
-      const previousSectors = queryClient.getQueryData(['setores']);
-      const optimisticSector = buildTreeItems({
-        ...newSector,
-        id: 999,
-        subsetores: [],
-      });
+    
+    onSuccess: (res) => {
+      if (!mountedRef.current) return;
 
-      const updatedSectors = insertChildByParentId(
-        previousSectors || [],
-        newSector?.setorPaiId,
-        optimisticSector
-      );
-
-      queryClient.setQueryData(['setores'], updatedSectors);
-  
-      return { previousSectors };
-    },
-  
-    onError: (err, _newSector, context) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
+      const realSector = buildTreeItems(res?.data);
+      if (!realSector) {
+        console.error('[useSectorMutations] Failed to build tree items from response:', res?.data);
+        return;
       }
-  
+      
+      // ✅ Nova estratégia: invalidate para refetch + mostrar input de rename no topo
+      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      
+      if (mountedRef.current) {
+        // Salvar ID do setor criado para renomear depois
+        setOpenCreateSectorId(realSector?.id);
+        setSelectedItem({id: realSector?.id, type: realSector?.itemType, parentId: realSector?.parentId});
+        
+        // Ativar modo de criação (mostra input de rename no topo)
+        setCreatingSector(true);
+      }
+    },
+    
+    onError: (err) => {
       if (mountedRef.current) {
         setError(err?.response?.data);
         enqueueSnackbar(getErrorMessage(err?.response?.status), {
           variant: 'error',
           autoHideDuration: 2000,
         });
-      }
-    },
-  
-    onSuccess: (res, newSector, context) => {
-      if (!mountedRef.current) {
-        console.warn('[useSectorMutations] Component unmounted, skipping setState in onSuccess');
-        return;
-      }
-
-      try {
-        const sector = buildTreeItems(res?.data)
-        if (!sector) {
-          console.error('[useSectorMutations] Failed to build tree items from response:', res?.data);
-          return;
-        }
-        
-        const updatedSectors = insertChildByParentId(
-          context?.previousSectors || [],
-          newSector?.setorPaiId,
-          sector,
-        );
-        queryClient.setQueryData(['setores'], updatedSectors);
-        
-        // Guard against setState after unmount
-        if (mountedRef.current) {
-          // Use functional updates to avoid stale closures
-          setOpenCreateSectorId(sector?.id);
-          setSelectedItem({id: sector?.id, type: sector?.itemType, parentId: sector?.parentId});
-          
-          // Fix: Use functional update with proper parameter name to avoid closure stale
-          setExpandedItems(prevExpandedItems => {
-            const parentId = newSector?.setorPaiId;
-            if (!parentId) return prevExpandedItems;
-            const parentIdStr = String(parentId);
-            if (prevExpandedItems?.includes(parentIdStr)) {
-              return prevExpandedItems;
-            }
-            return [...(prevExpandedItems || []), parentIdStr];
-          });
-          
-          setCreatingSector(true);
-        }
-      } catch (error) {
-        console.error('[useSectorMutations] Error in onSuccess:', error);
-        if (context?.previousSectors) {
-          queryClient.setQueryData(['setores'], context.previousSectors);
-        }
       }
     },
   });
