@@ -6,7 +6,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FormDefaultAsset from './FormDefaultAsset';
 import useNorms from '../hooks/useNorms';
 import useClient from '../../clients/hooks/useClient';
-import { frequenceCriterion, flattenSectors } from '../../utils/assets';
+import { frequenceCriterion, flattenSectors, flattenSectorsFromNodes } from '../../utils/assets';
 import { useSectorTreeContext } from '../contexts/SectorTreeContext';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import 'dayjs/locale/pt-br';
@@ -77,25 +77,25 @@ function CreateInstrument(props) {
 
   // Tentar usar o contexto se disponível, senão usar setores da prop (para tableViewCreate)
   let sectors = setores;
-  try {
-    const context = useSectorTreeContext();
-    if (context && context.nodes) {
-      // Converter nodes para formato hierárquico simplificado para flattenSectors
-      const rootIds = context.rootIds || [];
-      sectors = rootIds.map(id => {
-        const node = context.nodes[id];
-        return node ? {
-          id: node.id,
-          nome: node.label,
-          subsetores: (node.childIds || []).map(childId => context.nodes[childId]).filter(Boolean)
-        } : null;
-      }).filter(Boolean);
-    }
-  } catch (e) {
-    // Context não disponível, usar setores da prop
-  }
   
-  const options = useMemo(() => flattenSectors(sectors), [sectors]);
+  const context = useSectorTreeContext() || null;
+
+  
+  const options = useMemo(() => {
+    // If we have the new context structure, use a new flattening function
+    if (context?.nodes && context?.rootIds && context.rootIds.length > 0) {
+      const flattened = flattenSectorsFromNodes(context.nodes, context.rootIds);
+      return flattened;
+    }
+    // Otherwise, use the old flattenSectors function
+    if (sectors && sectors.length > 0) {
+      const flattened = flattenSectors(sectors);
+      return flattened;
+    }
+   
+    return [];
+  }, [sectors, context?.nodes, context?.rootIds]);
+  
 
   // Buscar instrumento atualizado quando o formulário estiver aberto (para edição)
   // Isso aproveita o cache do React Query e atualiza automaticamente após invalidateQueries
@@ -136,7 +136,22 @@ function CreateInstrument(props) {
   const [setorId, setSetorId] = useState(currentAsset?.setor?.id ? currentAsset?.setor?.id : null);
   const { normas } = useNorms(cliente);
 
-  const selectedOption = useMemo(() => options?.find((opt) => opt?.id === setorId) || null, [currentAsset?.setor?.id, setorId, options]);
+  // Find the selected option by matching IDs (handle both string and number types)
+  const selectedOption = useMemo(() => {
+    if (!setorId || !options || options.length === 0) {
+      return null;
+    }
+    // Convert both to strings for comparison to handle type mismatches
+    const found = options.find((opt) => String(opt?.id) === String(setorId));
+    console.log('[CreateInstrument] selectedOption lookup:', {
+      setorId,
+      setorIdType: typeof setorId,
+      optionsLength: options.length,
+      found,
+      sampleOptionIds: options.slice(0, 3).map(o => ({ id: o.id, type: typeof o.id })),
+    });
+    return found || null;
+  }, [setorId, options]);
 
   const form = useForm({
     defaultValues: {
@@ -205,7 +220,16 @@ function CreateInstrument(props) {
       }
 
       if (currentAsset?.setor?.id) {
-        setSetorId(currentAsset.setor.id);
+        // Ensure setorId is set when editing
+        const sectorId = currentAsset.setor.id;
+        setSetorId(sectorId);
+        console.log('[CreateInstrument] Setting setorId from asset:', {
+          sectorId,
+          sectorIdType: typeof sectorId,
+          setor: currentAsset.setor,
+        });
+      } else {
+        setSetorId(null);
       }
     }
   }, [currentAsset, open]);
@@ -643,9 +667,17 @@ function CreateInstrument(props) {
               <Autocomplete
                 options={options}
                 value={selectedOption}
-                onChange={(event, newValue) => setSetorId(newValue?.id || null)}
-                getOptionLabel={(option) => option.label}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
+                onChange={(event, newValue) => {
+                  const newId = newValue?.id || null;
+                  console.log('[CreateInstrument] Autocomplete onChange:', { newValue, newId });
+                  setSetorId(newId);
+                }}
+                getOptionLabel={(option) => option?.label ?? ''}
+                isOptionEqualToValue={(option, value) => {
+                  if (!option || !value) return false;
+                  // Compare as strings to handle type mismatches (number vs string)
+                  return String(option.id) === String(value.id);
+                }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
