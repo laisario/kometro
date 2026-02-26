@@ -15,7 +15,6 @@ import { useNavigate, useParams } from 'react-router';
 import useAsset from '../hooks/useAsset';
 import useAssetMutations from '../hooks/useAssetMutations';
 import useDefaultAssets from '../hooks/useDefaultAssets';
-import useSectorTree from '../hooks/useSectorTree';
 import RecordList from '../components/RecordList';
 import InstrumentDetails from '../components/InstrumentDetails';
 
@@ -54,8 +53,6 @@ function InstrumentoDetailPage() {
     hasNextPage, 
     isFetchingNextPage 
   } = useDefaultAssets();
-
-  const { sectors } = useSectorTree();
 
   const handleGoBack = () => {
     navigate('/dashboard/instrumentos?tab=table');

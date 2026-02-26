@@ -67,9 +67,15 @@ const useClientAssets = (clientId, table = false, infinite = false) => {
     return [];
   }, [infiniteData]);
 
-  const handleSearch = debounce((value) => setDebouncedSearch(value), 500);
+  const handleSearch = useMemo(
+    () => debounce((value) => setDebouncedSearch(value), 500),
+    []
+  );
   
-  useEffect(() => { handleSearch(search) }, [search, handleSearch]);
+  useEffect(() => {
+    handleSearch(search);
+    return () => handleSearch.cancel();
+  }, [search, handleSearch]);
 
   return {
     assets: infinite ? { results: allInfiniteAssets, count: infiniteData?.pages[0]?.count } : assets, 

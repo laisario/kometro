@@ -57,6 +57,58 @@ export function flattenSectors(data, depth = 0) {
   return result;
 }
 
+/**
+ * Flattens sectors from the new normalized tree structure (nodes + rootIds)
+ * Works with the structure from SectorTreeContext where nodes are stored in a flat object
+ * and relationships are maintained via childIds arrays.
+ * 
+ * @param {Object} nodes - Object mapping nodeId -> node (with id, label, type, childIds, etc.)
+ * @param {Array<string>} rootIds - Array of root node IDs
+ * @param {number} depth - Current depth in the tree (for indentation)
+ * @returns {Array<{id: string|number, label: string, depth: number, raw: any}>} - Flat array of sector options
+ */
+export function flattenSectorsFromNodes(nodes, rootIds, depth = 0) {
+  if (!nodes || !rootIds || rootIds.length === 0) {
+    return [];
+  }
+
+  const result = [];
+  const indentPrefix = '— '.repeat(depth); // Visual indentation prefix
+
+  function traverse(nodeId, currentDepth = 0) {
+    const node = nodes[nodeId];
+    if (!node) return;
+
+    // Only include sector nodes (not instruments)
+    if (node.type === 'sector') {
+      // Use node.label directly - visual indentation is handled by padding in renderOption
+      // But we can optionally add a prefix for text-based indentation if needed
+      const label = node.label;
+      
+      result.push({
+        id: node.id, // This will be a string from normalizeTree, but we compare as strings
+        label: label,
+        depth: currentDepth,
+        raw: node, // Keep reference to original node
+      });
+
+      // Recursively process child sectors
+      if (node.childIds && Array.isArray(node.childIds) && node.childIds.length > 0) {
+        node.childIds.forEach(childId => {
+          traverse(childId, currentDepth + 1);
+        });
+      }
+    }
+  }
+
+  // Start traversal from root nodes
+  rootIds.forEach(rootId => {
+    traverse(rootId, depth);
+  });
+
+  return result;
+}
+
 
 
 

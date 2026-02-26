@@ -1,5 +1,5 @@
 import { enqueueSnackbar } from 'notistack';
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import 'dayjs/locale/pt-br';
 import { axios } from '../../api';
@@ -9,60 +9,15 @@ import { buildTreeItems } from './useSectorTree';
 function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector) {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
+  const mountedRef = useRef(true);
 
-  const insertChildByParentId = (tree, parentId, child) => {
-    if (!parentId) {
-      return [...tree, child];
-    }
-    return tree.map((node) => {
-      if (String(node.id) === String(parentId)) {
-        return {
-          ...node,
-          children: [...(node.children || []), child],
-        };
-      }
-  
-      if (node.children?.length) {
-        return {
-          ...node,
-          children: insertChildByParentId(node.children, parentId, child),
-        };
-      }
-  
-      return node;
-    });
-  }
-
-  function updateLabelById(treeData, targetId, newLabel) {
-    return treeData.map((item) => {
-      if (item.id === targetId) {
-        return { ...item, label: newLabel };
-      }
-  
-      if (item.children && item.children.length > 0) {
-        return {
-          ...item,
-          children: updateLabelById(item.children, targetId, newLabel),
-        };
-      }
-  
-      return item;
-    });
-  }
-
-  function removeItemById(treeData, targetId) {
-    return treeData
-      .filter((item) => item.id !== targetId)
-      .map((item) => {
-        if (item.children && item.children.length > 0) {
-          return {
-            ...item,
-            children: removeItemById(item.children, targetId),
-          };
-        }
-        return item;
-      });
-  }
+  // Track mount/unmount to prevent setState after unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const deleteSector = async (data) => {
     await axios.delete(`/setores/${Number(data?.id)}/`, {
@@ -84,18 +39,9 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isDeleting 
   } = useMutation({
     mutationFn: deleteSector,
-    onMutate: async (sectorToDelete) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-      const previousSectors = queryClient.getQueryData(['setores']);
-
-      const updatedTree = removeItemById(previousSectors, sectorToDelete?.id)
-
-      queryClient.setQueryData(['setores'], updatedTree);
-  
-      return { previousSectors };
-    },
-
+    
     onSuccess: (_, variables) => {
+      // ✅ Nova estratégia: invalidate para forçar refetch
       queryClient.invalidateQueries({ queryKey: ['setores'] });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] });
       
@@ -112,17 +58,15 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
       });
     },
 
-    onError: (erro, _sectorToDelete, context) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
+    onError: (erro) => {
+      if (mountedRef.current) {
+        setError(erro?.response?.data)
+        const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
+        enqueueSnackbar(errorMessage, {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
       }
-      setError(erro?.response?.data)
-      
-      const errorMessage = erro?.response?.data?.detail || getErrorMessage(erro?.response?.status);
-      enqueueSnackbar(errorMessage, {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
     },
   })
 
@@ -136,29 +80,24 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isLoadingUpdate, 
   } = useMutation({
     mutationFn: updateSector,
-    onMutate: async (newSector) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-      const previousSectors = queryClient.getQueryData(['setores']);
-      const optimisticSector = buildTreeItems(newSector);
-
-      const updatedTree = updateLabelById(previousSectors, optimisticSector?.id, optimisticSector?.label);
-      queryClient.setQueryData(['setores'], updatedTree);
-  
-      return { previousSectors };
-    },
+    
     onSuccess: () => {
-      handleCloseCreateSector()
-    },
-    onError: (erro) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
+      // ✅ Nova estratégia: invalidate para forçar refetch
+      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      
+      if (mountedRef.current) {
+        handleCloseCreateSector()
       }
-
-      setError(erro?.response?.data)
-      enqueueSnackbar(getErrorMessage(erro?.response?.status), {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
+    },
+    
+    onError: (erro) => {
+      if (mountedRef.current) {
+        setError(erro?.response?.data)
+        enqueueSnackbar(getErrorMessage(erro?.response?.status), {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
+      }
     }
   })
 
@@ -178,51 +117,37 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     isLoading: isLoadingCreate,
   } = useMutation({
     mutationFn: createSector,
-    onMutate: async (newSector) => {
-      await queryClient.cancelQueries({ queryKey: ['setores'] });
-  
-      const previousSectors = queryClient.getQueryData(['setores']);
-      const optimisticSector = buildTreeItems({
-        ...newSector,
-        id: 999,
-        subsetores: [],
-      });
+    
+    onSuccess: (res) => {
+      if (!mountedRef.current) return;
 
-      const updatedSectors = insertChildByParentId(
-        previousSectors || [],
-        newSector?.setorPaiId,
-        optimisticSector
-      );
-
-      queryClient.setQueryData(['setores'], updatedSectors);
-  
-      return { previousSectors };
-    },
-  
-    onError: (err, _newSector, context) => {
-      if (context?.previousSectors) {
-        queryClient.setQueryData(['setores'], context.previousSectors);
+      const realSector = buildTreeItems(res?.data);
+      if (!realSector) {
+        console.error('[useSectorMutations] Failed to build tree items from response:', res?.data);
+        return;
       }
-  
-      setError(err?.response?.data);
-      enqueueSnackbar(getErrorMessage(err?.response?.status), {
-        variant: 'error',
-        autoHideDuration: 2000,
-      });
+      
+      // ✅ Nova estratégia: invalidate para refetch + mostrar input de rename no topo
+      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      
+      if (mountedRef.current) {
+        // Salvar ID do setor criado para renomear depois
+        setOpenCreateSectorId(realSector?.id);
+        setSelectedItem({id: realSector?.id, type: realSector?.itemType, parentId: realSector?.parentId});
+        
+        // Ativar modo de criação (mostra input de rename no topo)
+        setCreatingSector(true);
+      }
     },
-  
-    onSuccess: (res, newSector, context) => {
-      const sector = buildTreeItems(res?.data)
-      const updatedSectors = insertChildByParentId(
-        context.previousSectors || [],
-        newSector?.setorPaiId,
-        sector,
-      );
-      queryClient.setQueryData(['setores'], updatedSectors);
-      setOpenCreateSectorId(sector?.id)
-      setSelectedItem({id: sector?.id, type: sector?.itemType, parentId: sector?.parentId})
-      setExpandedItems(expandedItems => [...expandedItems, newSector?.setorPaiId])
-      setCreatingSector(true)
+    
+    onError: (err) => {
+      if (mountedRef.current) {
+        setError(err?.response?.data);
+        enqueueSnackbar(getErrorMessage(err?.response?.status), {
+          variant: 'error',
+          autoHideDuration: 2000,
+        });
+      }
     },
   });
 

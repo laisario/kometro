@@ -295,6 +295,3 @@ DJRICHTEXTFIELD_CONFIG = {
 GITHUB_REBUILD_LANDINGPAGE_TOKEN = os.getenv("GITHUB_REBUILD_LANDINGPAGE_TOKEN")
 GITHUB_REPO = "laisario/kometro"
 WORKFLOW_FILE = "deploy-landingpage.yml"
-
-
-# teste para comittar

@@ -62,9 +62,15 @@ const useDocuments = () => {
   }, {refetchOnReconnect: false,
     refetchOnWindowFocus: false});
 
-  const handleSearch = debounce((value) => setDebouncedSearch(value), 1500);
+  const handleSearch = useMemo(
+    () => debounce((value) => setDebouncedSearch(value), 1500),
+    []
+  );
 
-  useEffect(() => { handleSearch(search) }, [search, handleSearch])
+  useEffect(() => {
+    handleSearch(search);
+    return () => handleSearch.cancel();
+  }, [search, handleSearch]);
 
   return {
     data,

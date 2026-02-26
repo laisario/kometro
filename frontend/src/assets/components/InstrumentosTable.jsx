@@ -33,7 +33,6 @@ import { dateDistanceText, findDateStatusColor } from '../../utils/date';
 import useInstrumentosTable from '../hooks/useInstrumentosTable';
 import useDefaultAssets from '../hooks/useDefaultAssets';
 import useAssetMutations from '../hooks/useAssetMutations';
-import useSectorTree from '../hooks/useSectorTree';
 import useAuth from '../../auth/hooks/useAuth';
 import CreateInstrument from './CreateInstrument';
 
@@ -61,7 +60,6 @@ const InstrumentosTable = () => {
   } = useInstrumentosTable();
 
   // Hooks for creating instruments
-  const { sectors } = useSectorTree();
   const {
     defaultAssets,
     search: searchDefaultAssets,
@@ -314,7 +312,6 @@ const InstrumentosTable = () => {
         error={error || {}}
         setError={setError}
         isFetching={isFetchingDefaultAssets}
-        setores={sectors || []}
         tableViewCreate={true}
       />
     </Card>

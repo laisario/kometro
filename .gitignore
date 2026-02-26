@@ -20,3 +20,4 @@ bef-backend/.env
 **/*.pyc
 
 CREDENCIAIS.md
+*.heapsnapshot

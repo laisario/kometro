@@ -32,6 +32,10 @@ from .utils import (
     calcular_data_proxima_checagem_servico
 )
 from .models import CriterioFrequencia
+import logging
+from django.db.models import Q
+
+logger = logging.getLogger(__name__)
 
 
 PERIODOS_RELATIVEDELTA = {
@@ -42,6 +46,124 @@ PERIODOS_RELATIVEDELTA = {
     "ano": "years",
     "anos": "years",
 }
+
+
+def _norm_str(v, none_if_blank=True):
+    """
+    Normaliza string: remove espaços e converte None/empty para None ou "".
+    
+    Args:
+        v: valor a normalizar
+        none_if_blank: se True, retorna None para strings vazias; se False, retorna ""
+    
+    Returns:
+        str normalizado ou None
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if none_if_blank and s == "":
+        return None
+    return s if s else (None if none_if_blank else "")
+
+
+def _q_blank_or_null(field_name):
+    """
+    Retorna Q object que filtra por campo NULL ou string vazia.
+    Útil para tratar inconsistências entre NULL e "" no banco.
+    """
+    return Q(**{f"{field_name}__isnull": True}) | Q(**{field_name: ""})
+
+
+def _find_tipo_instrumento_deterministico(*, descricao, modelo=None, fabricante=None, resolucao=None):
+    """
+    Busca ou cria um TipoInstrumento de forma determinística e segura.
+    
+    Esta função resolve o problema de MultipleObjectsReturned que ocorria quando
+    existiam múltiplos TipoInstrumento com a mesma descricao/modelo/fabricante/resolucao.
+    
+    Estratégia:
+    1. Normaliza todos os campos de entrada (trim, tratamento de None/"" para campos opcionais)
+    2. Busca com filtro completo incluindo todos os campos (descricao, modelo, fabricante, resolucao)
+    3. Se encontrar múltiplos (duplicata perfeita), escolhe determinísticamente (menor id)
+    4. Se não encontrar, cria novo registro
+    5. Loga warning quando encontra duplicatas perfeitas
+    
+    Regras de matching:
+    - descricao: sempre obrigatório, comparação case-insensitive
+    - modelo/fabricante/resolucao: tratados de forma consistente
+      * Se None/vazio: filtra por NULL no banco
+      * Se fornecido: match exato
+    
+    Args:
+        descricao: Descrição do tipo de instrumento (obrigatório)
+        modelo: Modelo do instrumento (opcional)
+        fabricante: Fabricante do instrumento (opcional)
+        resolucao: Resolução do instrumento (opcional, pode ser None)
+    
+    Returns:
+        tuple: (TipoInstrumento instance, created: bool)
+    """
+    # Normalizar campos de entrada
+    descricao_n = _norm_str(descricao, none_if_blank=False)
+    modelo_n = _norm_str(modelo, none_if_blank=True)
+    fabricante_n = _norm_str(fabricante, none_if_blank=True)
+    
+    if not descricao_n:
+        raise serializers.ValidationError({"descricao": "Campo obrigatório."})
+    
+    # Construir queryset base com descricao (case-insensitive)
+    base = TipoInstrumento.objects.filter(descricao__iexact=descricao_n)
+    
+    # Filtrar por modelo (tratando NULL e "" como equivalentes)
+    if modelo_n is None:
+        base = base.filter(_q_blank_or_null("modelo"))
+    else:
+        base = base.filter(modelo__iexact=modelo_n)
+    
+    # Filtrar por fabricante (tratando NULL e "" como equivalentes)
+    if fabricante_n is None:
+        base = base.filter(_q_blank_or_null("fabricante"))
+    else:
+        base = base.filter(fabricante__iexact=fabricante_n)
+    
+    # Filtrar por resolucao (tratando de forma consistente como os outros campos)
+    if resolucao is None:
+        base = base.filter(resolucao__isnull=True)
+    else:
+        base = base.filter(resolucao=resolucao)
+    
+    # Ordenar por id para garantir determinismo
+    base = base.order_by("id")
+    
+    # Verificar quantos registros foram encontrados
+    count = base.count()
+    
+    if count == 0:
+        # Não encontrou, criar novo
+        tipo = TipoInstrumento.objects.create(
+            descricao=descricao_n,
+            modelo=modelo_n,
+            fabricante=fabricante_n,
+            resolucao=resolucao,
+        )
+        return tipo, True
+    
+    elif count == 1:
+        # Encontrou exatamente um, reutilizar
+        return base.first(), False
+    
+    else:
+        # Encontrou múltiplos (duplicata perfeita)
+        # Escolher determinísticamente o registro com menor id
+        tipo = base.first()
+        ids = list(base.values_list("id", flat=True)[:10])
+        logger.warning(
+            "TipoInstrumento duplicado. descricao=%r modelo=%r fabricante=%r resolucao=%r "
+            "chosen_id=%s ids_sample=%s",
+            descricao_n, modelo_n, fabricante_n, resolucao, tipo.id, ids
+        )
+        return tipo, False
 
 
 class TipoInstrumentoSerializer(serializers.ModelSerializer):
@@ -119,16 +241,12 @@ class InstrumentoWriteSerializer(serializers.ModelSerializer):
         fabricante = validated_data.pop("fabricante", "")
         resolucao = validated_data.pop("resolucao", None)
 
-        tipo_de_instrumento, _ = TipoInstrumento.objects.get_or_create(
+        tipo_de_instrumento, _ = _find_tipo_instrumento_deterministico(
             descricao=descricao,
             modelo=modelo,
             fabricante=fabricante,
-            defaults={"resolucao": resolucao}
+            resolucao=resolucao,
         )
-
-        if tipo_de_instrumento.resolucao is None and resolucao is not None:
-            tipo_de_instrumento.resolucao = resolucao
-            tipo_de_instrumento.save()
 
         capacidade_medicao = None
         valor_cap = validated_data.pop("capacidade_medicao", None)
@@ -164,16 +282,12 @@ class InstrumentoWriteSerializer(serializers.ModelSerializer):
         resolucao = validated_data.pop("resolucao", None)
 
         if descricao is not None:
-            tipo_de_instrumento, _ = TipoInstrumento.objects.get_or_create(
+            tipo_de_instrumento, _ = _find_tipo_instrumento_deterministico(
                 descricao=descricao,
-                modelo=modelo or "",
-                fabricante=fabricante or "",
-                defaults={"resolucao": resolucao}
+                modelo=modelo,
+                fabricante=fabricante,
+                resolucao=resolucao,
             )
-
-            if tipo_de_instrumento.resolucao is None and resolucao is not None:
-                tipo_de_instrumento.resolucao = resolucao
-                tipo_de_instrumento.save()
 
             instance.tipo_de_instrumento = tipo_de_instrumento
 
