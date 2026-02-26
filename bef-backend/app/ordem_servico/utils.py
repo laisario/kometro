@@ -123,7 +123,8 @@ def criar_os_do_grupo(proposta, grupo_key, instrumentos_data):
         # Set type-specific fields based on OS type
         if tipo_os == TipoOS.CALIBRACAO:
             instrumento_os.local = local
-            instrumento_os.tipo_servico = tipo_servico
+            # tipo_servico is now a computed property (from instrumento.instrumento.tipo_de_servico)
+            # No need to set it explicitly
         elif tipo_os == TipoOS.BALANCAS:
             # Balanças fields can be set later
             pass

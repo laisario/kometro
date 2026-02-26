@@ -3,23 +3,34 @@ import {
   TableRow,
   TableCell,
   Typography,
-  IconButton,
-  Box,
+  Chip,
 } from '@mui/material';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import EditIcon from '@mui/icons-material/Edit';
-import InlineResponsavelEditor from './InlineResponsavelEditor';
-import InlineExpiracaoEditor from './InlineExpiracaoEditor';
+import { fDate } from '../../utils/formatTime';
+
+// Status labels mapping
+const STATUS_LABELS = {
+  'AR': 'A realizar',
+  'a_realizar': 'A realizar',
+  'EA': 'Em andamento',
+  'em_andamento': 'Em andamento',
+  'RE': 'Realizado',
+  'realizado': 'Realizado',
+  'CA': 'Cancelado',
+  'cancelado': 'Cancelado',
+};
+
+// Tipo OS labels mapping
+const TIPO_OS_LABELS = {
+  'CAL': 'Calibração',
+  'BAL': 'Balanças',
+  'MAN': 'Manutenção',
+  'EXT': 'Serviços Externos',
+};
 
 function OrdemServicoRow({ 
   os, 
   onViewDetails, 
-  onSelectForAssignment,
   onUpdate,
-  isSelected,
-  isEditing,
-  onEditClick,
-  onEditCancel,
 }) {
   const handleRowClick = (e) => {
     // Don't trigger if clicking on action buttons or editors
@@ -27,9 +38,35 @@ function OrdemServicoRow({
       return;
     }
     onViewDetails(os);
-    if (onSelectForAssignment) {
-      onSelectForAssignment(os);
+  };
+
+  // Get expiration display
+  const getExpirationDisplay = () => {
+    if (!os.dataExpiracao) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Sem expiração
+        </Typography>
+      );
     }
+
+    const dataExp = new Date(os.dataExpiracao);
+    const hoje = new Date();
+    const em7Dias = new Date();
+    em7Dias.setDate(hoje.getDate() + 7);
+
+    let color = 'text.secondary';
+    if (dataExp < hoje) {
+      color = 'error'; // Vencida
+    } else if (dataExp <= em7Dias) {
+      color = 'warning'; // A vencer
+    }
+
+    return (
+      <Typography variant="body2" color={color}>
+        {fDate(os.dataExpiracao, 'dd/MM/yyyy')}
+      </Typography>
+    );
   };
 
   return (
@@ -38,19 +75,18 @@ function OrdemServicoRow({
       onClick={handleRowClick}
       sx={{ 
         cursor: 'pointer',
-        bgcolor: isSelected ? 'action.selected' : 'inherit',
         '&:hover': {
-          bgcolor: isSelected ? 'action.selected' : 'action.hover',
+          bgcolor: 'action.hover',
         },
       }}
     >
-      {/* OS Number and Proposta */}
+      {/* OS Number */}
       <TableCell>
         <Typography variant="subtitle2">
           {os.numero || 'N/A'}
         </Typography>
         <Typography variant="caption" color="text.secondary">
-          Proposta {os.propostaNumero || 'N/A'}
+          {os.propostaNumero || os.proposta_numero || 'N/A'}
         </Typography>
       </TableCell>
 
@@ -65,23 +101,37 @@ function OrdemServicoRow({
             whiteSpace: 'nowrap',
           }}
         >
-          {os.clienteNome || 'N/A'}
+          {os.clienteNome || os.cliente_nome || 'N/A'}
         </Typography>
       </TableCell>
 
-      {/* Responsável */}
-      <TableCell onClick={(e) => e.stopPropagation()}>
-        <InlineResponsavelEditor
-          ordemServico={os}
-          onUpdate={onUpdate}
+      {/* Expiração (Read-only) */}
+      <TableCell>
+        {getExpirationDisplay()}
+      </TableCell>
+
+      {/* Tipo */}
+      <TableCell>
+        <Chip
+          label={TIPO_OS_LABELS[os.tipoOs || os.tipo_os] || os.tipoOs || os.tipo_os || 'N/A'}
+          size="small"
+          color="default"
+          variant="outlined"
         />
       </TableCell>
 
-      {/* Expiração */}
-      <TableCell onClick={(e) => e.stopPropagation()}>
-        <InlineExpiracaoEditor
-          ordemServico={os}
-          onUpdate={onUpdate}
+      {/* Status */}
+      <TableCell>
+        <Chip
+          label={STATUS_LABELS[os.status] || os.status || 'N/A'}
+          size="small"
+          color={
+            os.status === 'AR' || os.status === 'a_realizar' ? 'warning' :
+            os.status === 'EA' || os.status === 'em_andamento' ? 'info' :
+            os.status === 'RE' || os.status === 'realizado' ? 'success' :
+            os.status === 'CA' || os.status === 'cancelado' ? 'error' : 'default'
+          }
+          variant="outlined"
         />
       </TableCell>
 

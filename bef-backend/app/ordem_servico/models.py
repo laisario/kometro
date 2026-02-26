@@ -42,7 +42,9 @@ class OrdemServico(models.Model):
     tipo_os = models.CharField(
         max_length=3,
         choices=TipoOS.choices,
-        verbose_name="Tipo de OS"
+        verbose_name="Tipo de OS",
+        null=True,
+        blank=True,
     )
     status = models.CharField(
         max_length=2,
@@ -145,22 +147,26 @@ class InstrumentoOS(models.Model):
         blank=True,
         verbose_name="Local"
     )
+    # tipo_servico DB field kept for backward compatibility (exists in DB from migration)
+    # Use the @property tipo_servico instead, which computes from instrumento.instrumento.tipo_de_servico
     tipo_servico = models.CharField(
         max_length=2,
         choices=TipoServico.choices,
         null=True,
         blank=True,
-        verbose_name="Tipo de serviço"
+        verbose_name="Tipo de serviço (deprecated - use property)"
     )
     
     # For Balanças:
     # fabricante and numero_serie come from instrumento properties, not stored here
+    # carga_maxima DB field kept for backward compatibility (exists in DB from migration)
+    # Use the @property carga_maxima instead, which computes from instrumento.instrumento.maximo
     carga_maxima = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         null=True,
         blank=True,
-        verbose_name="Carga máxima"
+        verbose_name="Carga máxima (deprecated - use property)"
     )
     marca_reparo = models.BooleanField(
         default=False,
@@ -173,6 +179,12 @@ class InstrumentoOS(models.Model):
         null=True,
         blank=True,
         verbose_name="Marca de selagem nova"
+    )
+    marca_selagem_retirada = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Marca de selagem retirada"
     )
     servico_executado = models.TextField(
         null=True,
@@ -215,4 +227,24 @@ class InstrumentoOS(models.Model):
         """Get numero_serie from instrumento.numero_de_serie"""
         if self.instrumento:
             return self.instrumento.numero_de_serie
+        return None
+    
+    @property
+    def carga_maxima(self):
+        """
+        Computed property: returns instrumento.instrumento.maximo.
+        Returns None if any link in the chain is missing.
+        """
+        if self.instrumento and self.instrumento.instrumento:
+            return self.instrumento.instrumento.maximo
+        return None
+    
+    @property
+    def tipo_servico(self):
+        """
+        Computed property: returns instrumento.instrumento.tipo_de_servico.
+        Returns None if any link in the chain is missing.
+        """
+        if self.instrumento and self.instrumento.instrumento:
+            return self.instrumento.instrumento.tipo_de_servico
         return None

@@ -1,19 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
-  Card, 
   Container, 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableContainer, 
-  TableHead,
-  TableRow, 
   Typography,
-  CircularProgress,
   Box,
   Button,
   Grid,
-  TablePagination,
   Skeleton,
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
@@ -24,9 +15,10 @@ import EmptyYet from '../../components/EmptyYet';
 import useResponsive from '../../theme/hooks/useResponsive';
 import useOrdensServico from '../hooks/useOrdensServico';
 import OrdemServicoDetailsDialog from '../components/OrdemServicoDetailsDialog';
-import OrdensServicoToolbar from '../components/OrdensServicoToolbar';
-import OrdemServicoRow from '../components/OrdemServicoRow';
-import EquipeSidebar from '../components/EquipeSidebar';
+import EmployeeListCard from '../components/EmployeeListCard';
+import OSSummaryRow from '../components/OSSummaryRow';
+import OSTable from '../components/OSTable';
+import useOSDetailsDialog from '../hooks/useOSDetailsDialog';
 
 function EquipePage() {
   const navigate = useNavigate();
@@ -39,19 +31,9 @@ function EquipePage() {
   );
   
   // State management
-  const [selectedOS, setSelectedOS] = useState(null);
-  const [selectedOSForAssignment, setSelectedOSForAssignment] = useState(null);
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({
-    semResponsavel: false,
-    semExpiracao: false,
-    aVencer: false,
-  });
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const { selectedOS, isOpen, openDialog, closeDialog } = useOSDetailsDialog();
 
-  // Pagination for OS table
-  const [osPage, setOsPage] = useState(0);
-  const [osRowsPerPage, setOsRowsPerPage] = useState(10);
 
   // Redirect non-managers to 404
   useEffect(() => {
@@ -60,94 +42,48 @@ function EquipePage() {
     }
   }, [user, isManager, navigate]);
 
-  // Filter and search OS
+  // Get selected employee name with username fallback
+  const getEmployeeDisplayName = (employee) => {
+    if (!employee) return null;
+    const fullName = `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+    return fullName || employee.username || 'Membro da equipe';
+  };
+
+  // Get selected employee name
+  const selectedEmployeeName = useMemo(() => {
+    if (!selectedEmployeeId || !staffUsers) return null;
+    const employee = staffUsers.find(u => u.id === selectedEmployeeId);
+    return getEmployeeDisplayName(employee);
+  }, [selectedEmployeeId, staffUsers]);
+
+  // Filter OS by selected employee
   const filteredOS = useMemo(() => {
     if (!ordensServico) return [];
     
-    let filtered = [...ordensServico];
-
-    // Apply search
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filtered = filtered.filter(os => 
-        os.numero?.toLowerCase().includes(searchLower) ||
-        os.propostaNumero?.toLowerCase().includes(searchLower) ||
-        os.clienteNome?.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Apply filters
-    if (filters.semResponsavel) {
-      filtered = filtered.filter(os => !os.responsavel);
-    }
-    if (filters.semExpiracao) {
-      filtered = filtered.filter(os => !os.dataExpiracao);
-    }
-    if (filters.aVencer) {
-      const hoje = new Date();
-      const em7Dias = new Date();
-      em7Dias.setDate(hoje.getDate() + 7);
-      filtered = filtered.filter(os => {
-        if (!os.dataExpiracao) return false;
-        const dataExp = new Date(os.dataExpiracao);
-        return dataExp >= hoje && dataExp <= em7Dias;
+    if (selectedEmployeeId) {
+      return ordensServico.filter(os => {
+        return os.responsavel === selectedEmployeeId || 
+               os.responsavelId === selectedEmployeeId ||
+               (os.responsavel && typeof os.responsavel === 'object' && os.responsavel.id === selectedEmployeeId);
       });
     }
-
-    return filtered;
-  }, [ordensServico, search, filters]);
-
-  // Paginated OS data
-  const paginatedOS = useMemo(() => {
-    if (!filteredOS) return [];
-    const start = osPage * osRowsPerPage;
-    const end = start + osRowsPerPage;
-    return filteredOS.slice(start, end);
-  }, [filteredOS, osPage, osRowsPerPage]);
+    
+    return ordensServico;
+  }, [ordensServico, selectedEmployeeId]);
 
   const hasStaffMembers = useMemo(() => !!staffUsers?.length, [staffUsers]);
   const hasOS = useMemo(() => !!filteredOS?.length, [filteredOS]);
 
-  const handleOSClick = (os) => {
-    setSelectedOS(os);
-    setDetailsDialogOpen(true);
-  };
-
-  const handleOSSelectForAssignment = (os) => {
-    setSelectedOSForAssignment(os);
-  };
-
-  const handleCloseDetailsDialog = () => {
-    setDetailsDialogOpen(false);
-    setSelectedOS(null);
-  };
-
   const handleUpdateOS = () => {
     refetch();
-    // Clear selection after update
-    setSelectedOSForAssignment(null);
   };
 
-  const handleSearchChange = (value) => {
-    setSearch(value);
-    setOsPage(0); // Reset to first page on search
+  const handleEmployeeSelect = (employeeId) => {
+    setSelectedEmployeeId(employeeId);
   };
 
-  const handleFilterToggle = (filterName) => {
-    setFilters(prev => ({
-      ...prev,
-      [filterName]: !prev[filterName],
-    }));
-    setOsPage(0); // Reset to first page on filter change
-  };
-
-  const handleChangeOsPage = (event, newPage) => {
-    setOsPage(newPage);
-  };
-
-  const handleChangeOsRowsPerPage = (event) => {
-    setOsRowsPerPage(parseInt(event.target.value, 10));
-    setOsPage(0);
+  const handleEmployeeDeselect = () => {
+    setSelectedEmployeeId(null);
   };
 
   if (!user || isLoadingUsers || isLoadingOrdensServico) {
@@ -186,83 +122,50 @@ function EquipePage() {
         <title> Ordens de Serviço | Kometro </title>
       </Helmet>
       <Container>
-        <OrdensServicoToolbar
-          search={search}
-          onSearchChange={handleSearchChange}
-          filters={filters}
-          onFilterToggle={handleFilterToggle}
-          ordensServico={ordensServico}
-          isLoading={isLoadingOrdensServico}
-        />
-
         <Grid container spacing={3}>
-          {/* Main Content - OS List */}
-          <Grid item xs={12} md={hasStaffMembers ? 8 : 12}>
-            {hasOS ? (
-              <Card>
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell><Typography variant="subtitle2">OS</Typography></TableCell>
-                        <TableCell><Typography variant="subtitle2">Cliente</Typography></TableCell>
-                        <TableCell><Typography variant="subtitle2">Responsável</Typography></TableCell>
-                        <TableCell><Typography variant="subtitle2">Expiração</Typography></TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {paginatedOS?.map((os) => (
-                        <OrdemServicoRow
-                          key={os.id}
-                          os={os}
-                          onViewDetails={handleOSClick}
-                          onSelectForAssignment={handleOSSelectForAssignment}
-                          onUpdate={handleUpdateOS}
-                          isSelected={selectedOSForAssignment?.id === os.id}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TablePagination
-                  rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                  component="div"
-                  count={filteredOS?.length || 0}
-                  rowsPerPage={osRowsPerPage}
-                  page={osPage}
-                  onPageChange={handleChangeOsPage}
-                  onRowsPerPageChange={handleChangeOsRowsPerPage}
-                  labelRowsPerPage="Linhas por página"
-                  labelDisplayedRows={({ from, to, count }) => 
-                    `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
-                  }
-                />
-              </Card>
-            ) : (
-              <EmptyYet 
-                content="os" 
-                isMobile={isMobile}
-                showKaka={false}
-              />
-            )}
-          </Grid>
-
-          {/* Side Panel - Team Members with Tabs */}
+          {/* Left Side - Employee List Card */}
           {hasStaffMembers && (
             <Grid item xs={12} md={4}>
-              <EquipeSidebar
+              <EmployeeListCard
                 staffUsers={staffUsers}
-                selectedOS={selectedOSForAssignment}
-                onUpdate={handleUpdateOS}
+                selectedEmployeeId={selectedEmployeeId}
+                onEmployeeSelect={handleEmployeeSelect}
+                onEmployeeDeselect={handleEmployeeDeselect}
+                isLoadingUsers={isLoadingUsers}
+                isLoadingOrdensServico={isLoadingOrdensServico}
               />
             </Grid>
           )}
+
+          {/* Right Side - OS Summary and Table */}
+          <Grid item xs={12} md={hasStaffMembers ? 8 : 12}>
+            {/* OS Summary Row (Above Table) */}
+            {hasOS && (
+              <Box mb={3}>
+                <OSSummaryRow
+                  ordensServico={ordensServico}
+                  selectedEmployeeId={selectedEmployeeId}
+                  selectedEmployeeName={selectedEmployeeName}
+                  isLoadingOrdensServico={isLoadingOrdensServico}
+                />
+              </Box>
+            )}
+
+            {/* OS Table */}
+            <OSTable
+              ordensServico={filteredOS}
+              isLoading={isLoadingOrdensServico}
+              onRowClick={openDialog}
+              onUpdate={handleUpdateOS}
+              title={selectedEmployeeName ? `Ordens de serviço - ${selectedEmployeeName}` : 'Ordens de serviço'}
+            />
+          </Grid>
         </Grid>
 
         {selectedOS && (
           <OrdemServicoDetailsDialog
-            open={detailsDialogOpen}
-            onClose={handleCloseDetailsDialog}
+            open={isOpen}
+            onClose={closeDialog}
             ordemServico={selectedOS}
           />
         )}

@@ -7,6 +7,9 @@ class InstrumentoOSSerializer(serializers.ModelSerializer):
     instrumento = InstrumentoDoClienteListReadSerializer(read_only=True)
     fabricante = serializers.CharField(source='fabricante', read_only=True)
     numero_serie = serializers.CharField(source='numero_serie', read_only=True)
+    # Computed properties - use SerializerMethodField to explicitly call the property
+    carga_maxima = serializers.SerializerMethodField()
+    tipo_servico = serializers.SerializerMethodField()
     
     class Meta:
         model = InstrumentoOS
@@ -20,13 +23,22 @@ class InstrumentoOSSerializer(serializers.ModelSerializer):
             'carga_maxima',
             'marca_reparo',
             'marca_selagem_nova',
+            'marca_selagem_retirada',
             'servico_executado',
             'descricao_anomalia',
             'quantidade',
             'fabricante',
             'numero_serie',
         ]
-        read_only_fields = ['id', 'item']
+        read_only_fields = ['id', 'item', 'carga_maxima', 'tipo_servico']
+    
+    def get_carga_maxima(self, obj):
+        """Return computed carga_maxima from instrumento.instrumento.maximo"""
+        return obj.carga_maxima
+    
+    def get_tipo_servico(self, obj):
+        """Return computed tipo_servico from instrumento.instrumento.tipo_de_servico"""
+        return obj.tipo_servico
 
 
 class OrdemServicoSerializer(serializers.ModelSerializer):

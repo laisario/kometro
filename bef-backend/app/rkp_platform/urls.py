@@ -34,6 +34,7 @@ from procedimentos.views import ProcedimentoViewSet
 from blog.views import PostViewSet, CategoriaViewSet
 from avaliacoes.views import AvaliacaoViewSet
 from equipamentos.views import CategoriaEquipamentosViewSet, EquipamentosViewSet
+from ordem_servico.views import OrdemServicoViewSet
 
 router = DefaultRouter()
 router.register(r"instrumentos", InstrumentoDoClienteViewSet, basename="instrumento")
@@ -57,6 +58,7 @@ router.register(r'convites', ConviteViewSet, basename="convite")
 router.register(r'categorias-equipamentos', CategoriaEquipamentosViewSet, basename='categoria-equipamento')
 router.register(r'equipamentos', EquipamentosViewSet, basename='equipamentos')
 router.register(r'tipos-instrumento', TipoInstrumentoViewSet, basename='tipo-instrumento')
+router.register(r'ordens-servico', OrdemServicoViewSet, basename='ordem-servico')
 
 urlpatterns = i18n_patterns(
     path("admin/", admin.site.urls),

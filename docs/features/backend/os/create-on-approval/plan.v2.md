@@ -17,6 +17,63 @@ This document describes V2 of the OrdemServico (OS) auto-generation feature. V2 
 
 **V1 is kept for historical reference** but is superseded by this version.
 
+## Implementation Status
+
+### ✅ Implemented
+
+- **Models**: 
+  - `OrdemServico` model with `tipo_os`, `status`, and type-specific date fields
+  - `InstrumentoOS` through model with all type-specific fields
+  - `marca_selagem_retirada` field (string) added to `InstrumentoOS`
+  - Computed properties: `carga_maxima` and `tipo_servico` (from `instrumento.instrumento`)
+- **Migrations**: 
+  - Initial migration (0001_initial)
+  - Migration for type-specific fields and InstrumentoOS (0002)
+  - Migration for `marca_selagem_retirada` (0003)
+- **Serializers**: 
+  - `OrdemServicoSerializer` for list views
+  - `OrdemServicoDetailSerializer` for detail views with instruments
+  - `InstrumentoOSSerializer` with computed properties and `marca_selagem_retirada`
+  - `OrdemServicoUpdateSerializer` for updates
+- **Views/Endpoints**: 
+  - `GET /api/ordens-servico/` - List OS (staff only)
+  - `GET /api/ordens-servico/{id}/` - Get OS detail
+  - `GET /api/ordens-servico/minhas/` - Get current user's OS
+  - `PATCH /api/ordens-servico/{id}/` - Update OS (gerente only)
+  - `POST /api/ordens-servico/{id}/reallocar/` - Move instrument to another OS
+  - `POST /api/ordens-servico/{id}/gerar-certificado/` - Generate certificate
+  - `PATCH /api/ordens-servico/{id}/finalizar/` - Mark OS as "realizado"
+- **Celery Task**: 
+  - `criar_ordens_servico_proposta` task with idempotency and retries
+- **Grouping Logic**: 
+  - `agrupar_instrumentos_os()` function with multi-criteria grouping
+  - `is_instrumento_balanca()` function for scale detection
+  - `criar_os_do_grupo()` function for OS creation
+- **Status Machine**: 
+  - `pode_transicionar_status()` method on `OrdemServico`
+- **Certificate Generation**: 
+  - Auto-generation for calibration OS
+  - Manual generation endpoint for other OS types
+
+### ❌ Missing / Partial
+
+- **Tests**: 
+  - Unit tests for OS creation task
+  - Tests for grouping logic
+  - Tests for status transitions
+  - Tests for computed properties (`carga_maxima`, `tipo_servico`)
+  - Tests for `marca_selagem_retirada` field persistence
+- **Documentation**: 
+  - API documentation examples updated with new fields
+  - Migration guide for removing deprecated DB fields (future)
+
+### Notes
+
+- `carga_maxima` and `tipo_servico` are implemented as computed properties (not stored in DB)
+- DB fields for these exist for backward compatibility but are deprecated
+- `marca_selagem_retirada` is a string field (CharField), similar to other string fields in the model
+- All endpoints require appropriate permissions (staff/gerente)
+
 ## Feature Summary
 
 When a `Proposta` status changes to "A" (Aprovada), automatically create `OrdemServico` records grouped by:
@@ -50,6 +107,14 @@ Each OS is created with status "a_realizar" and instruments are linked. Certific
 - OS templates or cloning
 
 ## Data Model Changes
+
+### Computed Properties
+
+The following fields are **computed properties** (not stored in the database):
+- `carga_maxima`: Returns `instrumento.instrumento.maximo`. Returns `None` if any link in the chain is missing.
+- `tipo_servico`: Returns `instrumento.instrumento.tipo_de_servico`. Returns `None` if any link in the chain is missing.
+
+These are implemented as `@property` methods on the `InstrumentoOS` model. DB fields with the same names exist for backward compatibility but are deprecated and should not be used. Serializers use `SerializerMethodField` to explicitly call the property methods.
 
 ### OrdemServico Model
 
@@ -114,22 +179,31 @@ class InstrumentoOS(models.Model):
     # Type-specific fields (nullable, used based on OS type)
     # For Calibração:
     local = models.CharField(max_length=1, choices=Local.choices, null=True, blank=True)
-    # tipo_servico is read from instrumento.instrumento.tipo_de_servico, stored here for reference
-    tipo_servico = models.CharField(max_length=2, choices=TipoServico.choices, null=True, blank=True)
+    
+    # Computed properties (NOT stored in DB):
+    # - tipo_servico: computed from instrumento.instrumento.tipo_de_servico
+    # - carga_maxima: computed from instrumento.instrumento.maximo
+    # Note: DB fields exist for backward compatibility but are deprecated.
+    # Use the @property methods instead.
     
     # For Balanças:
-    # These fields ("fabricante", "numero_serie") already exist on InstrumentoDoCliente and its related Instrumento/TipoInstrumento.
-    # Use properties on the serializer or model to expose them if needed.
-    # Example as model property (not DB field):
+    # These fields ("fabricante", "numero_serie") are computed properties:
     # @property
     # def fabricante(self):
-    #     return self.instrumento.tipo_de_instrumento.fabricante
+    #     return self.instrumento.instrumento.tipo_de_instrumento.fabricante
     # @property
     # def numero_serie(self):
     #     return self.instrumento.numero_de_serie
-    carga_maxima = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # @property
+    # def carga_maxima(self):
+    #     return self.instrumento.instrumento.maximo
+    # @property
+    # def tipo_servico(self):
+    #     return self.instrumento.instrumento.tipo_de_servico
+    
     marca_reparo = models.BooleanField(default=False, null=True, blank=True)
     marca_selagem_nova = models.BooleanField(default=False, null=True, blank=True)
+    marca_selagem_retirada = models.CharField(max_length=255, null=True, blank=True, verbose_name="Marca de selagem retirada")
     servico_executado = models.TextField(null=True, blank=True)
     
     # For Manutenção:
@@ -398,7 +472,7 @@ def is_instrumento_balanca(instrumento):
 - data_liberacao_instrumentos
 
 **InstrumentoOS fields (per item):**
-- item, descricao (from instrumento), tag, local, tipo_servico, observacao
+- item, descricao (from instrumento), tag, local, tipo_servico (computed), observacao
 
 ### OS Balanças
 
@@ -406,8 +480,8 @@ def is_instrumento_balanca(instrumento):
 - numero, cliente, cnpj, proposta, responsavel
 
 **InstrumentoOS fields (per item):**
-- item, descricao, tag, fabricante, numero_serie, carga_maxima
-- marca_reparo, marca_selagem_nova, servico_executado, observacao
+- item, descricao, tag, fabricante, numero_serie, carga_maxima (computed)
+- marca_reparo, marca_selagem_nova, marca_selagem_retirada (string), servico_executado, observacao
 
 ### OS Manutenção
 

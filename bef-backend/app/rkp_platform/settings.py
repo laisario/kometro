@@ -67,6 +67,7 @@ INSTALLED_APPS = [
     "avaliacoes",
     "blog",
     "equipamentos",
+    "ordem_servico",
 ]
 
 MIDDLEWARE = [

@@ -1,138 +1,50 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Box,
-  Card,
   Container,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Collapse,
   CircularProgress,
-  Chip,
   Button,
+  Skeleton,
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router';
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import useMyOrdensServico from '../hooks/useMyOrdensServico';
-import useOrdemServico from '../hooks/useOrdemServico';
 import useAuth from '../../auth/hooks/useAuth';
-import EmptyYet from '../../components/EmptyYet';
 import useResponsive from '../../theme/hooks/useResponsive';
-import { fDate } from '../../utils/formatTime';
-
-function OSCard({ os }) {
-  const [open, setOpen] = useState(false);
-  const { ordemServico, isLoadingOrdemServico } = useOrdemServico(os.id, { enabled: open });
-
-  return (
-    <>
-      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
-        <TableCell>
-          <IconButton
-            aria-label="expand row"
-            size="small"
-            onClick={() => setOpen(!open)}
-          >
-            {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
-          </IconButton>
-        </TableCell>
-        <TableCell>
-          <Typography variant="subtitle2">
-            {os.numero || 'N/A'}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2">
-            {os.propostaNumero || 'N/A'}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2">
-            {os.clienteNome || 'N/A'}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2">
-            {os.instrumentosCount || 0} instrumento(s)
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2">
-            {os.dataExpiracao ? fDate(os.dataExpiracao, "dd/MM/yyyy") : 'Sem prazo'}
-          </Typography>
-        </TableCell>
-      </TableRow>
-      <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
-          <Collapse in={open} timeout="auto" unmountOnExit>
-            <Box sx={{ margin: 2 }}>
-              {isLoadingOrdemServico ? (
-                <Box display="flex" justifyContent="center" p={2}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : ordemServico?.instrumentos?.length > 0 ? (
-                <Box>
-                  <Typography variant="subtitle2" gutterBottom>
-                    Instrumentos:
-                  </Typography>
-                  {ordemServico.instrumentos.map((instrumento) => {
-                    const tag = instrumento.tag || 'Sem tag';
-                    const numeroCertificado = instrumento.numeroCertificado || 'N/A';
-                    return (
-                      <Chip
-                        key={instrumento.id}
-                        label={`${tag} - ${numeroCertificado}`}
-                        sx={{ mr: 1, mb: 1 }}
-                        size="small"
-                        variant="outlined"
-                      />
-                    );
-                  })}
-                </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Sem instrumentos
-                </Typography>
-              )}
-            </Box>
-          </Collapse>
-        </TableCell>
-      </TableRow>
-    </>
-  );
-}
+import OSSummaryRow from '../components/OSSummaryRow';
+import OSTable from '../components/OSTable';
+import OrdemServicoDetailsDialog from '../components/OrdemServicoDetailsDialog';
+import useOSDetailsDialog from '../hooks/useOSDetailsDialog';
 
 function MinhasOSPage() {
   const navigate = useNavigate();
   const isMobile = useResponsive('down', 'sm');
   const { user } = useAuth();
-  const { ordensServico, isLoadingOrdensServico, errorOrdensServico } = useMyOrdensServico();
+  const { ordensServico, isLoadingOrdensServico, errorOrdensServico, refetch } = useMyOrdensServico();
+  const { selectedOS, isOpen, openDialog, closeDialog } = useOSDetailsDialog();
+
+  // Redirect non-staff users to 404
+  useEffect(() => {
+    if (errorOrdensServico?.response?.status === 403) {
+      navigate('/404', { replace: true });
+    }
+  }, [errorOrdensServico, navigate]);
 
   // Show loading while checking permissions or fetching data
   if (!user || isLoadingOrdensServico) {
     return (
       <Container>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-          <CircularProgress />
+        <Box display="flex" flexDirection="column" gap={2} minHeight="400px" pt={3}>
+          <Skeleton variant="text" width="40%" height={40} />
+          <Skeleton variant="rectangular" width="100%" height={400} />
         </Box>
       </Container>
     );
   }
 
   // Show error state
-  if (errorOrdensServico) {
-    // If 403, redirect to 404 (non-staff user)
-    if (errorOrdensServico?.response?.status === 403) {
-      navigate('/404', { replace: true });
-      return null;
-    }
+  if (errorOrdensServico && errorOrdensServico?.response?.status !== 403) {
     return (
       <Container>
         <Box display="flex" flexDirection="column" alignItems="center" gap={2} minHeight="400px" justifyContent="center">
@@ -149,6 +61,10 @@ function MinhasOSPage() {
 
   const hasOS = ordensServico && ordensServico.length > 0;
 
+  const handleUpdateOS = () => {
+    refetch();
+  };
+
   return (
     <>
       <Helmet>
@@ -161,34 +77,34 @@ function MinhasOSPage() {
           </Typography>
         </Box>
 
-        {hasOS ? (
-          <Card>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell />
-                    <TableCell><Typography variant="subtitle2">Número</Typography></TableCell>
-                    <TableCell><Typography variant="subtitle2">Proposta</Typography></TableCell>
-                    <TableCell><Typography variant="subtitle2">Cliente</Typography></TableCell>
-                    <TableCell><Typography variant="subtitle2">Instrumentos</Typography></TableCell>
-                    <TableCell><Typography variant="subtitle2">Data de Expiração</Typography></TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {ordensServico.map((os) => (
-                    <OSCard key={os.id} os={os} />
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Card>
-        ) : (
-          <EmptyYet
-            content="os"
-            isMobile={isMobile}
-            showKaka={false}
-            customMessage="Você ainda não possui ordens de serviço atribuídas"
+        {/* OS Summary Row (Above Table) */}
+        {hasOS && (
+          <Box mb={3}>
+            <OSSummaryRow
+              ordensServico={ordensServico}
+              selectedEmployeeId={null}
+              selectedEmployeeName={null}
+              isLoadingOrdensServico={isLoadingOrdensServico}
+            />
+          </Box>
+        )}
+
+        {/* OS Table */}
+        <OSTable
+          ordensServico={ordensServico}
+          isLoading={isLoadingOrdensServico}
+          onRowClick={openDialog}
+          onUpdate={handleUpdateOS}
+          title="Minhas Ordens de Serviço"
+          emptyMessage="Você ainda não possui ordens de serviço atribuídas"
+        />
+
+        {/* OS Details Dialog */}
+        {selectedOS && (
+          <OrdemServicoDetailsDialog
+            open={isOpen}
+            onClose={closeDialog}
+            ordemServico={selectedOS}
           />
         )}
       </Container>
