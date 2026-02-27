@@ -61,6 +61,7 @@ function ProposalDetailsPage() {
     setOpenSendEmail,
   } = useProposalVM();
   const theme = useTheme()
+  console.log(proposal, "PROPOSTA")
   const { hasCreatePermission } = useAuth()
   return (
     <>

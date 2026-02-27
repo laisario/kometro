@@ -3,7 +3,7 @@ Utilities for OS grouping and generation logic.
 """
 from collections import defaultdict
 from instrumentos.models import Local, TipoServico
-from .models import TipoOS
+from .models import TipoOS, StatusOS
 
 
 def is_instrumento_balanca(instrumento):
@@ -104,7 +104,7 @@ def criar_os_do_grupo(proposta, grupo_key, instrumentos_data):
     ordem_servico = OrdemServico.objects.create(
         proposta=proposta,
         tipo_os=tipo_os,
-        status=OrdemServico.StatusOS.A_REALIZAR,
+        status=StatusOS.A_REALIZAR,
         numero=numero
     )
     

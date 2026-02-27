@@ -200,7 +200,7 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
                 nova_os = OrdemServico.objects.create(
                     proposta=proposta,
                     tipo_os=nova_os_tipo,
-                    status=StatusOS.A_REALIZAR,
+                    status=status.A_REALIZAR,
                     numero=numero
                 )
                 

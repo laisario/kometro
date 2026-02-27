@@ -21,6 +21,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     ordemServico?.id,
     { enabled: open && !!ordemServico?.id }
   );
+  console.log(osDetails, "OS DETAILS")
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>

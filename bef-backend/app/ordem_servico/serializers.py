@@ -5,8 +5,8 @@ from instrumentos.serializers import InstrumentoDoClienteListReadSerializer
 
 class InstrumentoOSSerializer(serializers.ModelSerializer):
     instrumento = InstrumentoDoClienteListReadSerializer(read_only=True)
-    fabricante = serializers.CharField(source='fabricante', read_only=True)
-    numero_serie = serializers.CharField(source='numero_serie', read_only=True)
+    fabricante = serializers.CharField(read_only=True)
+    numero_serie = serializers.CharField(read_only=True)
     # Computed properties - use SerializerMethodField to explicitly call the property
     carga_maxima = serializers.SerializerMethodField()
     tipo_servico = serializers.SerializerMethodField()
@@ -86,10 +86,9 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
 
 class OrdemServicoDetailSerializer(OrdemServicoSerializer):
     instrumentos_os = InstrumentoOSSerializer(many=True, read_only=True, source='instrumentos_os.all')
-    instrumentos = InstrumentoDoClienteListReadSerializer(many=True, read_only=True)
     
     class Meta(OrdemServicoSerializer.Meta):
-        fields = OrdemServicoSerializer.Meta.fields + ['instrumentos', 'instrumentos_os']
+        fields = OrdemServicoSerializer.Meta.fields + ['instrumentos_os']
 
 
 class OrdemServicoUpdateSerializer(serializers.ModelSerializer):

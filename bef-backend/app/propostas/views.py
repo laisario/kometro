@@ -151,31 +151,6 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
     
-    @action(detail=True, methods=["GET"], permission_classes=[IsAuthenticated])
-    def ordens_servico_status(self, request, pk=None):
-        """Check OS generation status for a proposal"""
-        proposta = self.get_object()
-        os_count = proposta.ordens_servico.count()
-        
-        if proposta.status != "A":
-            return response.Response({
-                "status": "not_approved",
-                "os_count": os_count,
-                "message": "Proposta não aprovada"
-            })
-        
-        if os_count > 0:
-            return response.Response({
-                "status": "complete",
-                "os_count": os_count,
-                "message": f"{os_count} ordem(ns) de serviço criada(s)"
-            })
-        else:
-            return response.Response({
-                "status": "generating",
-                "os_count": 0,
-                "message": "Ordens de serviço sendo geradas..."
-            })
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def reprovar(self, request, pk=None):

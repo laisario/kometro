@@ -119,32 +119,9 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
     mutationFn: async() => await axios.post(`/propostas/${id}/aprovar/`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['propostas'] })
-      enqueueSnackbar('Proposta aprovada com sucesso! Ordens de serviço sendo geradas...', {
+      enqueueSnackbar('Proposta aprovada com sucesso!', {
         variant: 'success'
       });
-      
-      // Start polling for OS generation status
-      const pollInterval = setInterval(async () => {
-        try {
-          const response = await axios.get(`/propostas/${id}/ordens_servico_status/`);
-          const { status: osStatus, os_count } = response.data;
-          
-          if (osStatus === 'complete') {
-            clearInterval(pollInterval);
-            enqueueSnackbar(`${os_count} ordem(ns) de serviço criada(s) com sucesso!`, {
-              variant: 'success'
-            });
-            queryClient.invalidateQueries({ queryKey: ['propostas'] });
-          }
-        } catch (error) {
-          // Ignore polling errors
-        }
-      }, 2000); // Poll every 2 seconds
-      
-      // Timeout after 60 seconds
-      setTimeout(() => {
-        clearInterval(pollInterval);
-      }, 60000);
     },
     onError: () => {
       enqueueSnackbar('Falha ao aprovar proposta, tente novamente!', {

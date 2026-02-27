@@ -44,13 +44,11 @@ class PropostaInstrumentoSerializer(serializers.ModelSerializer):
         instrumento = data.get('instrumento')
         
         if proposta and instrumento:
-            # Validate instrument belongs to proposal client
             if instrumento.cliente != proposta.cliente:
                 raise serializers.ValidationError(
                     "Instrumento must belong to proposal client"
                 )
         
-        # Validate service_kind
         if data.get('service_kind') not in ['calibracao', 'manutencao']:
             raise serializers.ValidationError(
                 "service_kind must be 'calibracao' or 'manutencao'"
@@ -59,11 +57,110 @@ class PropostaInstrumentoSerializer(serializers.ModelSerializer):
         return data
 
 
+class InstrumentosField(serializers.Field):
+    """
+    Campo customizado que aceita instrumentos em dois formatos:
+    1. Lista de PKs (inteiros): [1, 2, 3] - formato antigo (backward compatible)
+    2. Lista de dicts com seleções: [{"id": 1, "service_kind": "calibracao", "local": "P"}, ...] - formato novo
+    
+    Normaliza ambos os formatos para uma estrutura interna consistente.
+    """
+    
+    def to_internal_value(self, data):
+        """
+        Normaliza o input para uma estrutura interna consistente.
+        
+        Aceita:
+        - Lista de inteiros (PKs): [1, 2, 3]
+        - Lista de dicts: [{"id": 1, ...}, {"id": 2, ...}]
+        - None ou lista vazia: []
+        
+        Retorna lista de dicts normalizados com estrutura:
+        [{"id": 1, "service_kind": "calibracao", "local": "P"}, ...]
+        """
+        if data is None:
+            return []
+        
+        if not isinstance(data, list):
+            raise serializers.ValidationError(
+                "Esperado uma lista de instrumentos (PKs ou dicts)."
+            )
+        
+        normalized = []
+        for item in data:
+            if isinstance(item, dict):
+                instrumento_id = item.get('id') or item.get('pk')
+                if instrumento_id is None:
+                    raise serializers.ValidationError(
+                        "Dict de instrumento deve conter campo 'id' ou 'pk'."
+                    )
+                
+                try:
+                    instrumento_id = int(instrumento_id)
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(
+                        f"ID do instrumento deve ser um inteiro válido, recebeu: {instrumento_id}"
+                    )
+                
+                service_kind = item.get('service_kind', 'calibracao')
+                if service_kind not in ['calibracao', 'manutencao']:
+                    raise serializers.ValidationError(
+                        f"service_kind deve ser 'calibracao' ou 'manutencao', recebeu: {service_kind}"
+                    )
+                
+                local = item.get('local', 'P')
+                if local not in ['P', 'C', 'T']:
+                    raise serializers.ValidationError(
+                        f"local deve ser 'P', 'C' ou 'T', recebeu: {local}"
+                    )
+                
+                normalized.append({
+                    'id': instrumento_id,
+                    'service_kind': service_kind,
+                    'local': local,
+                })
+            elif isinstance(item, (int, str)):
+                try:
+                    instrumento_id = int(item)
+                except (ValueError, TypeError):
+                    raise serializers.ValidationError(
+                        f"PK do instrumento deve ser um inteiro válido, recebeu: {item}"
+                    )
+                
+                normalized.append({
+                    'id': instrumento_id,
+                    'service_kind': 'calibracao',
+                    'local': 'P',
+                })
+            else:
+                raise serializers.ValidationError(
+                    f"Item inválido na lista de instrumentos. Esperado int ou dict, recebeu: {type(item).__name__}"
+                )
+        
+        return normalized
+    
+    def to_representation(self, value):
+        """Para escrita, não precisamos representar (campo write-only)."""
+        if hasattr(value, 'all'):
+            return [inst.id for inst in value.all()]
+        if isinstance(value, list):
+            return [item.get('id') if isinstance(item, dict) else item for item in value]
+        return []
+
+
 class WritePropostaSerializer(serializers.ModelSerializer):
+    """
+    Serializer para criação de Proposta.
+    
+    Aceita instrumentos em dois formatos (backward compatible):
+    1. Lista de PKs: [1, 2, 3]
+    2. Lista de dicts: [{"id": 1, "service_kind": "calibracao", "local": "P"}, ...]
+    """
+    instrumentos = InstrumentosField(required=False, allow_null=True, write_only=True)
+    
     class Meta:
         model = Proposta
-        fields = ("informacoes_adicionais",)
-        # Don't include instrumentos in fields - we handle it manually
+        fields = ("informacoes_adicionais", "instrumentos")
 
     def validate(self, data):
         user = self.context["request"].user
@@ -73,29 +170,76 @@ class WritePropostaSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         instrumentos_data = validated_data.pop('instrumentos', [])
-        print(instrumentos_data, "AAAAAAAAAAA")
-        # Create proposta without instrumentos (will be added after)
+        
         proposta = super().create(validated_data)
         
-        # Handle instrument selections (new format) or simple IDs (old format)
         if instrumentos_data and len(instrumentos_data) > 0:
-            if isinstance(instrumentos_data[0], dict):
-                # New format: list of dicts with selections
-                for inst_data in instrumentos_data:
-                    instrumento_id = inst_data.get('id')
-                    if instrumento_id:
-                        PropostaInstrumento.objects.create(
-                            proposta=proposta,
-                            instrumento_id=instrumento_id,
-                            service_kind=inst_data.get('service_kind', 'calibracao'),
-                            local=inst_data.get('local', proposta.local),
+            instrument_ids = []
+            for inst_data in instrumentos_data:
+                instrumento_id = inst_data['id']
+                
+                try:
+                    instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
+                    if instrumento.cliente != proposta.cliente:
+                        raise serializers.ValidationError(
+                            f"Instrumento {instrumento_id} não pertence ao cliente da proposta."
                         )
-                        proposta.instrumentos.add(instrumento_id)
-            else:
-                # Old format: simple list of IDs
-                proposta.instrumentos.set(instrumentos_data)
+                except InstrumentoDoCliente.DoesNotExist:
+                    raise serializers.ValidationError(
+                        f"Instrumento com ID {instrumento_id} não existe."
+                    )
+                
+                PropostaInstrumento.objects.create(
+                    proposta=proposta,
+                    instrumento=instrumento,
+                    service_kind=inst_data.get('service_kind', 'calibracao'),
+                    local=inst_data.get('local', proposta.local),
+                )
+                instrument_ids.append(instrumento_id)
+            
+            proposta.instrumentos.set(instrument_ids)
         
         return proposta
+
+    def update(self, instance, validated_data):
+        instrumentos_data = validated_data.pop("instrumentos", None)
+        
+        instance = super().update(instance=instance, validated_data=validated_data)
+        
+        if instrumentos_data is not None:
+            instance.instrumentos_selecoes.all().delete()
+            
+            if len(instrumentos_data) > 0:
+                instrument_ids = []
+                for inst_data in instrumentos_data:
+                    instrumento_id = inst_data['id']
+                    
+                    try:
+                        instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
+                        if instrumento.cliente != instance.cliente:
+                            raise serializers.ValidationError(
+                                f"Instrumento {instrumento_id} não pertence ao cliente da proposta."
+                            )
+                    except InstrumentoDoCliente.DoesNotExist:
+                        raise serializers.ValidationError(
+                            f"Instrumento com ID {instrumento_id} não existe."
+                        )
+                    
+                    PropostaInstrumento.objects.update_or_create(
+                        proposta=instance,
+                        instrumento=instrumento,
+                        defaults={
+                            'service_kind': inst_data.get('service_kind', 'calibracao'),
+                            'local': inst_data.get('local', instance.local),
+                        }
+                    )
+                    instrument_ids.append(instrumento_id)
+                
+                instance.instrumentos.set(instrument_ids)
+            else:
+                instance.instrumentos.clear()
+        
+        return instance
 
 
 class ReadPropostaSerializer(serializers.ModelSerializer):
@@ -159,6 +303,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
         required=False,
         queryset=Endereco.objects.all(),
     )
+    instrumentos = InstrumentosField(required=False, allow_null=True, write_only=True)
     total_com_desconto = serializers.SerializerMethodField()
 
     class Meta:
@@ -182,9 +327,47 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
         )
 
         extra_kwargs = {
-            "instrumentos": {"required": True},
             "cliente": {"required": True},
         }
+
+    def create(self, validated_data):
+        endereco_de_entrega_add = validated_data.pop("endereco_de_entrega_add", None)
+        instrumentos_data = validated_data.pop("instrumentos", None)
+
+        if endereco_de_entrega_add is not None:
+            validated_data["endereco_de_entrega"] = Endereco.objects.create(
+                **endereco_de_entrega_add
+            )
+
+        proposta = super().create(validated_data)
+        
+        if instrumentos_data and len(instrumentos_data) > 0:
+            instrument_ids = []
+            for inst_data in instrumentos_data:
+                instrumento_id = inst_data['id']
+                
+                try:
+                    instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
+                    if instrumento.cliente != proposta.cliente:
+                        raise serializers.ValidationError(
+                            f"Instrumento {instrumento_id} não pertence ao cliente da proposta."
+                        )
+                except InstrumentoDoCliente.DoesNotExist:
+                    raise serializers.ValidationError(
+                        f"Instrumento com ID {instrumento_id} não existe."
+                    )
+                
+                PropostaInstrumento.objects.create(
+                    proposta=proposta,
+                    instrumento=instrumento,
+                    service_kind=inst_data.get('service_kind', 'calibracao'),
+                    local=inst_data.get('local', proposta.local),
+                )
+                instrument_ids.append(instrumento_id)
+            
+            proposta.instrumentos.set(instrument_ids)
+        
+        return proposta
 
     def update(self, instance, validated_data):
         endereco_de_entrega_add = validated_data.pop("endereco_de_entrega_add", None)
@@ -195,34 +378,40 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                 **endereco_de_entrega_add
             )
 
-        # Salvar primeiro para ter os instrumentos atualizados
         instance = super().update(instance=instance, validated_data=validated_data)
         
-        # Update instrument selections if provided
         if instrumentos_data is not None:
-            # Clear existing selections
             instance.instrumentos_selecoes.all().delete()
             
-            if isinstance(instrumentos_data, list) and len(instrumentos_data) > 0:
-                if isinstance(instrumentos_data[0], dict):
-                    # New format: list of dicts with selections
-                    instrument_ids = []
-                    for inst_data in instrumentos_data:
-                        instrument_id = inst_data.get('id') or inst_data.get('instrumento_id')
-                        if instrument_id:
-                            instrument_ids.append(instrument_id)
-                            PropostaInstrumento.objects.update_or_create(
-                                proposta=instance,
-                                instrumento_id=instrument_id,
-                                defaults={
-                                    'service_kind': inst_data.get('service_kind', 'calibracao'),
-                                    'local': inst_data.get('local', instance.local),
-                                }
+            if len(instrumentos_data) > 0:
+                instrument_ids = []
+                for inst_data in instrumentos_data:
+                    instrumento_id = inst_data['id']
+                    
+                    try:
+                        instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
+                        if instrumento.cliente != instance.cliente:
+                            raise serializers.ValidationError(
+                                f"Instrumento {instrumento_id} não pertence ao cliente da proposta."
                             )
-                    instance.instrumentos.set(instrument_ids)
-                else:
-                    # Old format: simple list of IDs
-                    instance.instrumentos.set(instrumentos_data)
+                    except InstrumentoDoCliente.DoesNotExist:
+                        raise serializers.ValidationError(
+                            f"Instrumento com ID {instrumento_id} não existe."
+                        )
+                    
+                    PropostaInstrumento.objects.update_or_create(
+                        proposta=instance,
+                        instrumento=instrumento,
+                        defaults={
+                            'service_kind': inst_data.get('service_kind', 'calibracao'),
+                            'local': inst_data.get('local', instance.local),
+                        }
+                    )
+                    instrument_ids.append(instrumento_id)
+                
+                instance.instrumentos.set(instrument_ids)
+            else:
+                instance.instrumentos.clear()
         
         # Recalcular o total baseado nos instrumentos e no local da proposta
         if instance.instrumentos.exists():
