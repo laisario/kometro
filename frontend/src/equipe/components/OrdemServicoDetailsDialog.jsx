@@ -8,12 +8,270 @@ import {
   DialogTitle,
   Typography,
   CircularProgress,
-  Chip,
   Divider,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
 } from '@mui/material';
 import useOrdemServico from '../hooks/useOrdemServico';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { fDate } from '../../utils/formatTime';
+import { localLabels } from '../../utils/assets';
+
+// Helper functions
+const safeGet = (obj, path, fallback = '—') => {
+  if (!path || !obj) return fallback;
+  try {
+    const value = path.split('.').reduce((acc, part) => acc?.[part], obj);
+    return value != null && value !== '' ? value : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const formatDate = (date, format = 'dd/MM/yyyy') => {
+  if (!date) return '—';
+  return fDate(date, format);
+};
+
+const getOsLayoutKey = (os) => {
+  if (!os?.tipoOs) return 'calibracao'; // Default fallback
+  
+  const tipoMap = {
+    'CAL': 'calibracao',
+    'BAL': 'balancas',
+    'MAN': 'manutencao',
+    'EXT': 'externa',
+  };
+  
+  return tipoMap[os.tipoOs] || 'calibracao';
+};
+
+const getOsItems = (os) => {
+  // Items are in instrumentosOs (camelCase)
+  return os?.instrumentosOs || [];
+};
+
+// Layout configurations
+const OS_LAYOUTS = {
+  calibracao: {
+    title: 'Ordem de Serviço de Calibração',
+    subtitle: null,
+    headerLeftFields: [
+      { label: 'Número OS', path: 'numero' },
+      { label: 'Cliente', path: 'clienteNome' },
+      { label: 'CNPJ', path: "clienteCnpj" }, 
+      { label: 'Número Proposta', path: 'propostaNumero' },
+      { label: 'Data de Recebimento dos Instrumentos', path: 'dataRecebimentoInstrumentos', formatter: formatDate },
+    ],
+    columns: [
+      {
+        key: 'item',
+        header: 'Item',
+        render: (row, index) => row.item ?? index + 1,
+      },
+      {
+        key: 'descricao',
+        header: 'Descrição',
+        render: (row) => row.instrumento?.instrumento?.tipoDeInstrumento?.descricao ?? '—',
+      },
+      {
+        key: 'tag',
+        header: 'Tag',
+        render: (row) => row.instrumento?.tag ?? '—',
+      },
+      {
+        key: 'local',
+        header: 'Local',
+        render: (row) => localLabels[row.local] ?? '—',
+      },
+      {
+        key: 'tipo_servico',
+        header: 'Tipo de Serviço',
+        render: (row) => row.tipoServico ?? '—',
+      },
+      {
+        key: 'observacoes',
+        header: 'Observações',
+        render: (row) => row.observacao ?? '—',
+      },
+    ],
+    footerFields: [
+      { label: 'Data de Liberação dos Instrumentos', path: 'dataLiberacaoInstrumentos', formatter: formatDate },
+      { label: 'Responsável', path: 'responsavelNome' },
+    ],
+  },
+  balancas: {
+    title: 'Ordem de Serviço de Manutenção de Balanças',
+    subtitle: 'Autorizada pelo órgão metrológico sob nº 70000625',
+    headerLeftFields: [
+      { label: 'Número OS', path: 'numero' },
+      { label: 'Cliente', path: 'clienteNome' },
+      { label: 'CNPJ', path: "clienteCnpj" }, 
+      { label: 'Número Proposta', path: 'propostaNumero' },
+      { label: 'Data de Recebimento dos Instrumentos', path: 'dataRecebimentoInstrumentos', formatter: formatDate },
+    ],
+    columns: [
+      {
+        key: 'item',
+        header: 'Item',
+        render: (row, index) => row.item ?? index + 1,
+      },
+      {
+        key: 'descricao',
+        header: 'Descrição',
+        render: (row) => row.instrumento?.instrumento?.tipoDeInstrumento?.descricao ?? '—',
+      },
+      {
+        key: 'tag',
+        header: 'Tag',
+        render: (row) => row.instrumento?.tag ?? '—',
+      },
+      {
+        key: 'fabricante',
+        header: 'Fabricante',
+        render: (row) => row.fabricante ?? row.instrumento?.instrumento?.tipoDeInstrumento?.fabricante ?? '—',
+      },
+      {
+        key: 'numero_serie',
+        header: 'Nº de Série',
+        render: (row) => row.numeroSerie ?? row.instrumento?.numeroDeSerie ?? '—',
+      },
+      {
+        key: 'carga_maxima',
+        header: 'Carga Máxima',
+        render: (row) => row.cargaMaxima ?? row.instrumento?.instrumento?.maximo ?? '—',
+      },
+      {
+        key: 'local',
+        header: 'Local',
+        render: (row) => localLabels[row.local] ?? '—',
+      },
+      {
+        key: 'marca_reparo',
+        header: 'Marca de Reparo',
+        render: (row) => row.marcaReparo ? 'Sim' : 'Não',
+      },
+      {
+        key: 'marca_selagem_retirada',
+        header: 'Marca de Selagem Retirada',
+        render: (row) => row.marcaSelagemRetirada ?? '—',
+      },
+      {
+        key: 'marca_selagem_nova',
+        header: 'Marca de Selagem Nova',
+        render: (row) => row.marcaSelagemNova ? 'Sim' : 'Não',
+      },
+      {
+        key: 'servico_executado',
+        header: 'Serviço Executado',
+        render: (row) => row.servicoExecutado ?? '—',
+      },
+      {
+        key: 'observacao',
+        header: 'Observação',
+        render: (row) => row.observacao ?? '—',
+      },
+    ],
+    footerFields: [
+      { label: 'Data', path: 'dataCriacao', formatter: formatDate },
+      { label: 'Responsável', path: 'responsavelNome' },
+    ],
+  },
+  manutencao: {
+    title: 'Ordem de Serviço de Manutenção',
+    subtitle: null,
+    headerLeftFields: [
+      { label: 'Número OS', path: 'numero' },
+      { label: 'Cliente', path: 'clienteNome' },
+      { label: 'CNPJ', path: "clienteCnpj" }, 
+      { label: 'Número Proposta', path: 'propostaNumero' },
+      { label: 'OS de Recebimento dos Instrumentos', path: null, static: true }, // Static field
+    ],
+    columns: [
+      {
+        key: 'item',
+        header: 'Item',
+        render: (row, index) => row.item ?? index + 1,
+      },
+      {
+        key: 'descricao',
+        header: 'Descrição',
+        render: (row) => row.instrumento?.instrumento?.tipoDeInstrumento?.descricao ?? '—',
+      },
+      {
+        key: 'tag',
+        header: 'Tag',
+        render: (row) => row.instrumento?.tag ?? '—',
+      },
+      {
+        key: 'descricao_anomalia',
+        header: 'Descrição da Anomalia',
+        render: (row) => row.descricaoAnomalia ?? '—',
+      },
+      {
+        key: 'observacao',
+        header: 'Observação',
+        render: (row) => row.observacao ?? '—',
+      },
+    ],
+    footerFields: [
+      { label: 'Data de Liberação dos Instrumentos', path: 'dataLiberacaoInstrumentos', formatter: formatDate },
+      { label: 'Responsável', path: 'responsavelNome' },
+    ],
+  },
+  externa: {
+    title: 'Ordem de Serviço de Calibração Externa',
+    subtitle: null,
+    headerLeftFields: [
+      { label: 'Número OS', path: 'numero' },
+      { label: 'Cliente', path: 'clienteNome' },
+      { label: 'CNPJ', path: "clienteCnpj" }, 
+      { label: 'Número Proposta', path: 'propostaNumero' },
+      { label: 'Data de Calibração dos Instrumentos', path: 'dataCalibracaoInstrumentos', formatter: formatDate },
+    ],
+    columns: [
+      {
+        key: 'item',
+        header: 'Item',
+        render: (row, index) => row.item ?? index + 1,
+      },
+      {
+        key: 'quantidade',
+        header: 'Quantidade',
+        render: (row) => row.quantidade ?? '—',
+      },
+      {
+        key: 'descricao',
+        header: 'Descrição',
+        render: (row) => row.instrumento?.instrumento?.tipoDeInstrumento?.descricao ?? '—',
+      },
+      {
+        key: 'observacao',
+        header: 'Observação',
+        render: (row) => row.observacao ?? '—',
+      },
+    ],
+    footerFields: [
+      { label: 'Data de Liberação da Calibração', path: 'dataLiberacaoCalibracao', formatter: formatDate },
+      { label: 'Responsável', path: 'responsavelNome' },
+    ],
+  },
+};
+
+// Static header right block (same for all types)
+const HEADER_RIGHT_STATIC = (
+  <Box>
+    <Typography variant="body2">FQ-49</Typography>
+    <Typography variant="body2">Rev.4</Typography>
+    <Typography variant="body2">Aprovação: 09/01/2025</Typography>
+    <Typography variant="body2">Validade: 09/01/2030</Typography>
+  </Box>
+);
 
 function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
   const isMobile = useResponsive('down', 'sm');
@@ -23,109 +281,139 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
   );
   console.log(osDetails, "OS DETAILS")
 
+  if (!osDetails) {
+    return (
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
+        <DialogTitle>Detalhes da Ordem de Serviço</DialogTitle>
+        <DialogContent>
+          {isLoadingOrdemServico ? (
+            <Box display="flex" justifyContent="center" p={3}>
+              <CircularProgress />
+            </Box>
+          ) : errorOrdemServico ? (
+            <Box display="flex" flexDirection="column" alignItems="center" gap={2} p={3}>
+              <Typography variant="body1" color="error">
+                Erro ao carregar detalhes da ordem de serviço
+              </Typography>
+              <Button variant="contained" onClick={() => window.location.reload()}>
+                Tentar novamente
+              </Button>
+            </Box>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose} color="primary">
+            Fechar
+          </Button>
+        </DialogActions>
+      </Dialog>
+    );
+  }
+
+  const layoutKey = getOsLayoutKey(osDetails);
+  const layout = OS_LAYOUTS[layoutKey] || OS_LAYOUTS.calibracao;
+  const items = getOsItems(osDetails);
+
+  // Render header/footer field value
+  const renderHeaderFieldValue = (field) => {
+    if (field.static || !field.path) {
+      return '—';
+    }
+    const value = safeGet(osDetails, field.path, null);
+    if (value === null || value === '—') return '—';
+    return field.formatter ? field.formatter(value) : value;
+  };
+
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
-      <DialogTitle>Detalhes da Ordem de Serviço</DialogTitle>
+      <DialogTitle>{layout.title}</DialogTitle>
       <DialogContent>
-        {isLoadingOrdemServico ? (
-          <Box display="flex" justifyContent="center" p={3}>
-            <CircularProgress />
-          </Box>
-        ) : errorOrdemServico ? (
-          <Box display="flex" flexDirection="column" alignItems="center" gap={2} p={3}>
-            <Typography variant="body1" color="error">
-              Erro ao carregar detalhes da ordem de serviço
+        <Box display="flex" flexDirection="column" gap={3} mt={1}>
+          {/* Subtitle */}
+          {layout.subtitle && (
+            <Typography variant="body2" color="text.secondary">
+              {layout.subtitle}
             </Typography>
-            <Button variant="contained" onClick={() => window.location.reload()}>
-              Tentar novamente
-            </Button>
-          </Box>
-        ) : osDetails ? (
-          <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Número
-              </Typography>
-              <Typography variant="body1">
-                {osDetails.numero || 'N/A'}
-              </Typography>
-            </Box>
+          )}
 
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Proposta
-              </Typography>
-              <Typography variant="body1">
-                {osDetails.propostaNumero || 'N/A'}
-              </Typography>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Cliente
-              </Typography>
-              <Typography variant="body1">
-                {osDetails.clienteNome || 'N/A'}
-              </Typography>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Responsável
-              </Typography>
-              <Typography variant="body1">
-                {osDetails.responsavelNome || 'Não atribuído'}
-              </Typography>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Data de Expiração
-              </Typography>
-              <Typography variant="body1">
-                {osDetails.dataExpiracao ? fDate(osDetails.dataExpiracao, 'dd/MM/yyyy') : 'Sem expiração'}
-              </Typography>
-            </Box>
-
-            <Divider />
-
-            <Box>
-              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Instrumentos
-              </Typography>
-              {osDetails.instrumentos && osDetails.instrumentos.length > 0 ? (
-                <Box display="flex" flexWrap="wrap" gap={1}>
-                  {osDetails.instrumentos.map((instrumento) => {
-                    const tag = instrumento.tag || 'Sem tag';
-                    const descricao = instrumento.instrumento?.tipoDeInstrumento?.descricao || 'N/A';
-                    const numeroCertificado = instrumento.numeroCertificado || 'N/A';
-                    return (
-                      <Chip
-                        key={instrumento.id}
-                        label={`${tag} - ${numeroCertificado}${descricao !== 'N/A' ? ` (${descricao})` : ''}`}
-                        size="small"
-                        variant="outlined"
-                        sx={{ mr: 1, mb: 1 }}
-                      />
-                    );
-                  })}
+          {/* Header Section */}
+          <Box display="flex" justifyContent="space-between" gap={4} flexWrap="wrap">
+            {/* Left Header Fields */}
+            <Box flex={1} minWidth={200}>
+              {layout.headerLeftFields.map((field, idx) => (
+                <Box key={idx} mb={2}>
+                  <Typography variant="subtitle2" color="text.secondary">
+                    {field.label}
+                  </Typography>
+                  <Typography variant="body1">
+                    {renderHeaderFieldValue(field)}
+                  </Typography>
                 </Box>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  Nenhum instrumento associado
-                </Typography>
-              )}
+              ))}
+            </Box>
+
+            {/* Right Header Static Block */}
+            <Box>
+              {HEADER_RIGHT_STATIC}
             </Box>
           </Box>
-        ) : null}
+
+          <Divider />
+
+          {/* Table Section */}
+          <Box>
+            <TableContainer component={Paper} variant="outlined">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    {layout.columns.map((col) => (
+                      <TableCell key={col.key} sx={{ fontWeight: 600 }}>
+                        {col.header}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {items.length > 0 ? (
+                    items.map((row, index) => (
+                      <TableRow key={row.id || index}>
+                        {layout.columns.map((col) => (
+                          <TableCell key={col.key}>
+                            {col.render(row, index)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={layout.columns.length} align="center">
+                        <Typography variant="body2" color="text.secondary">
+                          Nenhum instrumento associado
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Box>
+
+          <Divider />
+
+          {/* Footer Section */}
+          <Box display="flex" gap={4} flexWrap="wrap">
+            {layout.footerFields.map((field, idx) => (
+              <Box key={idx} minWidth={200}>
+                <Typography variant="subtitle2" color="text.secondary">
+                  {field.label}
+                </Typography>
+                <Typography variant="body1">
+                  {renderHeaderFieldValue(field)}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="primary">

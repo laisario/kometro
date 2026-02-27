@@ -46,7 +46,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     cliente_nome = serializers.SerializerMethodField()
     responsavel_nome = serializers.SerializerMethodField()
     instrumentos_count = serializers.SerializerMethodField()
-    
+    cliente_cnpj = serializers.SerializerMethodField()
     class Meta:
         model = OrdemServico
         fields = [
@@ -55,6 +55,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'proposta', 
             'proposta_numero', 
             'cliente_nome',
+            'cliente_cnpj',
             'responsavel', 
             'responsavel_nome', 
             'data_expiracao', 
@@ -72,6 +73,11 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     def get_cliente_nome(self, obj):
         if obj.proposta and obj.proposta.cliente and obj.proposta.cliente.empresa:
             return obj.proposta.cliente.empresa.razao_social
+        return None
+
+    def get_cliente_cnpj(self, obj):
+        if obj.proposta and obj.proposta.cliente and obj.proposta.cliente.empresa:
+            return obj.proposta.cliente.empresa.cnpj
         return None
     
     def get_responsavel_nome(self, obj):
