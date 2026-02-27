@@ -184,184 +184,190 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Use RunPython to apply all changes idempotently
-        migrations.RunPython(
-            apply_migration_0002_idempotent,
-            reverse_migration_0002,
-        ),
-        # Keep the model definitions for Django's state tracking
-        # These won't execute SQL if RunPython already created everything
-        migrations.AddField(
-            model_name="ordemservico",
-            name="data_calibracao_instrumentos",
-            field=models.DateField(
-                blank=True,
-                null=True,
-                verbose_name="Data de calibração dos instrumentos",
-            ),
-        ),
-        migrations.AddField(
-            model_name="ordemservico",
-            name="data_liberacao_calibracao",
-            field=models.DateField(
-                blank=True, null=True, verbose_name="Data liberação da calibração"
-            ),
-        ),
-        migrations.AddField(
-            model_name="ordemservico",
-            name="data_liberacao_instrumentos",
-            field=models.DateField(
-                blank=True, null=True, verbose_name="Data liberação instrumentos"
-            ),
-        ),
-        migrations.AddField(
-            model_name="ordemservico",
-            name="data_recebimento_instrumentos",
-            field=models.DateField(
-                blank=True, null=True, verbose_name="Data recebimento dos instrumentos"
-            ),
-        ),
-        migrations.AddField(
-            model_name="ordemservico",
-            name="status",
-            field=models.CharField(
-                choices=[
-                    ("AR", "A realizar"),
-                    ("EA", "Em andamento"),
-                    ("RE", "Realizado"),
-                    ("CA", "Cancelado"),
-                ],
-                default="AR",
-                max_length=2,
-                verbose_name="Status",
-            ),
-        ),
-        migrations.AddField(
-            model_name="ordemservico",
-            name="tipo_os",
-            field=models.CharField(
-                blank=True,
-                choices=[
-                    ("CAL", "OS Calibração"),
-                    ("BAL", "OS Balanças"),
-                    ("MAN", "OS Manutenção"),
-                    ("EXT", "OS Serviços Externos"),
-                ],
-                max_length=3,
-                null=True,
-                verbose_name="Tipo de OS",
-            ),
-        ),
-        migrations.CreateModel(
-            name="InstrumentoOS",
-            fields=[
-                (
-                    "id",
-                    models.BigAutoField(
-                        auto_created=True,
-                        primary_key=True,
-                        serialize=False,
-                        verbose_name="ID",
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # Executa a lógica idempotente no banco (checa se coluna/tabela existe antes)
+                migrations.RunPython(
+                    apply_migration_0002_idempotent,
+                    reverse_migration_0002,
+                ),
+            ],
+            state_operations=[
+                # Atualiza apenas o estado do Django (sem gerar SQL extra),
+                # assumindo que o banco já foi ajustado pelo RunPython acima.
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="data_calibracao_instrumentos",
+                    field=models.DateField(
+                        blank=True,
+                        null=True,
+                        verbose_name="Data de calibração dos instrumentos",
                     ),
                 ),
-                ("item", models.IntegerField(verbose_name="Item")),
-                (
-                    "observacao",
-                    models.TextField(blank=True, null=True, verbose_name="Observação"),
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="data_liberacao_calibracao",
+                    field=models.DateField(
+                        blank=True, null=True, verbose_name="Data liberação da calibração"
+                    ),
                 ),
-                (
-                    "local",
-                    models.CharField(
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="data_liberacao_instrumentos",
+                    field=models.DateField(
+                        blank=True, null=True, verbose_name="Data liberação instrumentos"
+                    ),
+                ),
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="data_recebimento_instrumentos",
+                    field=models.DateField(
+                        blank=True, null=True, verbose_name="Data recebimento dos instrumentos"
+                    ),
+                ),
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="status",
+                    field=models.CharField(
+                        choices=[
+                            ("AR", "A realizar"),
+                            ("EA", "Em andamento"),
+                            ("RE", "Realizado"),
+                            ("CA", "Cancelado"),
+                        ],
+                        default="AR",
+                        max_length=2,
+                        verbose_name="Status",
+                    ),
+                ),
+                migrations.AddField(
+                    model_name="ordemservico",
+                    name="tipo_os",
+                    field=models.CharField(
                         blank=True,
                         choices=[
-                            ("P", "Instalação permanente"),
-                            ("C", "Instalação cliente"),
-                            ("T", "Terceirizada"),
+                            ("CAL", "OS Calibração"),
+                            ("BAL", "OS Balanças"),
+                            ("MAN", "OS Manutenção"),
+                            ("EXT", "OS Serviços Externos"),
                         ],
-                        max_length=1,
+                        max_length=3,
                         null=True,
-                        verbose_name="Local",
+                        verbose_name="Tipo de OS",
                     ),
                 ),
-                (
-                    "marca_reparo",
-                    models.BooleanField(
-                        blank=True,
-                        default=False,
-                        null=True,
-                        verbose_name="Marca de reparo",
-                    ),
+                migrations.CreateModel(
+                    name="InstrumentoOS",
+                    fields=[
+                        (
+                            "id",
+                            models.BigAutoField(
+                                auto_created=True,
+                                primary_key=True,
+                                serialize=False,
+                                verbose_name="ID",
+                            ),
+                        ),
+                        ("item", models.IntegerField(verbose_name="Item")),
+                        (
+                            "observacao",
+                            models.TextField(blank=True, null=True, verbose_name="Observação"),
+                        ),
+                        (
+                            "local",
+                            models.CharField(
+                                blank=True,
+                                choices=[
+                                    ("P", "Instalação permanente"),
+                                    ("C", "Instalação cliente"),
+                                    ("T", "Terceirizada"),
+                                ],
+                                max_length=1,
+                                null=True,
+                                verbose_name="Local",
+                            ),
+                        ),
+                        (
+                            "marca_reparo",
+                            models.BooleanField(
+                                blank=True,
+                                default=False,
+                                null=True,
+                                verbose_name="Marca de reparo",
+                            ),
+                        ),
+                        (
+                            "marca_selagem_nova",
+                            models.BooleanField(
+                                blank=True,
+                                default=False,
+                                null=True,
+                                verbose_name="Marca de selagem nova",
+                            ),
+                        ),
+                        (
+                            "marca_selagem_retirada",
+                            models.CharField(
+                                blank=True,
+                                max_length=255,
+                                null=True,
+                                verbose_name="Marca de selagem retirada",
+                            ),
+                        ),
+                        (
+                            "servico_executado",
+                            models.TextField(
+                                blank=True, null=True, verbose_name="Serviço executado"
+                            ),
+                        ),
+                        (
+                            "descricao_anomalia",
+                            models.TextField(
+                                blank=True, null=True, verbose_name="Descrição anomalia"
+                            ),
+                        ),
+                        (
+                            "quantidade",
+                            models.IntegerField(
+                                blank=True, null=True, verbose_name="Quantidade"
+                            ),
+                        ),
+                        (
+                            "instrumento",
+                            models.ForeignKey(
+                                on_delete=django.db.models.deletion.CASCADE,
+                                related_name="ordens_servico_os",
+                                to="instrumentos.instrumentodocliente",
+                                verbose_name="Instrumento",
+                            ),
+                        ),
+                        (
+                            "ordem_servico",
+                            models.ForeignKey(
+                                on_delete=django.db.models.deletion.CASCADE,
+                                related_name="instrumentos_os",
+                                to="ordem_servico.ordemservico",
+                                verbose_name="Ordem de Serviço",
+                            ),
+                        ),
+                    ],
+                    options={
+                        "verbose_name": "Instrumento OS",
+                        "verbose_name_plural": "Instrumentos OS",
+                        "ordering": ["item"],
+                        "unique_together": {("ordem_servico", "item")},
+                    },
                 ),
-                (
-                    "marca_selagem_nova",
-                    models.BooleanField(
-                        blank=True,
-                        default=False,
-                        null=True,
-                        verbose_name="Marca de selagem nova",
-                    ),
-                ),
-                (
-                    "marca_selagem_retirada",
-                    models.CharField(
-                        blank=True,
-                        max_length=255,
-                        null=True,
-                        verbose_name="Marca de selagem retirada",
-                    ),
-                ),
-                (
-                    "servico_executado",
-                    models.TextField(
-                        blank=True, null=True, verbose_name="Serviço executado"
-                    ),
-                ),
-                (
-                    "descricao_anomalia",
-                    models.TextField(
-                        blank=True, null=True, verbose_name="Descrição anomalia"
-                    ),
-                ),
-                (
-                    "quantidade",
-                    models.IntegerField(
-                        blank=True, null=True, verbose_name="Quantidade"
-                    ),
-                ),
-                (
-                    "instrumento",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="ordens_servico_os",
+                migrations.AlterField(
+                    model_name="ordemservico",
+                    name="instrumentos",
+                    field=models.ManyToManyField(
+                        related_name="ordens_servico",
+                        through="ordem_servico.InstrumentoOS",
                         to="instrumentos.instrumentodocliente",
-                        verbose_name="Instrumento",
-                    ),
-                ),
-                (
-                    "ordem_servico",
-                    models.ForeignKey(
-                        on_delete=django.db.models.deletion.CASCADE,
-                        related_name="instrumentos_os",
-                        to="ordem_servico.ordemservico",
-                        verbose_name="Ordem de Serviço",
+                        verbose_name="Instrumentos",
                     ),
                 ),
             ],
-            options={
-                "verbose_name": "Instrumento OS",
-                "verbose_name_plural": "Instrumentos OS",
-                "ordering": ["item"],
-                "unique_together": {("ordem_servico", "item")},
-            },
-        ),
-        migrations.AlterField(
-            model_name="ordemservico",
-            name="instrumentos",
-            field=models.ManyToManyField(
-                related_name="ordens_servico",
-                through="ordem_servico.InstrumentoOS",
-                to="instrumentos.instrumentodocliente",
-                verbose_name="Instrumentos",
-            ),
         ),
     ]
