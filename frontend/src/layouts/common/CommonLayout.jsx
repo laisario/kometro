@@ -4,6 +4,7 @@ import { styled } from '@mui/material/styles';
 import Header from './header';
 import Nav from './nav';
 import useAuth from '../../auth/hooks/useAuth';
+import { SectorTreeProvider } from '../../assets/contexts/SectorTreeContext';
 
 const APP_BAR_MOBILE = 64;
 const APP_BAR_DESKTOP = 92;
@@ -43,7 +44,9 @@ function CommonLayout() {
       <Nav openNav={open} onCloseNav={() => setOpen(false)} admin={admin} />
 
       <Main>
-        <Outlet />
+        <SectorTreeProvider>
+          <Outlet />
+        </SectorTreeProvider>
       </Main>
     </StyledRoot>
   );

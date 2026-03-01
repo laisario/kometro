@@ -75,26 +75,23 @@ function CreateInstrument(props) {
   const { client } = useClient(cliente)
   const isMobile = useResponsive('down', 'md');
 
-  // Tentar usar o contexto se disponível, senão usar setores da prop (para tableViewCreate)
-  let sectors = setores;
-  
-  const context = useSectorTreeContext() || null;
-
+  // Contexto sempre disponível pois provider está no CommonLayout
+  const context = useSectorTreeContext();
   
   const options = useMemo(() => {
-    // If we have the new context structure, use a new flattening function
+    // Priorizar contexto (sempre disponível)
     if (context?.nodes && context?.rootIds && context.rootIds.length > 0) {
       const flattened = flattenSectorsFromNodes(context.nodes, context.rootIds);
       return flattened;
     }
-    // Otherwise, use the old flattenSectors function
-    if (sectors && sectors.length > 0) {
-      const flattened = flattenSectors(sectors);
+    // Fallback para setores da prop (caso edge raro)
+    if (setores && setores.length > 0) {
+      const flattened = flattenSectors(setores);
       return flattened;
     }
    
     return [];
-  }, [sectors, context?.nodes, context?.rootIds]);
+  }, [context?.nodes, context?.rootIds, setores]);
   
 
   // Buscar instrumento atualizado quando o formulário estiver aberto (para edição)
