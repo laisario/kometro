@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Button,
@@ -16,11 +16,46 @@ import {
   TableHead,
   TableRow,
   Paper,
+  Chip,
+  Menu,
+  MenuItem,
+  IconButton,
 } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
+import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import useOrdemServico from '../hooks/useOrdemServico';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { fDate } from '../../utils/formatTime';
 import { localLabels } from '../../utils/assets';
+import useOrdemServicoMutations from '../hooks/useOrdemServicoMutations';
+import OrdemServicoFormDialog from './OrdemServicoFormDialog';
+
+// Status labels mapping
+const STATUS_LABELS = {
+  'AR': 'A realizar',
+  'a_realizar': 'A realizar',
+  'EA': 'Em andamento',
+  'em_andamento': 'Em andamento',
+  'RE': 'Realizado',
+  'realizado': 'Realizado',
+  'CA': 'Cancelado',
+  'cancelado': 'Cancelado',
+};
+
+const STATUS_OPTIONS = [
+  { value: 'AR', label: 'A realizar' },
+  { value: 'EA', label: 'Em andamento' },
+  { value: 'RE', label: 'Realizado' },
+  { value: 'CA', label: 'Cancelado' },
+];
+
+const getStatusColor = (status) => {
+  if (status === 'AR' || status === 'a_realizar') return 'warning';
+  if (status === 'EA' || status === 'em_andamento') return 'info';
+  if (status === 'RE' || status === 'realizado') return 'success';
+  if (status === 'CA' || status === 'cancelado') return 'error';
+  return 'default';
+};
 
 // Helper functions
 const safeGet = (obj, path, fallback = '—') => {
@@ -275,11 +310,13 @@ const HEADER_RIGHT_STATIC = (
 
 function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
   const isMobile = useResponsive('down', 'sm');
-  const { ordemServico: osDetails, isLoadingOrdemServico, errorOrdemServico } = useOrdemServico(
+  const [statusMenuAnchor, setStatusMenuAnchor] = useState(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const { ordemServico: osDetails, isLoadingOrdemServico, errorOrdemServico, refetch } = useOrdemServico(
     ordemServico?.id,
     { enabled: open && !!ordemServico?.id }
   );
-  console.log(osDetails, "OS DETAILS")
+  const { mutateUpdateStatus, isLoadingUpdateStatus } = useOrdemServicoMutations();
 
   if (!osDetails) {
     return (
@@ -324,9 +361,69 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     return field.formatter ? field.formatter(value) : value;
   };
 
+  const handleStatusMenuOpen = (event) => {
+    setStatusMenuAnchor(event.currentTarget);
+  };
+
+  const handleStatusMenuClose = () => {
+    setStatusMenuAnchor(null);
+  };
+
+  const handleStatusChange = (newStatus) => {
+    if (osDetails?.id && newStatus !== osDetails.status) {
+      mutateUpdateStatus(
+        { id: osDetails.id, status: newStatus },
+        {
+          onSuccess: () => {
+            refetch();
+            handleStatusMenuClose();
+          },
+        }
+      );
+    } else {
+      handleStatusMenuClose();
+    }
+  };
+
+  const handleEditClick = () => {
+    setEditDialogOpen(true);
+  };
+
+  const handleEditDialogClose = () => {
+    setEditDialogOpen(false);
+  };
+
+  const handleEditSaved = () => {
+    refetch();
+  };
+
+  const currentStatus = osDetails?.status || 'AR';
+  const statusLabel = STATUS_LABELS[currentStatus] || currentStatus;
+  const statusColor = getStatusColor(currentStatus);
+  const isARealizar = currentStatus === 'AR' || currentStatus === 'a_realizar';
+  const editButtonLabel = isARealizar ? 'Preencher OS' : 'Editar';
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
-      <DialogTitle>{layout.title}</DialogTitle>
+    <>
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
+        <DialogTitle>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" component="span">
+              {layout.title}
+            </Typography>
+            <Box display="flex" alignItems="center" gap={1}>
+              <Chip
+                label={statusLabel}
+                color={statusColor}
+                variant="outlined"
+                size="small"
+                onClick={handleStatusMenuOpen}
+                icon={<ArrowDropDownIcon />}
+                sx={{ cursor: 'pointer' }}
+              />
+            </Box>
+          </Box>
+        </DialogTitle>
       <DialogContent>
         <Box display="flex" flexDirection="column" gap={3} mt={1}>
           {/* Subtitle */}
@@ -419,8 +516,42 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
         <Button onClick={onClose} color="primary">
           Fechar
         </Button>
+        <Button
+          onClick={handleEditClick}
+          variant="contained"
+          color="primary"
+          startIcon={<EditIcon />}
+        >
+          {editButtonLabel}
+        </Button>
       </DialogActions>
-    </Dialog>
+      </Dialog>
+
+      <Menu
+        anchorEl={statusMenuAnchor}
+        open={Boolean(statusMenuAnchor)}
+        onClose={handleStatusMenuClose}
+      >
+        {STATUS_OPTIONS.map((option) => (
+          <MenuItem
+            key={option.value}
+            onClick={() => handleStatusChange(option.value)}
+            selected={currentStatus === option.value}
+            disabled={isLoadingUpdateStatus}
+          >
+            {option.label}
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <OrdemServicoFormDialog
+        open={editDialogOpen}
+        onClose={handleEditDialogClose}
+        mode="edit"
+        os={osDetails}
+        onSaved={handleEditSaved}
+      />
+    </>
   );
 }
 

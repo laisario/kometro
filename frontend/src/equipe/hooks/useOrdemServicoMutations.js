@@ -5,37 +5,128 @@ import { enqueueSnackbar } from 'notistack';
 const useOrdemServicoMutations = () => {
   const queryClient = useQueryClient();
 
-  const updateOrdemServico = async ({ osId, data }) => {
-    const response = await axios.patch(`/ordens-servico/${osId}/`, data);
-    return response?.data;
+  // Update OS fields
+  const updateOS = async ({ id, osId, data }) => {
+    const osIdToUse = id || osId;
+    const response = await axios.patch(`/ordens-servico/${osIdToUse}/`, data);
+    return response.data;
   };
 
-  const { mutate: mutateUpdateOrdemServico, isLoading: isLoadingUpdate } = useMutation(
-    updateOrdemServico,
-    {
-      onSuccess: (data, variables) => {
-        // Invalidate related queries
-        queryClient.invalidateQueries(['ordens-servico']);
-        queryClient.invalidateQueries(['ordem-servico', variables.osId]);
-        
-        enqueueSnackbar('Ordem de serviço atualizada com sucesso!', {
-          variant: 'success'
-        });
-      },
-      onError: (error) => {
-        const errorMessage = error?.response?.data?.detail || 
-                           error?.response?.data?.message || 
-                           'Erro ao atualizar ordem de serviço. Tente novamente.';
-        enqueueSnackbar(errorMessage, {
-          variant: 'error'
-        });
-      },
-    }
-  );
+  const {
+    mutate: mutateUpdateOS,
+    mutateAsync: mutateUpdateOSAsync,
+    isLoading: isLoadingUpdateOS,
+  } = useMutation({
+    mutationFn: updateOS,
+    onSuccess: (data, variables) => {
+      const osIdToUse = variables.id || variables.osId;
+      if (osIdToUse) {
+        queryClient.invalidateQueries({ queryKey: ['ordem-servico', osIdToUse] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      enqueueSnackbar('Ordem de serviço atualizada com sucesso!', {
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 
+        (typeof errors === 'object' && errors !== null
+          ? Object.entries(errors)
+              .map(([field, messages]) => {
+                const fieldName = field === 'non_field_errors' 
+                  ? 'Erro' 
+                  : field.charAt(0).toUpperCase() + field.slice(1);
+                return `${fieldName}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
+              })
+              .join('\n')
+          : 'Falha ao atualizar ordem de serviço. Tente novamente!');
+      
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
+  // Update OS status
+  const updateStatus = async ({ id, status }) => {
+    const response = await axios.patch(`/ordens-servico/${id}/`, { status });
+    return response.data;
+  };
+
+  const {
+    mutate: mutateUpdateStatus,
+    isLoading: isLoadingUpdateStatus,
+  } = useMutation({
+    mutationFn: updateStatus,
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      enqueueSnackbar('Status atualizado com sucesso!', {
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 
+        (errors?.status ? errors.status.join(', ') : 'Falha ao atualizar status. Tente novamente!');
+      
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
+  // Create OS (if needed)
+  const createOS = async (data) => {
+    const response = await axios.post('/ordens-servico/', data);
+    return response.data;
+  };
+
+  const {
+    mutate: mutateCreateOS,
+    isLoading: isLoadingCreateOS,
+  } = useMutation({
+    mutationFn: createOS,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      enqueueSnackbar('Ordem de serviço criada com sucesso!', {
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 
+        (typeof errors === 'object' && errors !== null
+          ? Object.entries(errors)
+              .map(([field, messages]) => {
+                const fieldName = field === 'non_field_errors' 
+                  ? 'Erro' 
+                  : field.charAt(0).toUpperCase() + field.slice(1);
+                return `${fieldName}: ${Array.isArray(messages) ? messages.join(', ') : messages}`;
+              })
+              .join('\n')
+          : 'Falha ao criar ordem de serviço. Tente novamente!');
+      
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
 
   return {
-    mutateUpdateOrdemServico,
-    isLoadingUpdate,
+    mutateUpdateOS,
+    mutateUpdateOSAsync,
+    isLoadingUpdateOS,
+    // Alias for backward compatibility
+    mutateUpdateOrdemServico: mutateUpdateOS,
+    mutateUpdateStatus,
+    isLoadingUpdateStatus,
+    mutateCreateOS,
+    isLoadingCreateOS,
   };
 };
 
