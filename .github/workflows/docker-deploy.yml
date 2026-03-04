@@ -40,6 +40,7 @@ jobs:
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
+          port: 4848
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             echo "📦 Logging in to GHCR..."

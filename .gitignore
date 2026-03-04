@@ -21,3 +21,9 @@ bef-backend/.env
 
 CREDENCIAIS.md
 *.heapsnapshot
+
+# Celery Beat schedule file
+bef-backend/app/celerybeat-schedule
+bef-backend/app/celerybeat_schedule
+**/celerybeat-schedule
+**/celerybeat_schedule

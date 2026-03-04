@@ -118,7 +118,6 @@ function InstrumentoDetailPage() {
             error={error}
             setError={setError}
             isFetching={isFetching}
-            setores={sectors}
             mutateChangePosition={mutateChangePosition}
             openFormCreateInstrument={openFormCreateInstrument}
             setOpenFormCreateInstrument={setOpenFormCreateInstrument}

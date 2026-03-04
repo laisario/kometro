@@ -14,7 +14,6 @@ import InstrumentosTable from '../components/InstrumentosTable';
 import { NO_PERMISSION_ACTION } from '../../utils/messages';
 import useAssetsVm from '../viewModels/useAssetsVM';
 import { useParams, useSearchParams } from 'react-router';
-import { SectorTreeProvider } from '../contexts/SectorTreeContext';
 
 function AssetsPage() {
   const { id, idSetor } = useParams();
@@ -96,8 +95,7 @@ function AssetsPage() {
       </Helmet>
 
       <Container>
-        <SectorTreeProvider>
-          <Stack
+        <Stack
             direction="row"
             alignItems="center"
             justifyContent="space-between"
@@ -231,7 +229,6 @@ function AssetsPage() {
               </Box>
             )}
           </Box>
-        </SectorTreeProvider>
       </Container>
     </>
   )

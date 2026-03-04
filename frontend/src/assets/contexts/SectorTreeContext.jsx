@@ -224,12 +224,17 @@ export function SectorTreeProvider({ children }) {
 }
 
 /**
- * Hook para acessar contexto da árvore (retorna null se fora do Provider)
+ * Hook para acessar contexto da árvore (lança erro se fora do Provider)
+ * O contexto está sempre disponível para componentes renderizados dentro de CommonLayout
  */
 export function useSectorTreeContext() {
   const context = useContext(SectorTreeContext);
   if (!context) {
-    throw new Error('useSectorTreeContext must be used within SectorTreeProvider');
+    throw new Error(
+      'useSectorTreeContext must be used within SectorTreeProvider. ' +
+      'Certifique-se de que o componente está renderizado dentro de <SectorTreeProvider>. ' +
+      'O provider está disponível no CommonLayout para todas as rotas /dashboard/* e /admin/*.'
+    );
   }
   return context;
 }
