@@ -1,5 +1,7 @@
-import { Autocomplete, Button, Checkbox, Dialog, DialogContent, DialogTitle, TextField, Chip, Box } from '@mui/material'
+import { Button, Dialog, DialogContent, DialogTitle, DialogActions, Box, Typography } from '@mui/material'
 import React, { useState } from 'react'
+import VirtualizedInstrumentAutocomplete from './VirtualizedInstrumentAutocomplete';
+import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
 
 function FormAddInstrument(props) {
   const { 
@@ -11,58 +13,88 @@ function FormAddInstrument(props) {
   } = props;
   const [instruments, setInstruments] = useState([])
 
-  const submit = async () => {
-    addInstrumentProposal(instruments)
-    setInstruments([])
-    handleClose()
+  const handleInstrumentChange = (event, newValue) => {
+    // Transform to new format with default selections
+    const formattedInstruments = newValue?.map(inst => ({
+      id: inst.id,
+      service_kind: 'calibracao', // default
+      local: 'P', // default
+      ...inst, // Keep original instrument data
+    })) || [];
+    setInstruments(formattedInstruments);
   };
 
-  const optionsAvailable = !!data?.instrumentsAvailable?.length && data?.instrumentsAvailable
+  const handleServiceSelectionChange = (updatedInstruments) => {
+    setInstruments(updatedInstruments);
+  };
+
+  const handleRemoveInstrument = (instrumentId) => {
+    const updated = instruments.filter(inst => inst.id !== instrumentId);
+    setInstruments(updated);
+  };
+
+  const submit = async () => {
+    // Validate that all instruments have service_kind and local
+    const validInstruments = instruments.every(inst => 
+      inst.service_kind && ['calibracao', 'manutencao'].includes(inst.service_kind) &&
+      inst.local && ['P', 'C', 'T'].includes(inst.local)
+    );
+
+    if (!validInstruments) {
+      // This should not happen if InstrumentServiceSelectionTable is working correctly
+      console.error('Invalid instrument data');
+      return;
+    }
+
+    addInstrumentProposal(instruments);
+    setInstruments([]);
+    handleClose();
+  };
+
+  const handleCancel = () => {
+    setInstruments([]);
+    handleClose();
+  };
 
   return (
-    <Dialog open={open} onClose={handleClose}>
+    <Dialog open={open} onClose={handleCancel} fullWidth maxWidth="md">
       <DialogTitle>Adicionar outro instrumento:</DialogTitle>
       <DialogContent>
-        <Autocomplete
-            multiple
-            autoHighlight
-            options={optionsAvailable || []}
-            isOptionEqualToValue={(option, value) => option?.id === value?.id}
-            getOptionLabel={(instrument) => `${instrument?.tag}: ${instrument?.numeroDeSerie} - ${instrument?.instrumento?.tipoDeInstrumento?.descricao} - ${instrument.instrumento?.minimo} - ${instrument?.instrumento?.maximo}`}
-            disableCloseOnSelect
-            loading={isLoadingAdd}
-            renderTags={(value, getTagProps) => value?.map((tag, index) => <Chip {...getTagProps({ index })} key={tag?.tag} label={tag?.tag} />)}
-            name="instrumentos"
-            value={instruments || null}
-            loadingText="Carregando..."
-            noOptionsText="Sem resultados"
-            onChange={(event, newValue) => setInstruments(newValue)}
-            renderInput={(params) => (
-                <TextField
-                    {...params}
-                    label={"Instrumentos"}
-                    placeholder="Pesquisar instrumento"
-                />
-            )}
-            renderOption={(props, instrument, { selected }) => {
-                const { ...optionProps } = props;
-                return (
-                    <li key={instrument?.id} {...optionProps}>
-                        <Checkbox
-                            style={{ marginRight: 8 }}
-                            checked={selected}
-                        />
-                        {instrument?.tag}: {instrument?.numeroDeSerie} - {instrument?.instrumento?.tipoDeInstrumento?.descricao} - {instrument?.instrumento?.minimo} - {instrument?.instrumento?.maximo}
-                    </li>
-                );
-            }}
-            sx={{ my: 2 }}
+        <VirtualizedInstrumentAutocomplete
+          clientId={data?.cliente?.id}
+          value={instruments}
+          onChange={handleInstrumentChange}
+          label="Instrumentos"
+          placeholder="Pesquisar instrumento"
+          sx={{ my: 2 }}
         />
-        <Box display='flex' justifyContent='space-between'>
-          <Button onClick={() => { handleClose(); setInstruments([]) }}>Cancelar</Button>
-          <Button onClick={submit} variant="contained" >Salvar</Button>
-        </Box>
+        
+        {instruments && instruments.length > 0 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>
+              Configurar serviços para cada instrumento:
+            </Typography>
+            <InstrumentServiceSelectionTable
+              instruments={instruments}
+              onChange={handleServiceSelectionChange}
+              onRemove={handleRemoveInstrument}
+              errors={{}}
+            />
+          </>
+        )}
       </DialogContent>
+      <DialogActions>
+        <Button onClick={handleCancel} disabled={isLoadingAdd}>
+          Cancelar
+        </Button>
+        <Button 
+          onClick={submit} 
+          variant="contained"
+          disabled={isLoadingAdd || instruments.length === 0}
+        >
+          Salvar
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }

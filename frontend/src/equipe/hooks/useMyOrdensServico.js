@@ -31,8 +31,6 @@ const useMyOrdensServico = (options = {}) => {
     }
   );
 
-  console.log(ordensServico)
-
   return {
     ordensServico, 
     errorOrdensServico, 

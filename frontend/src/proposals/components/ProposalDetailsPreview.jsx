@@ -213,19 +213,17 @@ const ProposalDetailsPreview = ({ data, admin, isMobile }) => {
                 </Box>
               )}
               
-              {!!data?.realizado && (
-                <Box display="flex" alignItems="center" gap={1}>
-                  <Typography variant="body2" color="text.secondary" sx={{ minWidth: '140px' }}>
-                    Status:
-                  </Typography>
-                  <Chip 
-                    label="Realizado" 
-                    color="success" 
-                    size="small"
-                    variant="outlined"
-                  />
-                </Box>
-              )}
+              <Box display="flex" alignItems="center" gap={1}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: '140px' }}>
+                  Status:
+                </Typography>
+                <Chip 
+                  label={data?.realizado ? "Realizado" : "Não realizado" }
+                  color={data?.realizado ? "success" : "error" }
+                  size="small"
+                  variant="outlined"
+                />
+              </Box>
               
               {!!data?.observacao && (
                 <Box display="flex" alignItems="flex-start" gap={1}>

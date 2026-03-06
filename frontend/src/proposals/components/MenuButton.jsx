@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, MenuItem, IconButton, CircularProgress } from "@mui/material";
+import { Menu, MenuItem, IconButton, CircularProgress, Divider } from "@mui/material";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import ConfirmDeleteDialog from "../../assets/components/ConfirmDeleteDialog";
 
@@ -41,10 +41,6 @@ export default function MenuButton(props) {
         <MoreVertIcon />
       </IconButton>}
       <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-        <MenuItem onClick={handleDeleteClick}>
-          Deletar proposta
-        </MenuItem>
-
         {proposal?.status === "E" ? (
           <MenuItem onClick={() => { handleClose(); setElaborateOpen(true); }}>
             Elaborar proposta
@@ -57,6 +53,21 @@ export default function MenuButton(props) {
 
         <MenuItem onClick={() => { handleClose(); setOpenBillingApprovel(true) }}>
           Liberar para faturamento
+        </MenuItem>
+
+        <Divider />
+
+        <MenuItem 
+          onClick={handleDeleteClick}
+          sx={{
+            color: 'error.main',
+            '&:hover': {
+              backgroundColor: 'error.light',
+              color: 'error.dark',
+            },
+          }}
+        >
+          Deletar proposta
         </MenuItem>
       </Menu>
 

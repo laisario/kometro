@@ -1,9 +1,22 @@
 # Feature: My OS Page (Minhas Ordens de Servico)
 
 > **Version**: 2.0  
-> **Status**: Implemented  
+> **Status**: Deprecated - Migrating to Unified OS Page  
 > **Date**: 2025-01-XX  
+> **Migration Target**: [Unified OS Page with Tabs](../unified-os-page-with-tabs/plan.md)  
 > **Related**: [Team List Feature](../team-list/plan.v2.md)
+
+## ⚠️ Deprecation Notice
+
+**This feature is being deprecated and will be merged into the unified service orders page.**
+
+The `/admin/eu` route and `MinhasOSPage` component will be removed in favor of a tab-based interface in `/admin/ordens-servico`. 
+
+**Migration Plan**: See [Unified OS Page with Tabs](../unified-os-page-with-tabs/plan.md) for the new architecture.
+
+**Timeline**: 
+- Phase 1: Implement tabs in `/admin/ordens-servico` (in progress)
+- Phase 2: Remove `/admin/eu` route and `MinhasOSPage` component (after migration complete)
 
 ## Feature Summary
 

@@ -6,6 +6,8 @@ import {
   Button,
   Grid,
   Skeleton,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router';
@@ -14,6 +16,7 @@ import useAuth from '../../auth/hooks/useAuth';
 import EmptyYet from '../../components/EmptyYet';
 import useResponsive from '../../theme/hooks/useResponsive';
 import useOrdensServico from '../hooks/useOrdensServico';
+import useMyOrdensServico from '../hooks/useMyOrdensServico';
 import OrdemServicoDetailsDialog from '../components/OrdemServicoDetailsDialog';
 import EmployeeListCard from '../components/EmployeeListCard';
 import OSSummaryRow from '../components/OSSummaryRow';
@@ -25,22 +28,62 @@ function EquipePage() {
   const isMobile = useResponsive('down', 'sm');
   const { isManager, user } = useAuth();
   const { users: staffUsers, isLoadingUsers, errorUsers } = useUsers(null, { isStaff: true });
-  const { ordensServico, isLoadingOrdensServico, errorOrdensServico, refetch } = useOrdensServico(
+  
+  // Tab state management
+  // Default to 'todas' for managers, 'minhas' for non-managers
+  const [activeTab, setActiveTab] = useState('todas'); // 'todas' | 'minhas'
+  
+  // Adjust default tab and prevent non-managers from accessing "Todas"
+  useEffect(() => {
+    if (user && !isManager && activeTab === 'todas') {
+      setActiveTab('minhas');
+    }
+  }, [user, isManager, activeTab]);
+  
+  // Conditional data fetching based on active tab
+  const { 
+    ordensServico: todasOS, 
+    isLoading: isLoadingTodas, 
+    error: errorTodas, 
+    refetch: refetchTodas 
+  } = useOrdensServico(
     null,
-    { fetchAll: true }
+    { fetchAll: true, enabled: activeTab === 'todas' }
   );
+  
+  const { 
+    ordensServico: minhasOS, 
+    isLoading: isLoadingMinhas, 
+    error: errorMinhas, 
+    refetch: refetchMinhas 
+  } = useMyOrdensServico({
+    enabled: activeTab === 'minhas'
+  });
+  
+  // Use appropriate data based on active tab
+  const ordensServico = activeTab === 'todas' ? todasOS : minhasOS;
+  const isLoadingOrdensServico = activeTab === 'todas' ? isLoadingTodas : isLoadingMinhas;
+  const errorOrdensServico = activeTab === 'todas' ? errorTodas : errorMinhas;
   
   // State management
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const { selectedOS, isOpen, openDialog, closeDialog } = useOSDetailsDialog();
-
-
-  // Redirect non-managers to 404
+  
+  // Clear employee selection when switching to "Minhas" tab
   useEffect(() => {
-    if (user && !isManager) {
+    if (activeTab === 'minhas') {
+      setSelectedEmployeeId(null);
+    }
+  }, [activeTab]);
+
+
+  // Redirect non-staff users to 404
+  // Note: "Todas" tab requires manager, but "Minhas" tab is accessible to all staff
+  useEffect(() => {
+    if (errorOrdensServico?.response?.status === 403) {
       navigate('/404', { replace: true });
     }
-  }, [user, isManager, navigate]);
+  }, [errorOrdensServico, navigate]);
 
   // Get selected employee name with username fallback
   const getEmployeeDisplayName = (employee) => {
@@ -56,10 +99,16 @@ function EquipePage() {
     return getEmployeeDisplayName(employee);
   }, [selectedEmployeeId, staffUsers]);
 
-  // Filter OS by selected employee
+  // Filter OS by selected employee (only in "Todas" tab)
   const filteredOS = useMemo(() => {
     if (!ordensServico) return [];
     
+    // In "Minhas" tab, don't apply employee filter (already filtered by API)
+    if (activeTab === 'minhas') {
+      return ordensServico;
+    }
+    
+    // In "Todas" tab, apply employee filter if selected
     if (selectedEmployeeId) {
       return ordensServico.filter(os => {
         return os.responsavel === selectedEmployeeId || 
@@ -69,13 +118,21 @@ function EquipePage() {
     }
     
     return ordensServico;
-  }, [ordensServico, selectedEmployeeId]);
+  }, [ordensServico, selectedEmployeeId, activeTab]);
 
   const hasStaffMembers = useMemo(() => !!staffUsers?.length, [staffUsers]);
   const hasOS = useMemo(() => !!filteredOS?.length, [filteredOS]);
 
   const handleUpdateOS = () => {
-    refetch();
+    if (activeTab === 'todas') {
+      refetchTodas();
+    } else {
+      refetchMinhas();
+    }
+  };
+  
+  const handleTabChange = (event, newValue) => {
+    setActiveTab(newValue);
   };
 
   const handleEmployeeSelect = (employeeId) => {
@@ -97,9 +154,9 @@ function EquipePage() {
     );
   }
 
-  if (!isManager) {
-    return null;
-  }
+  // Allow all staff to access the page
+  // "Todas" tab functionality requires manager, but "Minhas" tab is for all staff
+  // The backend will enforce permissions for each endpoint
 
   if (errorUsers || errorOrdensServico) {
     return (
@@ -122,10 +179,24 @@ function EquipePage() {
         <title> Ordens de Serviço | Kometro </title>
       </Helmet>
       <Container>
+        <Box mb={3}>
+          <Typography variant="h4" gutterBottom>
+            Ordens de Serviço
+          </Typography>
+        </Box>
+
+        {/* Tabs */}
+        <Box mb={3}>
+          <Tabs value={activeTab} onChange={handleTabChange}>
+            {isManager && <Tab label="Todas" value="todas" />}
+            <Tab label="Minhas" value="minhas" />
+          </Tabs>
+        </Box>
+
         <Grid container spacing={3}>
-          {/* Left Side - Employee List Card */}
-          {hasStaffMembers && (
-            <Grid item xs={12} md={4}>
+          {/* Left Side - Employee List Card (Only in "Todas" tab) */}
+          {activeTab === 'todas' && hasStaffMembers && (
+            <Grid item xs={12} md={3}>
               <EmployeeListCard
                 staffUsers={staffUsers}
                 selectedEmployeeId={selectedEmployeeId}
@@ -138,14 +209,14 @@ function EquipePage() {
           )}
 
           {/* Right Side - OS Summary and Table */}
-          <Grid item xs={12} md={hasStaffMembers ? 8 : 12}>
+          <Grid item xs={12} md={activeTab === 'todas' && hasStaffMembers ? 9 : 12}>
             {/* OS Summary Row (Above Table) */}
             {hasOS && (
               <Box mb={3}>
                 <OSSummaryRow
                   ordensServico={ordensServico}
-                  selectedEmployeeId={selectedEmployeeId}
-                  selectedEmployeeName={selectedEmployeeName}
+                  selectedEmployeeId={activeTab === 'todas' ? selectedEmployeeId : null}
+                  selectedEmployeeName={activeTab === 'todas' ? selectedEmployeeName : null}
                   isLoadingOrdensServico={isLoadingOrdensServico}
                 />
               </Box>
@@ -157,7 +228,18 @@ function EquipePage() {
               isLoading={isLoadingOrdensServico}
               onRowClick={openDialog}
               onUpdate={handleUpdateOS}
-              title={selectedEmployeeName ? `Ordens de serviço - ${selectedEmployeeName}` : 'Ordens de serviço'}
+              title={
+                activeTab === 'minhas' 
+                  ? 'Minhas Ordens de Serviço'
+                  : selectedEmployeeName 
+                    ? `Ordens de serviço - ${selectedEmployeeName}` 
+                    : 'Ordens de serviço'
+              }
+              emptyMessage={
+                activeTab === 'minhas'
+                  ? 'Você ainda não possui ordens de serviço atribuídas'
+                  : undefined
+              }
             />
           </Grid>
         </Grid>

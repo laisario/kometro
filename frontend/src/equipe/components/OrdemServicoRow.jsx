@@ -135,6 +135,13 @@ function OrdemServicoRow({
         />
       </TableCell>
 
+      {/* Liberada para faturamento */}
+      <TableCell>
+        <Typography variant="body2">
+          {os.status === 'RE' || os.status === 'realizado' ? 'Sim' : 'Não'}
+        </Typography>
+      </TableCell>
+
     </TableRow>
   );
 }

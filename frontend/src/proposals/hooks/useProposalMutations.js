@@ -78,11 +78,19 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
     }
   })
 
-  const addInstrument = async (instruments) => {
-    const proposalAssets = proposal?.instrumentos?.map(({ id }) => id);
+  const addInstrument = async (newInstruments) => {
+    // Get existing instruments with their service_kind and local from PropostaInstrumento
+    // For now, we'll send only the new instruments with their service_kind and local
+    // The backend will merge them with existing ones
+    const formattedInstruments = newInstruments?.map(instrument => ({
+      id: instrument.id,
+      service_kind: instrument.service_kind || 'calibracao',
+      local: instrument.local || 'P',
+    })) || [];
+    
     await axios.post(
-      `/propostas/${proposal?.id}/adicionar_instrumento/`,
-      { instrumentos: [...proposalAssets, ...instruments?.map(instrument => instrument?.id)]}
+      `/propostas/${id}/adicionar_instrumento/`,
+      { instrumentos: formattedInstruments }
     );
   }
 

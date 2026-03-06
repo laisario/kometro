@@ -71,6 +71,7 @@ function OSTable({
               <TableCell><Typography variant="subtitle2">Expiração</Typography></TableCell>
               <TableCell><Typography variant="subtitle2">Tipo</Typography></TableCell>
               <TableCell><Typography variant="subtitle2">Status</Typography></TableCell>
+              <TableCell><Typography variant="subtitle2">Liberada para faturamento</Typography></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>

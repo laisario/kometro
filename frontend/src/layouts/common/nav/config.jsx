@@ -38,14 +38,6 @@ export const navConfig = (admin, hasPermission) => {
     })
   }
   
-  if (admin) {
-    data.push({
-      title: 'Minhas OS',
-      path: '/admin/eu',
-      icon: <AssignmentIcon />
-    })
-  }
-  
   if (hasPermission) {
     data.push({
       title: 'Acessos',

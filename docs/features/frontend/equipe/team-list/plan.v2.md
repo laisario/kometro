@@ -1,9 +1,18 @@
 # Feature: Ordens de Serviço - Team List (V2)
 
 > **Version**: 2.0  
-> **Status**: Planning  
+> **Status**: Planning - Migrating to Unified OS Page  
 > **Supersedes**: [plan.md](./plan.md) (V1)  
-> **Date**: 2025-01-XX
+> **Date**: 2025-01-XX  
+> **Migration Target**: [Unified OS Page with Tabs](../unified-os-page-with-tabs/plan.md)
+
+## ⚠️ Architecture Update Notice
+
+**This feature is being enhanced to support a unified service orders page with tabs.**
+
+The `/admin/ordens-servico` route will be updated to include tabs for switching between "Todas" (all OSs) and "Minhas" (user's OSs), consolidating the functionality currently split between `/admin/ordens-servico` and `/admin/eu`.
+
+**Migration Plan**: See [Unified OS Page with Tabs](../unified-os-page-with-tabs/plan.md) for the new architecture.
 
 ## Feature Overview
 

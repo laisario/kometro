@@ -7,7 +7,7 @@ from rest_framework import mixins, response, status, viewsets, filters, permissi
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from .task import enviar_proposta_cliente_email, gerar_pdf_proposta
-from .models import Proposta, Revisao, Anexo
+from .models import Proposta, Revisao, Anexo, PropostaInstrumento
 from .serializers import (
     PropostaAdminSerializer,
     PropostaFaturamentoSerializer,
@@ -180,14 +180,89 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def adicionar_instrumento(self, request, pk=None):
         proposta = self.get_object()
-        instrumentos = request.data.get("instrumentos")
-        new_instruments = []
-        for instrumento in instrumentos:
-            instrument = InstrumentoDoCliente.objects.get(id=instrumento)
-            new_instruments.append(instrument)
-        proposta.instrumentos.set(new_instruments)
-        proposta.status = "AA"
-        proposta.save()
+        instrumentos_data = request.data.get("instrumentos", [])
+        
+        if not instrumentos_data:
+            return response.Response(
+                {"detail": "Lista de instrumentos não pode estar vazia."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        with transaction.atomic():
+            instruments_to_add = []
+            proposta_instrumentos_to_create = []
+            
+            # First pass: validate all instruments
+            for item in instrumentos_data:
+                # Support both formats: dict with id/service_kind/local or just id
+                if isinstance(item, dict):
+                    instrumento_id = item.get('id') or item.get('pk')
+                    service_kind = item.get('service_kind', 'calibracao')
+                    local = item.get('local', proposta.local or 'P')
+                else:
+                    # Backward compatibility: just an ID
+                    instrumento_id = item
+                    service_kind = 'calibracao'
+                    local = proposta.local or 'P'
+                
+                if instrumento_id is None:
+                    continue
+                
+                try:
+                    instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
+                    
+                    # Validate instrument belongs to proposal's client
+                    if instrumento.cliente != proposta.cliente:
+                        return response.Response(
+                            {"detail": f"Instrumento {instrumento_id} não pertence ao cliente da proposta."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    
+                    # Validate service_kind
+                    if service_kind not in ['calibracao', 'manutencao']:
+                        return response.Response(
+                            {"detail": f"service_kind deve ser 'calibracao' ou 'manutencao', recebeu: {service_kind}"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    
+                    # Validate local
+                    if local not in ['P', 'C', 'T']:
+                        return response.Response(
+                            {"detail": f"local deve ser 'P', 'C' ou 'T', recebeu: {local}"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                    
+                    instruments_to_add.append(instrumento)
+                    proposta_instrumentos_to_create.append({
+                        'instrumento': instrumento,
+                        'service_kind': service_kind,
+                        'local': local,
+                    })
+                    
+                except InstrumentoDoCliente.DoesNotExist:
+                    return response.Response(
+                        {"detail": f"Instrumento com ID {instrumento_id} não existe."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            
+            # Add all instruments to many-to-many relationship at once
+            if instruments_to_add:
+                proposta.instrumentos.add(*instruments_to_add)
+            
+            # Create or update PropostaInstrumento records
+            for item_data in proposta_instrumentos_to_create:
+                PropostaInstrumento.objects.update_or_create(
+                    proposta=proposta,
+                    instrumento=item_data['instrumento'],
+                    defaults={
+                        'service_kind': item_data['service_kind'],
+                        'local': item_data['local'],
+                    }
+                )
+            
+            proposta.status = "AA"
+            proposta.save()
+        
         return response.Response(
             {"message": "Instrumentos adicionados com sucesso!"},
             status=status.HTTP_200_OK,
