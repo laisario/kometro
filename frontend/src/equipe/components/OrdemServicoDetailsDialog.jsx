@@ -23,18 +23,22 @@ import {
   Tooltip,
   Alert,
   TextField,
+  Checkbox,
+  Badge,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
 import useOrdemServico from '../hooks/useOrdemServico';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { fDate } from '../../utils/formatTime';
 import { localLabels } from '../../utils/assets';
 import useOrdemServicoMutations from '../hooks/useOrdemServicoMutations';
 import OrdemServicoFormDialog from './OrdemServicoFormDialog';
+import CreateNewOSDialog from './CreateNewOSDialog';
 
 // Status labels mapping
 const STATUS_LABELS = {
@@ -462,17 +466,41 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     mutateGerarCertificado,
     mutateGerarCertificadoAsync,
     isLoadingGerarCertificado,
+    mutateCreateNewOSAndMove,
+    isLoadingCreateNewOSAndMove,
   } = useOrdemServicoMutations();
   const [generatingCertificadoId, setGeneratingCertificadoId] = useState(null);
   const [editingStates, setEditingStates] = useState({}); // { instrumentoId: { isEditing: bool, value: string } }
+  
+  // Selection state
+  const [selectedInstrumentIds, setSelectedInstrumentIds] = useState([]);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
   
   // Clear editing states when dialog closes
   useEffect(() => {
     if (!open) {
       setEditingStates({});
       setGeneratingCertificadoId(null);
+      setSelectedInstrumentIds([]);
+      setCreateDialogOpen(false);
     }
   }, [open]);
+  
+  const layoutKey = getOsLayoutKey(osDetails);
+  const layout = OS_LAYOUTS[layoutKey] || OS_LAYOUTS.calibracao;
+  const items = getOsItems(osDetails);
+
+  // Filter selected IDs to only include instruments that still exist after refetch
+  useEffect(() => {
+    if (items && items.length > 0) {
+      const validIds = items
+        .map(item => item.instrumento?.id)
+        .filter(Boolean);
+      setSelectedInstrumentIds(prev => 
+        prev.filter(id => validIds.includes(id))
+      );
+    }
+  }, [items]);
   
   if (!osDetails) {
     return (
@@ -503,9 +531,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     );
   }
   
-  const layoutKey = getOsLayoutKey(osDetails);
-  const layout = OS_LAYOUTS[layoutKey] || OS_LAYOUTS.calibracao;
-  const items = getOsItems(osDetails);
+
 
   // Render header/footer field value
   const renderHeaderFieldValue = (field) => {
@@ -632,6 +658,72 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     });
   };
 
+  // Selection handlers
+  const isInstrumentSelected = (instrumentoId) => {
+    return selectedInstrumentIds.includes(instrumentoId);
+  };
+
+  const handleToggleInstrument = (instrumentoId) => {
+    if (!instrumentoId) return;
+    setSelectedInstrumentIds(prev => {
+      if (prev.includes(instrumentoId)) {
+        return prev.filter(id => id !== instrumentoId);
+      }
+      return [...prev, instrumentoId];
+    });
+  };
+
+  const handleSelectAll = () => {
+    const allIds = items
+      .map(item => item.instrumento?.id)
+      .filter(Boolean);
+    if (selectedInstrumentIds.length === allIds.length) {
+      setSelectedInstrumentIds([]); // Deselect all
+    } else {
+      setSelectedInstrumentIds(allIds); // Select all
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedInstrumentIds([]);
+  };
+
+  // Create new OS handlers
+  const handleCreateNewOS = () => {
+    if (!osDetails?.id || selectedInstrumentIds.length === 0) return;
+    setCreateDialogOpen(true);
+  };
+
+  const handleConfirmCreateNewOS = (tipoOs) => {
+    if (!osDetails?.id || selectedInstrumentIds.length === 0 || !tipoOs) return;
+    
+    mutateCreateNewOSAndMove(
+      {
+        osId: osDetails.id,
+        instrumentoIds: selectedInstrumentIds,
+        tipoOs,
+      },
+      {
+        onSuccess: () => {
+          setSelectedInstrumentIds([]);
+          setCreateDialogOpen(false);
+          refetch();
+        },
+      }
+    );
+  };
+
+  const handleCloseCreateDialog = () => {
+    setCreateDialogOpen(false);
+  };
+
+  // Get selected instruments data for display
+  const getSelectedInstruments = () => {
+    return items.filter(item => 
+      selectedInstrumentIds.includes(item.instrumento?.id)
+    );
+  };
+
   const currentStatus = osDetails?.status || 'AR';
   const statusLabel = STATUS_LABELS[currentStatus] || currentStatus;
   const statusColor = getStatusColor(currentStatus);
@@ -692,12 +784,62 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
 
           <Divider />
 
+          {/* Bulk Actions Toolbar */}
+          {selectedInstrumentIds.length > 0 && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                p: 1.5,
+                bgcolor: 'grey.50',
+                borderRadius: 1,
+                border: '1px solid',
+                borderColor: 'divider',
+              }}
+            >
+              <Box display="flex" alignItems="center" gap={2}>
+                <Badge badgeContent={selectedInstrumentIds.length} color="primary">
+                  <Typography variant="body2" fontWeight={500}>
+                    {selectedInstrumentIds.length} instrumento{selectedInstrumentIds.length !== 1 ? 's' : ''} selecionado{selectedInstrumentIds.length !== 1 ? 's' : ''}
+                  </Typography>
+                </Badge>
+                <Button
+                  size="small"
+                  onClick={handleClearSelection}
+                  variant="text"
+                >
+                  Limpar seleção
+                </Button>
+              </Box>
+              <Box display="flex" gap={1}>
+                <Button
+                  size="small"
+                  variant="contained"
+                  startIcon={<CreateNewFolderIcon />}
+                  onClick={handleCreateNewOS}
+                  disabled={isLoadingCreateNewOSAndMove}
+                >
+                  Gerar nova OS
+                </Button>
+              </Box>
+            </Box>
+          )}
+
           {/* Table Section */}
           <Box>
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
                 <TableHead>
                   <TableRow>
+                    <TableCell padding="checkbox" sx={{ fontWeight: 600 }}>
+                      <Checkbox
+                        size="small"
+                        indeterminate={selectedInstrumentIds.length > 0 && selectedInstrumentIds.length < items.length}
+                        checked={items.length > 0 && selectedInstrumentIds.length === items.length}
+                        onChange={handleSelectAll}
+                      />
+                    </TableCell>
                     {layout.columns.map((col) => (
                       <TableCell key={col.key} sx={{ fontWeight: 600 }}>
                         {col.header}
@@ -709,6 +851,14 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
                   {items.length > 0 ? (
                     items.map((row, index) => (
                       <TableRow key={row.id || index}>
+                        <TableCell padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={isInstrumentSelected(row.instrumento?.id)}
+                            onChange={() => handleToggleInstrument(row.instrumento?.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </TableCell>
                         {layout.columns.map((col) => (
                           <TableCell key={col.key}>
                             {col.render(
@@ -730,7 +880,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={layout.columns.length} align="center">
+                      <TableCell colSpan={layout.columns.length + 1} align="center">
                         <Typography variant="body2" color="text.secondary">
                           Nenhum instrumento associado
                         </Typography>
@@ -797,6 +947,15 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
         mode="edit"
         os={osDetails}
         onSaved={handleEditSaved}
+      />
+
+      <CreateNewOSDialog
+        open={createDialogOpen}
+        onClose={handleCloseCreateDialog}
+        selectedInstruments={getSelectedInstruments()}
+        originOsType={osDetails?.tipoOs}
+        loading={isLoadingCreateNewOSAndMove}
+        onConfirm={handleConfirmCreateNewOS}
       />
     </>
   );

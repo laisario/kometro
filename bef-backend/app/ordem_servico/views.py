@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters
 from django.db import transaction
+from django.db.models import Max
 
 from .models import OrdemServico, InstrumentoOS, TipoOS, StatusOS
 from .serializers import (
@@ -128,14 +129,19 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['POST'], permission_classes=[IsAuthenticated])
     def reallocar(self, request, pk=None):
         """
-        Move an instrument from this OS to another OS (existing or new).
+        Move one or more instruments from this OS to a newly created OS.
         
         Request body:
         {
-            "instrumento_id": 123,
-            "nova_os_id": 456,  // null to create new OS
-            "nova_os_tipo": "CAL"  // required if nova_os_id is null
+            "instrumento_ids": [17, 27, 35],
+            "tipo_os": "CAL"  // Required: CAL, BAL, MAN, or EXT
         }
+        
+        Business Rules:
+        - BR-SEL-1: Only instruments from origin OS can be moved
+        - BR-CTX-1: New OS belongs to same proposal as origin OS
+        - BR-TYPE-NEW-1: User must provide valid tipo_os
+        - BR-STATUS-1: Origin OS cannot be REALIZADO or CANCELADO
         """
         if not request.user.groups.filter(name='gerente').exists():
             return Response(
@@ -144,83 +150,140 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             )
         
         os = self.get_object()
-        instrumento_id = request.data.get('instrumento_id')
-        nova_os_id = request.data.get('nova_os_id')
-        nova_os_tipo = request.data.get('nova_os_tipo')
         
-        if not instrumento_id:
+        # Validate origin OS status (BR-STATUS-1)
+        if os.status in [StatusOS.REALIZADO, StatusOS.CANCELADO]:
             return Response(
-                {"detail": "instrumento_id é obrigatório."},
+                {"detail": "Não é possível mover instrumentos de uma OS finalizada ou cancelada."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        try:
-            instrumento_os = InstrumentoOS.objects.get(
-                ordem_servico=os,
-                instrumento_id=instrumento_id
-            )
-        except InstrumentoOS.DoesNotExist:
+        # Get instrument IDs
+        instrumento_ids = request.data.get('instrumento_ids')
+        
+        if not instrumento_ids:
             return Response(
-                {"detail": "Instrumento não encontrado nesta ordem de serviço."},
-                status=status.HTTP_404_NOT_FOUND
+                {"detail": "instrumento_ids é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Normalize to list
+        if isinstance(instrumento_ids, str):
+            # Handle comma-separated string
+            try:
+                instrumento_ids = [int(id.strip()) for id in instrumento_ids.split(',')]
+            except ValueError:
+                return Response(
+                    {"detail": "instrumento_ids deve ser uma lista de números."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        elif not isinstance(instrumento_ids, list):
+            return Response(
+                {"detail": "instrumento_ids deve ser uma lista."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not instrumento_ids:
+            return Response(
+                {"detail": "Pelo menos um instrumento deve ser fornecido."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate and get tipo_os
+        tipo_os = request.data.get('tipo_os')
+        if not tipo_os:
+            return Response(
+                {
+                    "detail": "tipo_os é obrigatório.",
+                    "valid_types": [choice[0] for choice in TipoOS.choices]
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate tipo_os is a valid choice
+        valid_types = [choice[0] for choice in TipoOS.choices]
+        if tipo_os not in valid_types:
+            return Response(
+                {
+                    "detail": f"tipo_os inválido: {tipo_os}. Tipos válidos: {valid_types}",
+                    "valid_types": valid_types
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate all instruments belong to origin OS (BR-SEL-1, BR-VAL-1)
+        # First check without select_for_update (outside transaction)
+        found_instrumentos_os = InstrumentoOS.objects.filter(
+            ordem_servico=os,
+            instrumento_id__in=instrumento_ids
+        )
+        
+        found_ids = set(found_instrumentos_os.values_list('instrumento_id', flat=True))
+        missing_ids = set(instrumento_ids) - found_ids
+        
+        if missing_ids:
+            return Response(
+                {
+                    "detail": f"Instrumentos não encontrados nesta OS: {list(missing_ids)}",
+                    "invalid_instrumento_ids": list(missing_ids)
+                },
+                status=status.HTTP_400_BAD_REQUEST
             )
         
         with transaction.atomic():
-            if nova_os_id:
-                # Move to existing OS
-                try:
-                    nova_os = OrdemServico.objects.get(id=nova_os_id)
-                except OrdemServico.DoesNotExist:
-                    return Response(
-                        {"detail": "Ordem de serviço de destino não encontrada."},
-                        status=status.HTTP_404_NOT_FOUND
-                    )
-                
-                # Get next item number in new OS
-                max_item = InstrumentoOS.objects.filter(
-                    ordem_servico=nova_os
-                ).aggregate(max_item=models.Max('item'))['max_item'] or 0
-                
-                instrumento_os.ordem_servico = nova_os
-                instrumento_os.item = max_item + 1
-                instrumento_os.save()
-            else:
-                # Create new OS
-                if not nova_os_tipo:
-                    return Response(
-                        {"detail": "nova_os_tipo é obrigatório ao criar nova OS."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                
-                # Generate OS number
-                proposta = os.proposta
-                os_count = proposta.ordens_servico.filter(tipo_os=nova_os_tipo).count() + 1
-                numero = f"{proposta.numero}-OS-{nova_os_tipo}-{os_count:03d}"
-                
-                nova_os = OrdemServico.objects.create(
-                    proposta=proposta,
-                    tipo_os=nova_os_tipo,
-                    status=status.A_REALIZAR,
-                    numero=numero
-                )
-                
-                instrumento_os.ordem_servico = nova_os
-                instrumento_os.item = 1
-                instrumento_os.save()
+            # Now get with select_for_update inside transaction
+            instrumentos_os = InstrumentoOS.objects.select_for_update().filter(
+                ordem_servico=os,
+                instrumento_id__in=instrumento_ids
+            )
             
-            # Recalculate item numbers in old OS
-            for idx, inst_os in enumerate(
+            # Create new OS (BR-TYPE-NEW-1)
+            proposta = os.proposta
+            
+            # Generate OS number using same pattern as auto-generation
+            # Count OSs of the same type in this proposal
+            os_count = proposta.ordens_servico.filter(tipo_os=tipo_os).count() + 1
+            numero = f"{proposta.numero}-OS-{tipo_os}-{os_count:03d}"
+            
+            # Check if number already exists (shouldn't happen, but be safe)
+            if OrdemServico.objects.filter(numero=numero).exists():
+                # Try next number
+                os_count += 1
+                numero = f"{proposta.numero}-OS-{tipo_os}-{os_count:03d}"
+            
+            nova_os = OrdemServico.objects.create(
+                proposta=proposta,
+                tipo_os=tipo_os,  # User-selected type
+                status=StatusOS.A_REALIZAR,
+                numero=numero
+            )
+            
+            # Move all instruments to new OS
+            moved_ids = []
+            for idx, inst_os in enumerate(instrumentos_os, start=1):
+                inst_os.ordem_servico = nova_os
+                inst_os.item = idx
+                inst_os.save(update_fields=['ordem_servico', 'item'])
+                moved_ids.append(inst_os.instrumento_id)
+            
+            # Resequence origin OS items
+            for idx, origin_inst_os in enumerate(
                 InstrumentoOS.objects.filter(ordem_servico=os).order_by('item'),
                 start=1
             ):
-                inst_os.item = idx
-                inst_os.save(update_fields=['item'])
-        
-        return Response({
-            "message": "Instrumento realocado com sucesso.",
-            "nova_os_id": nova_os.id if not nova_os_id else nova_os_id,
-            "nova_os_numero": nova_os.numero if not nova_os_id else OrdemServico.objects.get(id=nova_os_id).numero
-        })
+                if origin_inst_os.item != idx:
+                    origin_inst_os.item = idx
+                    origin_inst_os.save(update_fields=['item'])
+            
+            return Response({
+                "message": "Instrumentos realocados com sucesso.",
+                "origin_os_id": os.id,
+                "destination_os_id": nova_os.id,
+                "destination_os_numero": nova_os.numero,
+                "destination_os_tipo": nova_os.tipo_os,
+                "moved_instrumento_ids": moved_ids,
+                "origin_items_resequenced": True
+            })
     
     @action(detail=True, methods=['GET'], permission_classes=[IsAuthenticated])
     def preview_certificado(self, request, pk=None):

@@ -159,6 +159,42 @@ const useOrdemServicoMutations = () => {
     },
   });
 
+  // Create new OS and move instruments
+  const createNewOSAndMove = async ({ osId, instrumentoIds, tipoOs }) => {
+    const response = await axios.post(
+      `/ordens-servico/${osId}/reallocar/`,
+      {
+        instrumento_ids: instrumentoIds,
+        tipo_os: tipoOs
+      }
+    );
+    return response.data;
+  };
+
+  const {
+    mutate: mutateCreateNewOSAndMove,
+    isLoading: isLoadingCreateNewOSAndMove,
+  } = useMutation({
+    mutationFn: createNewOSAndMove,
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico', variables.osId] });
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
+      const count = variables.instrumentoIds?.length || 1;
+      enqueueSnackbar(
+        `Nova OS ${data.destination_os_numero} criada e ${count} instrumento(s) movido(s) com sucesso!`,
+        { variant: 'success' }
+      );
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 'Falha ao criar nova OS e mover instrumentos. Tente novamente!';
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
   return {
     mutateUpdateOS,
     mutateUpdateOSAsync,
@@ -173,6 +209,9 @@ const useOrdemServicoMutations = () => {
     mutateGerarCertificado,
     mutateGerarCertificadoAsync,
     isLoadingGerarCertificado,
+    // Mutation for creating new OS and moving instruments
+    mutateCreateNewOSAndMove,
+    isLoadingCreateNewOSAndMove,
   };
 };
 
