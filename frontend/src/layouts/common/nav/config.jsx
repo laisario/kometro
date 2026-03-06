@@ -4,7 +4,6 @@ import ScaleIcon from '@mui/icons-material/Scale';
 import DescriptionIcon from '@mui/icons-material/Description';
 import Groups2Icon from '@mui/icons-material/Groups2';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
-import SupervisorAccountIcon from '@mui/icons-material/SupervisorAccount';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 
 export const navConfig = (admin, hasPermission) => {
@@ -33,9 +32,9 @@ export const navConfig = (admin, hasPermission) => {
   
   if (admin && hasPermission) {
     data.push({
-      title: 'Equipe',
-      path: '/admin/equipe',
-      icon: <SupervisorAccountIcon />
+      title: 'Ordens de Serviço',
+      path: '/admin/ordens-servico',
+      icon: <AssignmentIcon  />
     })
   }
   

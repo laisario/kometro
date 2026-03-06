@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
@@ -20,9 +20,15 @@ import {
   Menu,
   MenuItem,
   IconButton,
+  Tooltip,
+  Alert,
+  TextField,
 } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
+import AddIcon from '@mui/icons-material/Add';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import useOrdemServico from '../hooks/useOrdemServico';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { fDate } from '../../utils/formatTime';
@@ -91,6 +97,116 @@ const getOsItems = (os) => {
   return os?.instrumentosOs || [];
 };
 
+// Helper function to render numero certificado column
+const renderNumeroCertificado = (
+  row, 
+  osTipo, 
+  onGerarCertificado,
+  onEditarCertificado,
+  onSalvarCertificado,
+  onCancelarEdicao,
+  isLoading, 
+  instrumentoId,
+  editingStates,
+  onInputChange
+) => {
+  const hasCertificado = !!row.numeroCertificado;
+  const isCalibracao = osTipo === 'CAL';
+  const isGenerating = isLoading && instrumentoId === row.instrumento?.id;
+  const instrumentoIdKey = row.instrumento?.id;
+  const isEditing = editingStates?.[instrumentoIdKey]?.isEditing || false;
+  const inputValue = editingStates?.[instrumentoIdKey]?.value || '';
+  
+  if (isCalibracao) {
+    return <Typography variant="body2" color="text.secondary">—</Typography>;
+  }
+  
+  // If in editing mode (editing existing certificate or new one)
+  if (isEditing) {
+    const displayValue = inputValue || row.numeroCertificado || '';
+    
+    return (
+      <Box display="flex" alignItems="center" gap={1} sx={{ minWidth: 300 }}>
+        <TextField
+          size="small"
+          value={displayValue}
+          onChange={(e) => onInputChange(instrumentoIdKey, e.target.value)}
+          placeholder="Número de certificado"
+          disabled={isGenerating}
+          sx={{ flex: 1, minWidth: 200 }}
+          inputProps={{ style: { fontSize: '0.875rem' } }}
+          autoFocus
+        />
+        <Tooltip title="Salvar">
+          <IconButton
+            size="small"
+            onClick={() => onSalvarCertificado(instrumentoIdKey, displayValue)}
+            disabled={isGenerating || !displayValue.trim()}
+            color="primary"
+            aria-label="Salvar número de certificado"
+          >
+            {isGenerating ? (
+              <CircularProgress size={16} />
+            ) : (
+              <CheckCircleIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+        <Tooltip title="Cancelar">
+          <IconButton
+            size="small"
+            onClick={() => onCancelarEdicao(instrumentoIdKey, row.numeroCertificado)}
+            disabled={isGenerating}
+            color="inherit"
+            aria-label="Cancelar"
+          >
+            <CancelIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    );
+  }
+  
+  // If has certificate, show it with edit button
+  if (hasCertificado) {
+    return (
+      <Box display="flex" alignItems="center" gap={1}>
+        <Typography variant="body2">{row.numeroCertificado}</Typography>
+        <Tooltip title="Editar número de certificado">
+          <IconButton
+            size="small"
+            onClick={() => onEditarCertificado(instrumentoIdKey, row.numeroCertificado)}
+            disabled={isGenerating}
+            aria-label="Editar número de certificado"
+          >
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
+    );
+  }
+  
+  // No certificate: show button to generate and save directly
+  return (
+    <Box display="flex" alignItems="center" gap={1}>
+      <Tooltip title="Gerar e salvar número de certificado">
+        <IconButton
+          size="small"
+          onClick={() => onGerarCertificado(instrumentoIdKey)}
+          disabled={isGenerating}
+          aria-label="Gerar número de certificado"
+        >
+          {isGenerating ? (
+            <CircularProgress size={16} />
+          ) : (
+            <AddIcon fontSize="small" />
+          )}
+        </IconButton>
+      </Tooltip>
+    </Box>
+  );
+};
+
 // Layout configurations
 const OS_LAYOUTS = {
   calibracao: {
@@ -128,6 +244,12 @@ const OS_LAYOUTS = {
         key: 'tipo_servico',
         header: 'Tipo de Serviço',
         render: (row) => row.tipoServico ?? '—',
+      },
+      {
+        key: 'numero_certificado',
+        header: 'Número de Certificado',
+        render: (row, index, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange) => 
+          renderNumeroCertificado(row, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange),
       },
       {
         key: 'observacoes',
@@ -211,6 +333,12 @@ const OS_LAYOUTS = {
         header: 'Observação',
         render: (row) => row.observacao ?? '—',
       },
+      {
+        key: 'numero_certificado',
+        header: 'Número de Certificado',
+        render: (row, index, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange) => 
+          renderNumeroCertificado(row, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange),
+      },
     ],
     footerFields: [
       { label: 'Data', path: 'dataCriacao', formatter: formatDate },
@@ -253,6 +381,12 @@ const OS_LAYOUTS = {
         header: 'Observação',
         render: (row) => row.observacao ?? '—',
       },
+      {
+        key: 'numero_certificado',
+        header: 'Número de Certificado',
+        render: (row, index, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange) => 
+          renderNumeroCertificado(row, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange),
+      },
     ],
     footerFields: [
       { label: 'Data de Liberação dos Instrumentos', path: 'dataLiberacaoInstrumentos', formatter: formatDate },
@@ -290,6 +424,12 @@ const OS_LAYOUTS = {
         header: 'Observação',
         render: (row) => row.observacao ?? '—',
       },
+      {
+        key: 'numero_certificado',
+        header: 'Número de Certificado',
+        render: (row, index, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange) => 
+          renderNumeroCertificado(row, osTipo, onGerarCertificado, onEditarCertificado, onSalvarCertificado, onCancelarEdicao, isLoading, instrumentoId, editingStates, onInputChange),
+      },
     ],
     footerFields: [
       { label: 'Data de Liberação da Calibração', path: 'dataLiberacaoCalibracao', formatter: formatDate },
@@ -316,8 +456,24 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     ordemServico?.id,
     { enabled: open && !!ordemServico?.id }
   );
-  const { mutateUpdateStatus, isLoadingUpdateStatus } = useOrdemServicoMutations();
-
+  const { 
+    mutateUpdateStatus, 
+    isLoadingUpdateStatus,
+    mutateGerarCertificado,
+    mutateGerarCertificadoAsync,
+    isLoadingGerarCertificado,
+  } = useOrdemServicoMutations();
+  const [generatingCertificadoId, setGeneratingCertificadoId] = useState(null);
+  const [editingStates, setEditingStates] = useState({}); // { instrumentoId: { isEditing: bool, value: string } }
+  
+  // Clear editing states when dialog closes
+  useEffect(() => {
+    if (!open) {
+      setEditingStates({});
+      setGeneratingCertificadoId(null);
+    }
+  }, [open]);
+  
   if (!osDetails) {
     return (
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
@@ -346,7 +502,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
       </Dialog>
     );
   }
-
+  
   const layoutKey = getOsLayoutKey(osDetails);
   const layout = OS_LAYOUTS[layoutKey] || OS_LAYOUTS.calibracao;
   const items = getOsItems(osDetails);
@@ -395,6 +551,85 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
 
   const handleEditSaved = () => {
     refetch();
+  };
+
+  const handleGerarCertificado = (instrumentoId) => {
+    if (!osDetails?.id || !instrumentoId) return;
+    
+    setGeneratingCertificadoId(instrumentoId);
+    mutateGerarCertificado(
+      { osId: osDetails.id, instrumentoId },
+      {
+        onSuccess: () => {
+          refetch();
+          setGeneratingCertificadoId(null);
+        },
+        onError: () => {
+          setGeneratingCertificadoId(null);
+        },
+      }
+    );
+  };
+
+  const handleEditarCertificado = (instrumentoId, currentValue) => {
+    setEditingStates(prev => ({
+      ...prev,
+      [instrumentoId]: {
+        isEditing: true,
+        value: currentValue || ''
+      }
+    }));
+  };
+
+  const handleInputChange = (instrumentoId, value) => {
+    setEditingStates(prev => ({
+      ...prev,
+      [instrumentoId]: {
+        ...prev[instrumentoId],
+        value: value
+      }
+    }));
+  };
+
+  const handleSalvarCertificado = async (instrumentoId, numeroCertificado) => {
+    if (!osDetails?.id || !instrumentoId || !numeroCertificado?.trim()) return;
+    
+    setGeneratingCertificadoId(instrumentoId);
+    
+    try {
+      // Update certificate number using the OS endpoint
+      const { axios } = await import('../../api');
+      await axios.patch(
+        `/ordens-servico/${osDetails.id}/atualizar_certificado/`,
+        {
+          instrumento_id: instrumentoId,
+          numero_certificado: numeroCertificado.trim()
+        }
+      );
+      
+      // Success: clear editing state
+      setEditingStates(prev => {
+        const newData = { ...prev };
+        delete newData[instrumentoId];
+        return newData;
+      });
+      setGeneratingCertificadoId(null);
+      
+      // Refresh data
+      refetch();
+    } catch (error) {
+      setGeneratingCertificadoId(null);
+      // Keep editing state on error so user can retry
+    }
+  };
+
+  const handleCancelarEdicao = (instrumentoId, originalValue) => {
+    // Clear editing state, return to original value
+    setEditingStates(prev => {
+      const newData = { ...prev };
+      delete newData[instrumentoId];
+      return newData;
+    });
   };
 
   const currentStatus = osDetails?.status || 'AR';
@@ -476,7 +711,19 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
                       <TableRow key={row.id || index}>
                         {layout.columns.map((col) => (
                           <TableCell key={col.key}>
-                            {col.render(row, index)}
+                            {col.render(
+                              row, 
+                              index, 
+                              osDetails?.tipoOs,
+                              handleGerarCertificado,
+                              handleEditarCertificado,
+                              handleSalvarCertificado,
+                              handleCancelarEdicao,
+                              isLoadingGerarCertificado,
+                              generatingCertificadoId,
+                              editingStates,
+                              handleInputChange
+                            )}
                           </TableCell>
                         ))}
                       </TableRow>

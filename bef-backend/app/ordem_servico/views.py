@@ -222,27 +222,19 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             "nova_os_numero": nova_os.numero if not nova_os_id else OrdemServico.objects.get(id=nova_os_id).numero
         })
     
-    @action(detail=True, methods=['POST'], permission_classes=[IsAuthenticated])
-    def gerar_certificado(self, request, pk=None):
+    @action(detail=True, methods=['GET'], permission_classes=[IsAuthenticated])
+    def preview_certificado(self, request, pk=None):
         """
-        Generate certificate number for an instrument in this OS.
+        Get preview of the next certificate number for an instrument without persisting it.
         
-        Request body:
-        {
-            "instrumento_id": 123
-        }
+        Query params:
+        - instrumento_id: ID of the instrument
         
-        For calibration OS, certificate is auto-generated on OS creation.
-        For other OS types, this endpoint generates it manually.
+        Returns the certificate number that would be assigned if confirmed.
+        This is a read-only operation that does not modify the database.
         """
-        if not request.user.is_staff:
-            return Response(
-                {"detail": "Acesso negado."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
         os = self.get_object()
-        instrumento_id = request.data.get('instrumento_id')
+        instrumento_id = request.query_params.get('instrumento_id')
         
         if not instrumento_id:
             return Response(
@@ -261,25 +253,180 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Generate certificate number
+        # Generate certificate number using same logic as automatic generation
         numero_certificado = f"{os.numero}-{instrumento_os.item:03d}"
         
-        # Check uniqueness
+        # Check if this number is already taken
         from instrumentos.models import InstrumentoDoCliente
-        if InstrumentoDoCliente.objects.filter(
+        is_available = not InstrumentoDoCliente.objects.filter(
             numero_certificado=numero_certificado
-        ).exclude(id=instrumento_os.instrumento_id).exists():
-            return Response(
-                {"detail": f"Número de certificado {numero_certificado} já existe."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        instrumento_os.instrumento.numero_certificado = numero_certificado
-        instrumento_os.instrumento.save(update_fields=['numero_certificado'])
+        ).exclude(id=instrumento_os.instrumento_id).exists()
         
         return Response({
             "numero_certificado": numero_certificado,
-            "instrumento_id": instrumento_id
+            "instrumento_id": int(instrumento_id),
+            "disponivel": is_available,
+            "ja_atribuido": instrumento_os.instrumento.numero_certificado == numero_certificado
+        })
+    
+    @action(detail=True, methods=['POST'], permission_classes=[IsAuthenticated])
+    def gerar_certificado(self, request, pk=None):
+        """
+        Generate and persist certificate number for an instrument in this OS.
+        
+        Request body:
+        {
+            "instrumento_id": 123
+        }
+        
+        Business Rules:
+        - For CALIBRACAO OS: certificate is auto-generated on OS creation (this endpoint is for manual override if needed)
+        - For other OS types: certificate must be generated manually via this endpoint
+        - Uses same sequential numbering logic as automatic generation: {os.numero}-{item:03d}
+        - Ensures sequence consistency and uniqueness
+        """
+        if not request.user.is_staff:
+            return Response(
+                {"detail": "Acesso negado."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        os = self.get_object()
+        instrumento_id = request.data.get('instrumento_id')
+        
+        if not instrumento_id:
+            return Response(
+                {"detail": "instrumento_id é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check uniqueness with transaction to prevent race conditions
+        from instrumentos.models import InstrumentoDoCliente
+        with transaction.atomic():
+            try:
+                # Use select_for_update inside transaction to lock the row
+                instrumento_os = InstrumentoOS.objects.select_for_update().get(
+                    ordem_servico=os,
+                    instrumento_id=instrumento_id
+                )
+            except InstrumentoOS.DoesNotExist:
+                return Response(
+                    {"detail": "Instrumento não encontrado nesta ordem de serviço."},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Generate certificate number using same logic as automatic generation
+            # Format: {os.numero}-{item:03d} - ensures sequence consistency
+            numero_certificado = f"{os.numero}-{instrumento_os.item:03d}"
+            
+            # Use select_for_update to lock the row and prevent concurrent modifications
+            existing = InstrumentoDoCliente.objects.select_for_update().filter(
+                numero_certificado=numero_certificado
+            ).exclude(id=instrumento_os.instrumento_id).first()
+            
+            if existing:
+                return Response(
+                    {
+                        "detail": f"Número de certificado {numero_certificado} já está em uso pelo instrumento {existing.tag or existing.id}.",
+                        "numero_certificado": numero_certificado,
+                        "instrumento_conflito": existing.id
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if instrument already has this certificate number
+            if instrumento_os.instrumento.numero_certificado == numero_certificado:
+                return Response({
+                    "numero_certificado": numero_certificado,
+                    "instrumento_id": instrumento_id,
+                    "message": "Número de certificado já atribuído a este instrumento."
+                })
+            
+            # Persist the certificate number
+            instrumento_os.instrumento.numero_certificado = numero_certificado
+            instrumento_os.instrumento.save(update_fields=['numero_certificado'])
+        
+        return Response({
+            "numero_certificado": numero_certificado,
+            "instrumento_id": instrumento_id,
+            "message": "Número de certificado gerado e atribuído com sucesso."
+        })
+    
+    @action(detail=True, methods=['PATCH'], permission_classes=[IsAuthenticated])
+    def atualizar_certificado(self, request, pk=None):
+        """
+        Update certificate number for an instrument in this OS.
+        
+        Request body:
+        {
+            "instrumento_id": 123,
+            "numero_certificado": "2024-001-OS-CAL-001-001"
+        }
+        
+        This endpoint allows updating the certificate number to a custom value.
+        Useful for editing certificate numbers after they've been generated.
+        """
+        if not request.user.is_staff:
+            return Response(
+                {"detail": "Acesso negado."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        os = self.get_object()
+        instrumento_id = request.data.get('instrumento_id')
+        numero_certificado = request.data.get('numero_certificado')
+        
+        if not instrumento_id:
+            return Response(
+                {"detail": "instrumento_id é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if not numero_certificado:
+            return Response(
+                {"detail": "numero_certificado é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            instrumento_os = InstrumentoOS.objects.get(
+                ordem_servico=os,
+                instrumento_id=instrumento_id
+            )
+        except InstrumentoOS.DoesNotExist:
+            return Response(
+                {"detail": "Instrumento não encontrado nesta ordem de serviço."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Validate and update certificate number
+        from instrumentos.models import InstrumentoDoCliente
+        numero_certificado = numero_certificado.strip()
+        
+        with transaction.atomic():
+            # Check if number is already in use by another instrument
+            existing = InstrumentoDoCliente.objects.select_for_update().filter(
+                numero_certificado=numero_certificado
+            ).exclude(id=instrumento_os.instrumento_id).first()
+            
+            if existing:
+                return Response(
+                    {
+                        "detail": f"Número de certificado {numero_certificado} já está em uso pelo instrumento {existing.tag or existing.id}.",
+                        "numero_certificado": numero_certificado,
+                        "instrumento_conflito": existing.id
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Update the certificate number
+            instrumento_os.instrumento.numero_certificado = numero_certificado
+            instrumento_os.instrumento.save(update_fields=['numero_certificado'])
+        
+        return Response({
+            "numero_certificado": numero_certificado,
+            "instrumento_id": instrumento_id,
+            "message": "Número de certificado atualizado com sucesso."
         })
     
     @action(detail=True, methods=['PATCH'], permission_classes=[IsAuthenticated])

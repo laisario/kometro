@@ -25,7 +25,7 @@ const useOrdemServico = (osId, options = {}) => {
       refetchInterval: false,
     }
   );
-
+  console.log(ordemServico, "ordemServico");
   return {
     ordemServico, 
     errorOrdemServico, 

@@ -59,7 +59,6 @@ function OSTable({
       />
     );
   }
-
   return (
     <Card>
       {title && <CardHeader sx={{ pb: 2 }} title={title} />}

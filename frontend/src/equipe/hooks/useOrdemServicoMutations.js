@@ -117,6 +117,48 @@ const useOrdemServicoMutations = () => {
     },
   });
 
+  // Preview certificate number (read-only, doesn't persist)
+  const previewCertificado = async ({ osId, instrumentoId }) => {
+    const response = await axios.get(
+      `/ordens-servico/${osId}/preview_certificado/`,
+      { params: { instrumento_id: instrumentoId } }
+    );
+    return response.data;
+  };
+
+  // Generate certificate for an instrument (persists to database)
+  const gerarCertificado = async ({ osId, instrumentoId }) => {
+    const response = await axios.post(
+      `/ordens-servico/${osId}/gerar_certificado/`,
+      { instrumento_id: instrumentoId }
+    );
+    return response.data;
+  };
+
+  const {
+    mutate: mutateGerarCertificado,
+    mutateAsync: mutateGerarCertificadoAsync,
+    isLoading: isLoadingGerarCertificado,
+  } = useMutation({
+    mutationFn: gerarCertificado,
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico', variables.osId] });
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      enqueueSnackbar('Número de certificado gerado e atribuído com sucesso!', {
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 'Falha ao gerar número de certificado. Tente novamente!';
+      
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
   return {
     mutateUpdateOS,
     mutateUpdateOSAsync,
@@ -127,6 +169,10 @@ const useOrdemServicoMutations = () => {
     isLoadingUpdateStatus,
     mutateCreateOS,
     isLoadingCreateOS,
+    previewCertificado,
+    mutateGerarCertificado,
+    mutateGerarCertificadoAsync,
+    isLoadingGerarCertificado,
   };
 };
 

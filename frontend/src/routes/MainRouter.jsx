@@ -74,7 +74,7 @@ export default function MainRouter() {
         <Route path="clientes" element={<ClientsPage />} />
         <Route path="cliente/:id" element={<ClientDetailsPage />} />
         <Route path="acessos" element={<UserAccessPage />} />
-        <Route path="equipe" element={<EquipePage />} />
+        <Route path="ordens-servico" element={<EquipePage />} />
         <Route path="eu" element={<MinhasOSPage />} />
       </Route>
 

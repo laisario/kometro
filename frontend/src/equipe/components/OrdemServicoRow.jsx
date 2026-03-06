@@ -39,7 +39,7 @@ function OrdemServicoRow({
     }
     onViewDetails(os);
   };
-
+ 
   // Get expiration display
   const getExpirationDisplay = () => {
     if (!os.dataExpiracao) {
