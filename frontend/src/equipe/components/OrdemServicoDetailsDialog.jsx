@@ -121,7 +121,7 @@ const renderNumeroCertificado = (
   const isEditing = editingStates?.[instrumentoIdKey]?.isEditing || false;
   const inputValue = editingStates?.[instrumentoIdKey]?.value || '';
   
-  if (isCalibracao) {
+  if (!hasCertificado) {
     return <Typography variant="body2" color="text.secondary">—</Typography>;
   }
   
