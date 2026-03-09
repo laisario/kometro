@@ -49,13 +49,13 @@ function OSTable({
     setPage(0);
   };
 
-  if (!hasOS) {
+  if (!hasOS && !isLoading) {
     return (
       <EmptyYet
         content="os"
         isMobile={isMobile}
-        showKaka={false}
-        customMessage={emptyMessage}
+        showKaka={true}
+        table={true}
       />
     );
   }

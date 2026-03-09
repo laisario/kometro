@@ -100,6 +100,16 @@ function EmptyYet({
         Ops, parece que não tem nenhum instrumento cadastrado nessa cliente. Que tal adicionar um?
       </Typography>
     ),
+    os: (
+      <>
+        <Typography variant="h6" color={theme.palette.info.main}>
+          Ainda não há ordens de serviço cadastradas.
+        </Typography>
+        <Typography variant="body1" color={theme.palette.info.main}>
+          As ordens de serviço aparecerão aqui quando forem criadas.
+        </Typography>
+      </>
+    ),
   };
 
   return (
