@@ -505,9 +505,22 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
 
     def get_instruments_available(self, proposal):
         cliente = self.context["request"].query_params.get("cliente")
-        instrumentos = InstrumentoDoCliente.objects.filter(cliente_id=cliente)
         if not cliente:
             return InstrumentoDoCliente.objects.none()
+
+        instrumentos = InstrumentoDoCliente.objects.filter(cliente_id=cliente).select_related(
+            'cliente',
+            'instrumento',
+            'setor',
+            'frequencia_calibracao',
+            'frequencia_checagem'
+        ).prefetch_related(
+            'normativos',
+            'criterios_aceitacao',
+            'pontos_de_calibracao',
+            'historico_posicoes',
+            'historico_setores'
+        )
 
         instrumentos = instrumentos.exclude(
             id__in=proposal.instrumentos.values_list("id", flat=True)
