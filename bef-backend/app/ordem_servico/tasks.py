@@ -3,6 +3,9 @@ from celery import shared_task
 from django.db import transaction
 
 logger = logging.getLogger(__name__)
+from propostas.models import Proposta
+from ordem_servico.models import OrdemServico
+from ordem_servico.utils import agrupar_instrumentos_os, criar_os_do_grupo
 
 
 @shared_task(bind=True, max_retries=3)
@@ -19,9 +22,6 @@ def criar_ordens_servico_proposta(self, proposta_id):
     - Service kind (calibracao / manutencao) - from proposal selection
     - Special case: if instrument is a scale (balança), group into OS Balanças
     """
-    from propostas.models import Proposta
-    from ordem_servico.models import OrdemServico
-    from ordem_servico.utils import agrupar_instrumentos_os, criar_os_do_grupo
     
     try:
         proposta = Proposta.objects.select_related('cliente').get(id=proposta_id)
@@ -48,24 +48,21 @@ def criar_ordens_servico_proposta(self, proposta_id):
             logger.warning(f"No instruments found for proposta {proposta_id}")
             return {"status": "no_instruments"}
         
-        # Create default selections from proposta.local
         instrumentos_data = {}
         for instrumento in instrumentos:
             instrumentos_data[instrumento.id] = {
                 'instrumento': instrumento,
                 'service_kind': 'calibracao',  # Default
                 'local': proposta.local,
-                'tipo_servico': instrumento.instrumento.tipo_de_servico or 'NA',
+                'tipo_servico': instrumento.instrumento.tipo_de_servico or '-',
             }
     
-    # Group instruments
     grupos = agrupar_instrumentos_os(list(instrumentos_data.values()))
     
     if not grupos:
         logger.warning(f"No groups created for proposta {proposta_id}")
         return {"status": "no_groups"}
     
-    # Create OS for each group
     os_created = []
     try:
         with transaction.atomic():
