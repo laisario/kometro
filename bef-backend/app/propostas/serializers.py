@@ -7,7 +7,10 @@ from clientes.serializers import ClienteSerializer, UserSerializer
 from enderecos.models import Endereco
 from enderecos.serializers import ReadEnderecoSerializer, WriteEnderecoSerializer
 from instrumentos.models import InstrumentoDoCliente, Local
-from instrumentos.serializers import InstrumentoDoClienteReadSerializer
+from instrumentos.serializers import (
+    InstrumentoDoClienteReadSerializer,
+    InstrumentoDoClienteAvailableSerializer
+)
 from .models import Proposta, Revisao, Anexo, PropostaInstrumento
 from decimal import Decimal, InvalidOperation
 
@@ -506,32 +509,25 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
     def get_instruments_available(self, proposal):
         cliente = self.context["request"].query_params.get("cliente")
         if not cliente:
-            return InstrumentoDoCliente.objects.none()
+            return []
 
+        # Query otimizada - apenas campos essenciais para listagem
         instrumentos = InstrumentoDoCliente.objects.filter(cliente_id=cliente).select_related(
-            'cliente',
             'instrumento',
-            'instrumento__tipo_de_instrumento',
-            'instrumento__capacidade_de_medicao',
-            'instrumento__procedimento_relacionado',
-            'setor',
-            'setor__setor_pai',
-            'frequencia_calibracao',
-            'frequencia_checagem'
-        ).prefetch_related(
-            'normativos',
-            'criterios_aceitacao',
-            'pontos_de_calibracao',
-            'historico_posicoes',
-            'historico_setores',
-            'calibracoes'
+            'instrumento__tipo_de_instrumento'
+        ).only(
+            'id',
+            'tag',
+            'numero_de_serie',
+            'instrumento',
+            'instrumento__tipo_de_servico',
         )
 
         instrumentos = instrumentos.exclude(
             id__in=proposal.instrumentos.values_list("id", flat=True)
         )
 
-        return InstrumentoDoClienteReadSerializer(instrumentos, many=True).data
+        return InstrumentoDoClienteAvailableSerializer(instrumentos, many=True).data
 
     def get_total_com_desconto(self, proposta):
         try:

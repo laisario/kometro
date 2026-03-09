@@ -349,6 +349,29 @@ class SetorCalibracaoSerializer(serializers.ModelSerializer):
     
 
 
+class TipoInstrumentoSimpleSerializer(serializers.ModelSerializer):
+    """Serializer leve para tipo de instrumento - apenas campos essenciais"""
+    class Meta:
+        model = TipoInstrumento
+        fields = ["id", "descricao", "fabricante", "modelo"]
+
+
+class InstrumentoDoClienteAvailableSerializer(serializers.ModelSerializer):
+    """Serializer leve para lista de instrumentos disponíveis"""
+    tipo_instrumento = TipoInstrumentoSimpleSerializer(source="instrumento.tipo_de_instrumento", read_only=True)
+    tipo_servico = serializers.CharField(source="instrumento.tipo_de_servico", read_only=True)
+    
+    class Meta:
+        model = InstrumentoDoCliente
+        fields = [
+            "id",
+            "tag",
+            "numero_de_serie",
+            "tipo_instrumento",
+            "tipo_servico",
+        ]
+
+
 class CriterioAceitacaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = CriterioAceitacao
@@ -624,10 +647,14 @@ class InstrumentoDoClienteReadSerializer(serializers.ModelSerializer):
         )
 
     def get_checagens(self, obj):
-        return list(obj.calibracoes.filter(checagem=True).values_list("id", flat=True))
+        # Usar list comprehension ao invés de .filter() quando prefetch_related foi usado
+        # Isso evita problemas com querysets pré-carregados
+        return [cal.id for cal in obj.calibracoes.all() if cal.checagem is True]
     
     def get_calibracoes(self, obj):
-        return list(obj.calibracoes.filter(checagem=False).values_list("id", flat=True))
+        # Usar list comprehension ao invés de .filter() quando prefetch_related foi usado
+        # Isso evita problemas com querysets pré-carregados
+        return [cal.id for cal in obj.calibracoes.all() if cal.checagem is False]
 
 class CalibracaoReadSerializer(serializers.ModelSerializer):
     certificados = CertificadoSerializer(many=True)
