@@ -511,7 +511,11 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
         instrumentos = InstrumentoDoCliente.objects.filter(cliente_id=cliente).select_related(
             'cliente',
             'instrumento',
+            'instrumento__tipo_de_instrumento',
+            'instrumento__capacidade_de_medicao',
+            'instrumento__procedimento_relacionado',
             'setor',
+            'setor__setor_pai',
             'frequencia_calibracao',
             'frequencia_checagem'
         ).prefetch_related(
@@ -519,7 +523,8 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
             'criterios_aceitacao',
             'pontos_de_calibracao',
             'historico_posicoes',
-            'historico_setores'
+            'historico_setores',
+            'calibracoes'
         )
 
         instrumentos = instrumentos.exclude(
