@@ -512,15 +512,10 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
             return []
 
         # Query otimizada - apenas campos essenciais para listagem
+        # select_related já otimiza fazendo JOINs, não precisa de .only()
         instrumentos = InstrumentoDoCliente.objects.filter(cliente_id=cliente).select_related(
             'instrumento',
             'instrumento__tipo_de_instrumento'
-        ).only(
-            'id',
-            'tag',
-            'numero_de_serie',
-            'instrumento',
-            'instrumento__tipo_de_servico',
         )
 
         instrumentos = instrumentos.exclude(
