@@ -163,7 +163,11 @@ class WritePropostaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Proposta
-        fields = ("informacoes_adicionais", "instrumentos")
+        fields = (
+            "informacoes_adicionais",
+            "instrumentos",
+            "tipo_servico",
+        )
 
     def validate(self, data):
         user = self.context["request"].user
@@ -278,7 +282,8 @@ class ReadPropostaSerializer(serializers.ModelSerializer):
             "revisoes",
             "anexos",
             "total_com_desconto",
-            "local"
+            "local",
+            "tipo_servico",
         )
 
     def get_total_com_desconto(self, proposta):
@@ -326,7 +331,8 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
             "total",
             "desconto_percentual",
             "total_com_desconto",
-            "local"
+            "local",
+            "tipo_servico",
         )
 
         extra_kwargs = {
@@ -503,7 +509,8 @@ class ReadPropostaAdminSerializer(serializers.ModelSerializer):
             "nf_entrada",
             "nf",
             "observacao",
-            "local"
+            "local",
+            "tipo_servico",
         )
 
     def get_instruments_available(self, proposal):

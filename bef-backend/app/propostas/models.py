@@ -94,6 +94,15 @@ class PropostaInstrumento(models.Model):
 
 
 class Proposta(models.Model):
+    # Service type for proposal level (manual override)
+    TIPO_SERVICO_ACREDITADO = "acreditado"
+    TIPO_SERVICO_NAO_ACREDITADO = "nao_acreditado"
+
+    TIPO_SERVICO_CHOICES = (
+        (TIPO_SERVICO_ACREDITADO, _("Acreditado")),
+        (TIPO_SERVICO_NAO_ACREDITADO, _("Não acreditado")),
+    )
+
     cliente = models.ForeignKey(
         "clientes.Cliente", on_delete=models.CASCADE, related_name="propostas"
     )
@@ -169,6 +178,15 @@ class Proposta(models.Model):
         choices=Local.choices,
         default=Local.PERMANENTE,
         max_length=1,
+    )
+    # Manual service type for the whole proposal (optional, overrides inference)
+    tipo_servico = models.CharField(
+        max_length=20,
+        choices=TIPO_SERVICO_CHOICES,
+        null=True,
+        blank=True,
+        verbose_name="Tipo de serviço (proposta)",
+        help_text="Classificação manual da proposta: acreditado ou não acreditado.",
     )
 
     def generate_numero(self):
@@ -281,3 +299,56 @@ class Proposta(models.Model):
         #     )
 
         #     super().save(*args, **kwargs)
+
+    # --- Service type resolution helpers ---
+
+    def infer_tipo_servico_from_instrumentos(self) -> str:
+        """
+        Infer proposal service type based on its instruments.
+
+        Rules:
+        - If at least one instrument linked to the proposal is accredited (TipoServico.ACREDITADO),
+          return TIPO_SERVICO_ACREDITADO.
+        - Otherwise, return TIPO_SERVICO_NAO_ACREDITADO.
+
+        This uses efficient EXISTS-based queries and supports both the new
+        PropostaInstrumento relation and the legacy many-to-many 'instrumentos'.
+        """
+        from instrumentos.models import TipoServico as InstrumentoTipoServico
+
+        # Check selections table first (new structure)
+        has_accredited_selection = self.instrumentos_selecoes.filter(
+            instrumento__instrumento__tipo_de_servico=InstrumentoTipoServico.ACREDITADO
+        ).exists()
+
+        if has_accredited_selection:
+            return self.TIPO_SERVICO_ACREDITADO
+
+        # Fallback to legacy M2M if needed
+        has_accredited_instrument = self.instrumentos.filter(
+            instrumento__tipo_de_servico=InstrumentoTipoServico.ACREDITADO
+        ).exists()
+
+        if has_accredited_instrument:
+            return self.TIPO_SERVICO_ACREDITADO
+
+        return self.TIPO_SERVICO_NAO_ACREDITADO
+
+    def resolve_tipo_servico_efetivo(self) -> str:
+        """
+        Resolve effective service type for the proposal.
+
+        Priority:
+        1. Infer from instruments (infer_tipo_servico_from_instrumentos)
+        2. If self.tipo_servico is filled, override the inferred value.
+        """
+        inferred = self.infer_tipo_servico_from_instrumentos()
+        return self.tipo_servico or inferred
+
+    def should_apply_seal(self) -> bool:
+        """
+        Decide if the PDF seal must be applied for this proposal.
+
+        Only apply seal when effective service type is 'acreditado'.
+        """
+        return self.resolve_tipo_servico_efetivo() == self.TIPO_SERVICO_ACREDITADO

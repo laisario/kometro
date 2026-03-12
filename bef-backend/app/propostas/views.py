@@ -64,11 +64,15 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
 
                 # Criar revisão sem PDF inicialmente
                 rev = Revisao.objects.create(proposta=proposta)
-                
+
                 # Gerar PDF de forma síncrona (espera a conclusão)
                 total_com_desconto = serializer.data.get("total_com_desconto", 0)
+
+                # Decidir aplicação do selo com base no tipo de serviço efetivo da proposta
+                aplicar_selo = proposta.should_apply_seal()
+
                 # Chamar a task diretamente para execução síncrona
-                gerar_pdf_proposta(proposta.id, rev.id, total_com_desconto)
+                gerar_pdf_proposta(proposta.id, rev.id, total_com_desconto, aplicar_selo)
 
             return response.Response(
                 {"message": "Proposta elaborada com sucesso!"},

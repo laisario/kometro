@@ -68,8 +68,8 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
             const serviceKind = instrument.service_kind || 'calibracao';
             const local = instrument.local || 'P';
             const instrumentErrors = errors?.[instrument.id] || {};
-            const tipoServico = instrument?.instrumento?.tipoDeInstrumento?.tipoDeServico || 'NA';
-
+            const tipoServico = instrument?.instrumento?.tipoDeInstrumento?.tipoDeServico;
+            console.log(instrument);
             return (
               <TableRow key={instrument.id}>
                 <TableCell>
@@ -79,7 +79,7 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                     </Typography>
                     {instrument.numeroDeSerie && (
                       <Typography variant="caption" color="text.secondary">
-                        S/N: {instrument.numeroDeSerie}
+                        N/S: {instrument.numeroDeSerie}
                       </Typography>
                     )}
                     {instrument.instrumento?.tipoDeInstrumento?.descricao && (

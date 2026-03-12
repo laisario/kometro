@@ -128,7 +128,7 @@ function ProposalsPage() {
                           />
                           <TableBody sx={{ overflowX: 'auto' }}>
                             {allProposals?.results?.map((row, index) => {
-                              const { id, dataCriacao, status, cliente, numero, total } = row;
+                              const { id, dataCriacao, status, cliente, numero, total, tipoServico } = row;
                               const isItemSelected = isSelected(row.id);
                               return (
                                 <TableRow

@@ -182,6 +182,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
       diasUteis: formValues?.diasUteis || null,
       descontoPercentual: formValues?.descontoPercentual || null,
       local: formValues?.local || null,
+      tipoServico: formValues?.tipoServico || null,
     };
 
     if (formValues?.enderecoDeEntrega === 'enderecoCadastrado') {

@@ -34,6 +34,16 @@ const ProposalDetailsPreview = ({ data, admin, isMobile }) => {
          />
         <CardContent>
           <Stack spacing={1.5}>
+            {!!data?.tipoServico && (
+              <Box display="flex" alignItems="center" gap={1}>
+                <Typography variant="body2" color="text.secondary" sx={{ minWidth: '140px' }}>
+                  Tipo de serviço:
+                </Typography>
+                <Typography variant="body2">
+                  {data?.tipoServico === 'acreditado' ? 'Acreditado' : 'Não acreditado'}
+                </Typography>
+              </Box>
+            )}
             {+(data?.totalComDesconto || data?.total) > 0 && (
               <Box display="flex" alignItems="center" gap={1}>
                 <Typography variant="subtitle1" fontWeight="600" color="primary">

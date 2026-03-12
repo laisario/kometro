@@ -69,7 +69,7 @@ def enviar_proposta_cliente_email(proposta_id, emails):
 
 
 @shared_task
-def gerar_pdf_proposta(proposta_id, revisao_id, total_com_desconto):
+def gerar_pdf_proposta(proposta_id, revisao_id, total_com_desconto, aplicar_selo: bool):
     """
     Task assíncrona para gerar o PDF da proposta.
     """
@@ -79,7 +79,7 @@ def gerar_pdf_proposta(proposta_id, revisao_id, total_com_desconto):
         
         instrumentos = proposta.instrumentos.all()
         logo = static("logo.png")
-        selo = static("selo-acreditado-inmetro.jpg")
+        selo = static("selo-acreditado-inmetro.jpg") if aplicar_selo else None
 
         pdf = render_to_pdf(
             f"{os.path.dirname(__file__)}/templates/proposta.html",
