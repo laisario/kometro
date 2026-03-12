@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import OrdemServico, InstrumentoOS
+from .models import OrdemServico, InstrumentoOS, StatusOS, TipoOS
 from instrumentos.serializers import InstrumentoDoClienteListReadSerializer
 
 
@@ -75,6 +75,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'data_liberacao_instrumentos',
             'data_calibracao_instrumentos',
             'data_liberacao_calibracao',
+            'os_recebimento_dos_instruementos',
         ]
         read_only_fields = ['id', 'numero', 'proposta', 'data_criacao']
     
@@ -106,6 +107,12 @@ class OrdemServicoDetailSerializer(OrdemServicoSerializer):
         fields = OrdemServicoSerializer.Meta.fields + ['instrumentos_os']
 
 
+class OrdemServicoStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrdemServico
+        fields = ['status']
+
+
 class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrdemServico
@@ -117,12 +124,27 @@ class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
             'data_liberacao_instrumentos',
             'data_calibracao_instrumentos',
             'data_liberacao_calibracao',
+            'os_recebimento_dos_instruementos',
         ]
     
     def validate_status(self, value):
-        instance = self.instance
-        if instance and not instance.pode_transicionar_status(value):
-            raise serializers.ValidationError(
-                f"Cannot transition from {instance.get_status_display()} to {instance.StatusOS(value).label}"
-            )
-        return value
+        """
+        Coerce any incoming status value to EM_ANDAMENTO.
+        This ensures that API consumers cannot set a different status via update.
+        """
+        return StatusOS.EM_ANDAMENTO
+    
+
+    def update(self, instance, validated_data):
+        """
+        On any update (PUT/PATCH), force status to EM_ANDAMENTO regardless
+        of the previous status or the payload.
+        """
+        # Remove status from validated_data to avoid ModelSerializer
+        # applying a different value before we enforce EM_ANDAMENTO.
+        validated_data.pop('status', None)
+        
+        instance = super().update(instance, validated_data)
+        instance.status = StatusOS.EM_ANDAMENTO
+        instance.save(update_fields=['status'])
+        return instance

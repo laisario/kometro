@@ -56,6 +56,7 @@ const OS_FORM_FIELDS_BY_TYPE = {
       'responsavel',
       'dataExpiracao',
       'dataLiberacaoInstrumentos',
+      'osRecebimentoDosInstruementos',
     ],
   },
   externa: {
@@ -76,6 +77,7 @@ const FIELD_LABELS = {
   dataLiberacaoInstrumentos: 'Data de Liberação dos Instrumentos',
   dataCalibracaoInstrumentos: 'Data de Calibração dos Instrumentos',
   dataLiberacaoCalibracao: 'Data de Liberação da Calibração',
+  osRecebimentoDosInstruementos: 'OS de Recebimento dos Instrumentos',
 };
 
 // Tipo OS options for create mode
@@ -138,6 +140,7 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
         dataLiberacaoCalibracao: os.dataLiberacaoCalibracao
           ? dayjs(os.dataLiberacaoCalibracao)
           : null,
+        osRecebimentoDosInstruementos: os.osRecebimentoDosInstruementos || '',
       });
     } else if (mode === 'create' && open) {
       form.reset({
@@ -148,6 +151,7 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
         dataLiberacaoInstrumentos: null,
         dataCalibracaoInstrumentos: null,
         dataLiberacaoCalibracao: null,
+        osRecebimentoDosInstruementos: '',
       });
     }
   }, [mode, os, open, form, defaultTipoOs, users]);
@@ -177,6 +181,9 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
     }
     if (visibleFields.includes('dataLiberacaoCalibracao') && data.dataLiberacaoCalibracao) {
       payload.dataLiberacaoCalibracao = dayjs(data.dataLiberacaoCalibracao).format('YYYY-MM-DD');
+    }
+    if (visibleFields.includes('osRecebimentoDosInstruementos') && data.osRecebimentoDosInstruementos) {
+        payload.osRecebimentoDosInstruementos = data.osRecebimentoDosInstruementos;
     }
 
     if (mode === 'edit' && os?.id) {
@@ -345,6 +352,17 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
                     fullWidth: true,
                   },
                 }}
+              />
+            )}
+
+            {/* OS de Recebimento dos Instrumentos */}
+            {visibleFields.includes('osRecebimentoDosInstruementos') && (
+              <TextField
+                label={FIELD_LABELS.osRecebimentoDosInstruementos}
+                value={form.watch('osRecebimentoDosInstruementos')}
+                onChange={(e) => form.setValue('osRecebimentoDosInstruementos', e.target.value)}
+                fullWidth
+                variant="outlined"
               />
             )}
           </Box>

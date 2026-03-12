@@ -78,6 +78,12 @@ class OrdemServico(models.Model):
         blank=True,
         verbose_name="Data liberação da calibração"
     )  # Serviços Externos
+    os_recebimento_dos_instruementos = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        verbose_name="OS de recebimento dos instrumentos (Manutenção)"
+    )  # Manutenção
     numero = models.CharField(
         max_length=25,
         unique=True,

@@ -49,9 +49,8 @@ const useOrdemServicoMutations = () => {
     },
   });
 
-  // Update OS status
   const updateStatus = async ({ id, status }) => {
-    const response = await axios.patch(`/ordens-servico/${id}/`, { status });
+    const response = await axios.patch(`/ordens-servico/${id}/atualizar-status/`, { status });
     return response.data;
   };
 

@@ -11,7 +11,8 @@ from .models import OrdemServico, InstrumentoOS, TipoOS, StatusOS
 from .serializers import (
     OrdemServicoSerializer, 
     OrdemServicoDetailSerializer,
-    OrdemServicoUpdateSerializer
+    OrdemServicoUpdateSerializer,
+    OrdemServicoStatusUpdateSerializer,
 )
 
 
@@ -125,6 +126,32 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             {"detail": "Ordens de serviço não podem ser excluídas."},
             status=status.HTTP_405_METHOD_NOT_ALLOWED
         )
+    
+    @action(detail=True, methods=['PATCH'], url_path='atualizar-status', permission_classes=[IsAuthenticated])
+    def atualizar_status(self, request, pk=None):
+        """
+        Update only the status of an OS, allowing any status value (AR, EA, RE, CA).
+        This endpoint is used by the frontend status chip/select and intentionally
+        bypasses the automatic 'EM_ANDAMENTO' enforcement from OrdemServicoUpdateSerializer.
+        """
+        if not request.user.groups.filter(name='gerente').exists():
+            return Response(
+                {"detail": "Apenas gerentes podem editar o status das ordens de serviço."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        os = self.get_object()
+        serializer = OrdemServicoStatusUpdateSerializer(os, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            {
+                "message": "Status da ordem de serviço atualizado com sucesso.",
+                "status": os.status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
     
     @action(detail=True, methods=['POST'], permission_classes=[IsAuthenticated])
     def reallocar(self, request, pk=None):

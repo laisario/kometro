@@ -121,10 +121,6 @@ const renderNumeroCertificado = (
   const isEditing = editingStates?.[instrumentoIdKey]?.isEditing || false;
   const inputValue = editingStates?.[instrumentoIdKey]?.value || '';
   
-  if (!hasCertificado) {
-    return <Typography variant="body2" color="text.secondary">—</Typography>;
-  }
-  
   // If in editing mode (editing existing certificate or new one)
   if (isEditing) {
     const displayValue = inputValue || row.numeroCertificado || '';
@@ -357,7 +353,7 @@ const OS_LAYOUTS = {
       { label: 'Cliente', path: 'clienteNome' },
       { label: 'CNPJ', path: "clienteCnpj" }, 
       { label: 'Número Proposta', path: 'propostaNumero' },
-      { label: 'OS de Recebimento dos Instrumentos', path: null, static: true }, // Static field
+      { label: 'OS de Recebimento dos Instrumentos', path: 'osRecebimentoDosInstruementos' },
     ],
     columns: [
       {
