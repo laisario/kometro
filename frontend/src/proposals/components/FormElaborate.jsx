@@ -35,6 +35,7 @@ import Iconify from '../../components/Iconify';
 import FormAdress from '../../auth/components/FormAddress';
 import { truncateString } from '../../utils/formatString';
 import useUsers from '../../auth/hooks/useUsers';
+import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
 
 
 function FormElaborate(props) {
@@ -48,8 +49,27 @@ function FormElaborate(props) {
   } = props;
   const [anexos, setAnexos] = useState([])
   const [loadingAnexo, setLoadingAnexo] = useState(false)
-  const [total, setTotal] = useState(0)
   const [totalComDesconto, setTotalComDesconto] = useState(data?.totalComDesconto);
+
+  const [items, setItems] = useState([]);
+  console.log(items, "ITEMS")
+  const total = items.reduce((acc, it) => acc + (Number(it.preco) || 0), 0);
+
+  useEffect(() => {
+    const instrumentos = data?.instrumentos || [];
+    const selecoes = data?.instrumentosSelecoes || data?.instrumentos_selecoes || [];
+    if (instrumentos.length) {
+      setItems(instrumentos.map((inst) => {
+        const sel = selecoes.find(s => (s.instrumentoId ?? s.instrumento_id) === inst.id);
+        const local = sel?.local ?? 'P';
+        const serviceKind = sel?.serviceKind ?? sel?.service_kind ?? 'calibracao';
+        const preco = sel?.preco != null ? Number(sel.preco) : null;
+        return { ...inst, local, service_kind: serviceKind, preco };
+      }));
+    } else {
+      setItems([]);
+    }
+  }, [data?.id, data?.instrumentos, data?.instrumentosSelecoes, data?.instrumentos_selecoes, open]);
 
   const defaultValues = useMemo(() => ({
     numeroProposta: data?.numero || '',
@@ -60,7 +80,7 @@ function FormElaborate(props) {
     prazoDePagamento: data?.prazoDePagamento || null,
     responsavel: data?.responsavel?.id || null,
     diasUteis: data?.diasUteis || null,
-    total: total || 0,
+    total: total,
     descontoPercentual: Number(data?.descontoPercentual).toFixed(0) || 0,
     local: data?.local || 'P',
     tipoServico: data?.tipoServico || '',
@@ -82,20 +102,6 @@ function FormElaborate(props) {
     local,
     tipoServico,
   } = useWatch({ control: form.control })
-  useEffect(() => {
-    const getValue = (item) => {
-      if (item?.precoAlternativoCalibracao) {
-        return item.precoAlternativoCalibracao
-      } else if (local === "C") {
-        return Number(item?.instrumento?.precoCalibracaoNoCliente)
-      } else {
-        return Number(item?.instrumento?.precoCalibracaoNoLaboratorio)
-      }
-    }
-    setTotal(data?.instrumentos?.reduce((acc, cur) => {
-      return acc + (getValue(cur) || 0)
-    }, 0))
-  }, [local, data])
   
   const { users } = useUsers(null, { isStaff: true });
   
@@ -157,7 +163,7 @@ function FormElaborate(props) {
   const userValue = (user) => user?.firstName || user?.username;
 
   return (
-    <Dialog open={open} onClose={handleClose}>
+    <Dialog fullScreen open={open} onClose={handleClose}>
       <DialogTitle>Elaboração da proposta</DialogTitle>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
         <DialogContent>
@@ -313,6 +319,17 @@ function FormElaborate(props) {
               form={form} 
             />
           )}
+          {items?.length > 0 && (
+            <Box sx={{ my: 2 }}>
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>Instrumentos e preços:</Typography>
+              <InstrumentServiceSelectionTable
+                instruments={items}
+                onChange={setItems}
+                onRemove={(instrumentId) => setItems(prev => prev.filter(i => i.id !== instrumentId))}
+                showPreco
+              />
+            </Box>
+          )}
           <Box display="flex" gap={1} >
             {+total !== 0 && (
               <Box>
@@ -355,9 +372,16 @@ function FormElaborate(props) {
               variant="contained"
               onClick={() => {
                 form.handleSubmit((submitData) => {
+                  const instrumentos = items?.map(it => ({
+                    id: it.id,
+                    service_kind: it.service_kind || 'calibracao',
+                    local: it.local || 'P',
+                    preco: it.preco != null ? it.preco : null,
+                  })) || [];
                   const dataToSubmit = {
                     ...submitData,
                     total,
+                    instrumentos: instrumentos.length > 0 ? instrumentos : null,
                   };
                   
                   elaborateProposal({

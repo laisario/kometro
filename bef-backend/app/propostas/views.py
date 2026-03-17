@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
@@ -8,6 +9,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 from .task import enviar_proposta_cliente_email, gerar_pdf_proposta
 from .models import Proposta, Revisao, Anexo, PropostaInstrumento
+from .services import recompute_total
 from .serializers import (
     PropostaAdminSerializer,
     PropostaFaturamentoSerializer,
@@ -175,6 +177,8 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
         instrumento_id = request.data.get("instrumento_id")
         instrumento = InstrumentoDoCliente.objects.get(id=instrumento_id)
         proposta.instrumentos.remove(instrumento)
+        PropostaInstrumento.objects.filter(proposta=proposta, instrumento=instrumento).delete()
+        recompute_total(proposta)
         proposta.status = "AA"
         proposta.save()
         return response.Response(
@@ -236,11 +240,15 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                             status=status.HTTP_400_BAD_REQUEST,
                         )
                     
+                    preco = item.get('preco') if isinstance(item, dict) else None
+                    if preco is None:
+                        preco = Decimal("0")
                     instruments_to_add.append(instrumento)
                     proposta_instrumentos_to_create.append({
                         'instrumento': instrumento,
                         'service_kind': service_kind,
                         'local': local,
+                        'preco': preco,
                     })
                     
                 except InstrumentoDoCliente.DoesNotExist:
@@ -261,9 +269,11 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                     defaults={
                         'service_kind': item_data['service_kind'],
                         'local': item_data['local'],
+                        'preco': item_data['preco'],
                     }
                 )
             
+            recompute_total(proposta)
             proposta.status = "AA"
             proposta.save()
         

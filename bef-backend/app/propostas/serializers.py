@@ -1,7 +1,6 @@
 from django.core.files import File
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from django.db import models
 from clientes.models import Cliente
 from clientes.serializers import ClienteSerializer, UserSerializer
 from enderecos.models import Endereco
@@ -12,6 +11,7 @@ from instrumentos.serializers import (
     InstrumentoDoClienteAvailableSerializer
 )
 from .models import Proposta, Revisao, Anexo, PropostaInstrumento
+from .services import recompute_total
 from decimal import Decimal, InvalidOperation
 
 
@@ -37,6 +37,7 @@ class PropostaInstrumentoSerializer(serializers.ModelSerializer):
             'instrumento_id',
             'service_kind',
             'local',
+            'preco',
             'created_at',
             'updated_at',
         ]
@@ -117,10 +118,19 @@ class InstrumentosField(serializers.Field):
                         f"local deve ser 'P', 'C' ou 'T', recebeu: {local}"
                     )
                 
+                preco = item.get('preco')
+                if preco is not None:
+                    try:
+                        preco = Decimal(str(preco))
+                    except (ValueError, TypeError, InvalidOperation):
+                        raise serializers.ValidationError(
+                            f"preco deve ser um número válido, recebeu: {preco}"
+                        )
                 normalized.append({
                     'id': instrumento_id,
                     'service_kind': service_kind,
                     'local': local,
+                    'preco': preco,
                 })
             elif isinstance(item, (int, str)):
                 try:
@@ -134,6 +144,7 @@ class InstrumentosField(serializers.Field):
                     'id': instrumento_id,
                     'service_kind': 'calibracao',
                     'local': 'P',
+                    'preco': None,
                 })
             else:
                 raise serializers.ValidationError(
@@ -196,15 +207,21 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                         f"Instrumento com ID {instrumento_id} não existe."
                     )
                 
+                local = inst_data.get('local', proposta.local)
+                preco = inst_data.get('preco')
+                if preco is None:
+                    preco = Decimal("0")
                 PropostaInstrumento.objects.create(
                     proposta=proposta,
                     instrumento=instrumento,
                     service_kind=inst_data.get('service_kind', 'calibracao'),
-                    local=inst_data.get('local', proposta.local),
+                    local=local,
+                    preco=preco,
                 )
                 instrument_ids.append(instrumento_id)
             
             proposta.instrumentos.set(instrument_ids)
+            # recompute_total(proposta)
         
         return proposta
 
@@ -232,12 +249,17 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                             f"Instrumento com ID {instrumento_id} não existe."
                         )
                     
+                    local = inst_data.get('local', instance.local)
+                    preco = inst_data.get('preco')
+                    if preco is None:
+                        preco = Decimal("0")
                     PropostaInstrumento.objects.update_or_create(
                         proposta=instance,
                         instrumento=instrumento,
                         defaults={
                             'service_kind': inst_data.get('service_kind', 'calibracao'),
-                            'local': inst_data.get('local', instance.local),
+                            'local': local,
+                            'preco': preco,
                         }
                     )
                     instrument_ids.append(instrumento_id)
@@ -245,6 +267,7 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                 instance.instrumentos.set(instrument_ids)
             else:
                 instance.instrumentos.clear()
+            recompute_total(instance)
         
         return instance
 
@@ -366,11 +389,13 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                         f"Instrumento com ID {instrumento_id} não existe."
                     )
                 
+                local = inst_data.get('local', proposta.local)
+           
                 PropostaInstrumento.objects.create(
                     proposta=proposta,
                     instrumento=instrumento,
                     service_kind=inst_data.get('service_kind', 'calibracao'),
-                    local=inst_data.get('local', proposta.local),
+                    local=local,
                 )
                 instrument_ids.append(instrumento_id)
             
@@ -408,12 +433,17 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                             f"Instrumento com ID {instrumento_id} não existe."
                         )
                     
+                    local = inst_data.get('local', instance.local)
+                    preco = inst_data.get('preco')
+                    if preco is None:
+                        preco = Decimal("0")
                     PropostaInstrumento.objects.update_or_create(
                         proposta=instance,
                         instrumento=instrumento,
                         defaults={
                             'service_kind': inst_data.get('service_kind', 'calibracao'),
-                            'local': inst_data.get('local', instance.local),
+                            'local': local,
+                            'preco': preco,
                         }
                     )
                     instrument_ids.append(instrumento_id)
@@ -421,32 +451,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                 instance.instrumentos.set(instrument_ids)
             else:
                 instance.instrumentos.clear()
-        
-        # Recalcular o total baseado nos instrumentos e no local da proposta
-        if instance.instrumentos.exists():
-            local = instance.local or Local.PERMANENTE
-            if local == Local.CLIENTE:
-                preco_field = "instrumento__preco_calibracao_no_cliente"
-            else:
-                preco_field = "instrumento__preco_calibracao_no_laboratorio"
-            
-            total_calculado = (
-                instance.instrumentos.aggregate(
-                    total=models.Sum(
-                        models.Case(
-                            models.When(
-                                preco_alternativo_calibracao__isnull=False,
-                                then=models.F("preco_alternativo_calibracao"),
-                            ),
-                            default=models.F(preco_field),
-                        )
-                    )
-                )["total"]
-                or Decimal("0")
-            )
-            
-            instance.total = total_calculado
-            instance.save(update_fields=['total'])
+            recompute_total(instance)
 
         return instance
 

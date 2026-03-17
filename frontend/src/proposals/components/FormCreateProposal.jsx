@@ -71,7 +71,7 @@ function FormCreateProposal(props) {
           onChange={(event, newValue) => {
             verifyError("instrumentos", error, setError);
             // Transform to new format with default selections
-            const formattedInstruments = newValue?.map(inst => ({
+              const formattedInstruments = newValue?.map(inst => ({
               id: inst.id,
               service_kind: 'calibracao',
               local: 'P',

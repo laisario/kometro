@@ -16,8 +16,19 @@ import {
   IconButton,
   Typography,
   Box,
+  TextField,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+
+/** Suggested price: alternative first, else catalog by local. T -> null. */
+export function getSuggestedPreco(instrument, local) {
+  if (local === 'T') return null;
+  if (instrument?.precoAlternativoCalibracao != null) return Number(instrument.precoAlternativoCalibracao);
+  const inst = instrument?.instrumento;
+  if (!inst) return null;
+  const p = local === 'C' ? inst.precoCalibracaoNoCliente : inst.precoCalibracaoNoLaboratorio;
+  return p != null ? Number(p) : 0;
+}
 
 /**
  * Component to display and edit instrument service selections
@@ -27,8 +38,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
  * @param {Function} props.onChange - Callback when selections change: (updatedInstruments) => void
  * @param {Function} props.onRemove - Callback when instrument is removed: (instrumentId) => void
  * @param {Object} props.errors - Validation errors
+ * @param {boolean} props.showPreco - When true, show editable price column
  */
-function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, errors }) {
+function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, errors, showPreco = false }) {
   const handleServiceKindChange = (instrumentId, value) => {
     const updated = instruments?.map(inst => 
       inst?.id === instrumentId 
@@ -39,10 +51,16 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
   };
 
   const handleLocalChange = (instrumentId, value) => {
+    const updated = instruments?.map(inst =>
+      inst?.id === instrumentId ? { ...inst, local: value } : inst
+    );
+    onChange(updated);
+  };
+
+  const handlePrecoChange = (instrumentId, value) => {
+    const num = value === '' || value == null ? null : Number(value);
     const updated = instruments?.map(inst => 
-      inst?.id === instrumentId 
-        ? { ...inst, local: value }
-        : inst
+      inst?.id === instrumentId ? { ...inst, preco: isNaN(num) ? inst.preco : num } : inst
     );
     onChange(updated);
   };
@@ -59,17 +77,17 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
             <TableCell>Instrumento</TableCell>
             <TableCell>Tipo de Serviço</TableCell>
             <TableCell>Local</TableCell>
+            {showPreco && <TableCell align="right">Preço (R$)</TableCell>}
             <TableCell align="right">Ações</TableCell>
           </TableRow>
         </TableHead>
         <TableBody>
           {instruments.map((instrument) => {
-            // Get selections from the instrument object itself
             const serviceKind = instrument.service_kind || 'calibracao';
             const local = instrument.local || 'P';
+            const displayPreco = instrument.preco != null ? instrument.preco : '';
             const instrumentErrors = errors?.[instrument.id] || {};
             const tipoServico = instrument?.instrumento?.tipoDeInstrumento?.tipoDeServico;
-            console.log(instrument);
             return (
               <TableRow key={instrument.id}>
                 <TableCell>
@@ -126,8 +144,8 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                       onChange={(e) => handleLocalChange(instrument.id, e.target.value)}
                       displayEmpty
                     >
-                      <MenuItem value="C">Cliente</MenuItem>
-                      <MenuItem value="P">Instalações Permanentes</MenuItem>
+                      <MenuItem value="C">Cliente {showPreco && (`- R$ ${instrument.instrumento?.precoCalibracaoNoCliente}` || 0)}</MenuItem>
+                      <MenuItem value="P">Instalações Permanentes {showPreco && (`- R$ ${instrument.instrumento?.precoCalibracaoNoLaboratorio}` || 0)}</MenuItem>
                       <MenuItem value="T">Terceirizado</MenuItem>
                     </Select>
                     {instrumentErrors.local && (
@@ -137,6 +155,18 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                     )}
                   </FormControl>
                 </TableCell>
+                {showPreco && (
+                  <TableCell align="right">
+                    <TextField
+                      type="number"
+                      size="small"
+                      value={displayPreco}
+                      onChange={(e) => handlePrecoChange(instrument.id, e.target.value)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                      sx={{ width: 100 }}
+                    />
+                  </TableCell>
+                )}
                 <TableCell align="right">
                   <IconButton
                     size="small"

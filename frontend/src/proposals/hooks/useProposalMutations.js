@@ -2,17 +2,20 @@ import { useMutation, useQueryClient } from "react-query";
 import { axios } from "../../api";
 import { enqueueSnackbar } from "notistack";
 import dayjs from 'dayjs';
+import { getSuggestedPreco } from '../components/InstrumentServiceSelectionTable';
 
 const useProposalMutations = (formCreateProposal, handleClose, setError, id) => {
   const queryClient = useQueryClient();
 
   const createProposal = async (data) => {
-    // New format: send instrument selections
-    const instrumentos = data?.instrumentos?.map(inst => ({
-      id: inst.id,
-      service_kind: inst.service_kind || 'calibracao',
-      local: inst.local || 'P',
-    })) || [];
+    const instrumentos = data?.instrumentos?.map(inst => {
+      const local = inst.local || 'P';
+      return {
+        id: inst.id,
+        service_kind: inst.service_kind || 'calibracao',
+        local,
+      };
+    }) || [];
     
     await axios.post('/propostas/', { 
       instrumentos: !!instrumentos.length ? instrumentos : null,
@@ -79,14 +82,16 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
   })
 
   const addInstrument = async (newInstruments) => {
-    // Get existing instruments with their service_kind and local from PropostaInstrumento
-    // For now, we'll send only the new instruments with their service_kind and local
-    // The backend will merge them with existing ones
-    const formattedInstruments = newInstruments?.map(instrument => ({
-      id: instrument.id,
-      service_kind: instrument.service_kind || 'calibracao',
-      local: instrument.local || 'P',
-    })) || [];
+    const formattedInstruments = newInstruments?.map(instrument => {
+      const local = instrument.local || 'P';
+      const preco = instrument.preco != null ? instrument.preco : getSuggestedPreco(instrument, local);
+      return {
+        id: instrument.id,
+        service_kind: instrument.service_kind || 'calibracao',
+        local,
+        preco: preco != null ? preco : null,
+      };
+    }) || [];
     
     await axios.post(
       `/propostas/${id}/adicionar_instrumento/`,
@@ -171,6 +176,13 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
   const elaborate = async ({ addressClient, data }) => {
     const formValues = data;
     const formatDayjs = (date) => dayjs.isDayjs(date) ? date.format('YYYY-MM-DD') : null;
+    const instrumentos = formValues?.instrumentos?.map(it => ({
+      id: it.id,
+      service_kind: it.service_kind || 'calibracao',
+      local: it.local || 'P',
+      preco: it.preco != null ? it.preco : null,
+    })) || null;
+
     const commonData = {
       total: formValues?.total || 0,
       condicaoDePagamento: formValues?.condicaoDePagamento || null,
@@ -183,6 +195,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
       descontoPercentual: formValues?.descontoPercentual || null,
       local: formValues?.local || null,
       tipoServico: formValues?.tipoServico || null,
+      instrumentos: instrumentos?.length ? instrumentos : null,
     };
 
     if (formValues?.enderecoDeEntrega === 'enderecoCadastrado') {

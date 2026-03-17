@@ -77,6 +77,14 @@ class PropostaInstrumento(models.Model):
         choices=Local.choices,
         verbose_name="Local"
     )
+    preco = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name="Preço",
+        help_text="Preço unitário deste item na proposta. Usado no cálculo do total.",
+    )
     # Note: tipo_servico (acreditado/nao_acreditado) is stored in Instrumento.tipo_de_servico
     # and does not need to be stored here. It will be read from the instrument during OS generation.
     
