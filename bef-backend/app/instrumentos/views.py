@@ -699,7 +699,53 @@ class CalibracaoViewSet(viewsets.ModelViewSet):
             return response.Response(
                 {"message": "Faltou o id."}, status=status.HTTP_400_BAD_REQUEST
             )
-        
+
+    @action(detail=True, methods=["post", "patch"])
+    def atualizar_certificado(self, request, pk=None):
+        """
+        Update an existing certificate's numero and/or arquivo.
+        Accepts multipart/form-data: certificado_id, numero, arquivo (file).
+        When arquivo is provided: deletes old file from storage, saves new file.
+        """
+        calibracao = self.get_object()
+        certificado_id = request.data.get("certificado_id") or request.POST.get("certificado_id")
+        numero = request.data.get("numero") or request.POST.get("numero")
+        arquivo = request.FILES.get("arquivo") or request.data.get("arquivo")
+
+        if not certificado_id:
+            return response.Response(
+                {"detail": "certificado_id é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            certificado = Certificado.objects.get(id=certificado_id, calibracao=calibracao)
+        except Certificado.DoesNotExist:
+            return response.Response(
+                {"detail": "Certificado não encontrado ou não pertence a esta calibração."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        update_fields = []
+
+        if numero is not None:
+            certificado.numero = str(numero).strip() if str(numero).strip() else None
+            update_fields.append("numero")
+
+        if arquivo:
+            if certificado.arquivo:
+                certificado.arquivo.delete(save=False)
+            certificado.arquivo = arquivo
+            update_fields.append("arquivo")
+
+        if update_fields:
+            certificado.save(update_fields=update_fields)
+
+        return response.Response(
+            CertificadoSerializer(certificado).data,
+            status=status.HTTP_200_OK,
+        )
+
     def perform_create(self, serializer):
         instance = serializer.save()
         is_checagem = self.request.query_params.get("checagem") in ["1", "true", "True"]

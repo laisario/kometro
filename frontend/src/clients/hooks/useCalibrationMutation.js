@@ -30,6 +30,7 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     return () => handleSearchOS.cancel();
   }, [search, handleSearchOS]);
   
+  const firstCertificado = selectedCalibration?.certificados?.[0];
   const defaultValues = useMemo(() => ({
     local: selectedCalibration?.local ? selectedCalibration?.local : 'P',
     data: selectedCalibration?.data ? selectedCalibration?.data : null,
@@ -41,6 +42,10 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     preco: selectedCalibration?.preco ? selectedCalibration.preco : null,
     laboratorio: selectedCalibration?.laboratorio ? selectedCalibration.laboratorio : '',
     observacaoFornecedor: selectedCalibration?.observacaoFornecedor ? selectedCalibration.observacaoFornecedor : '',
+    numero: firstCertificado?.numero ?? '',
+    certificadoId: firstCertificado?.id ?? null,
+    arquivo: firstCertificado?.arquivo ?? null,
+    anexos: [],
   }), [selectedCalibration])
   
   const form = useForm({ defaultValues })
@@ -94,10 +99,13 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   })
 
 
-  const formatedData = (form) => ({
-    ...form,
-    data: form?.data && dayjs(form?.data)?.format('YYYY-MM-DD'),
-  })
+  const formatedData = (form) => {
+    const { certificadoId, ...rest } = form || {};
+    return {
+      ...rest,
+      data: form?.data && dayjs(form?.data)?.format('YYYY-MM-DD'),
+    };
+  };
 
   const create = async (params) => {
     const data = formatedData(params?.form)
@@ -149,17 +157,56 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
 
 
   const edit = async (params) => {
-    const data = formatedData(params?.form)
+    const formData = params?.form;
+    const data = formatedData(formData);
     const response = await axios.patch(`/calibracoes/${params?.id}/`, { ...data, instrumento });
-    return response.data;
+    return { ...response.data, _formData: formData };
   }
+
+  const updateCertificate = async (calibracaoId, certificadoId, numero, arquivo) => {
+    const hasFile = arquivo && arquivo instanceof File;
+    if (hasFile) {
+      const formData = new FormData();
+      formData.append('certificado_id', certificadoId);
+      if (numero != null) formData.append('numero', numero ?? '');
+      formData.append('arquivo', arquivo);
+      await axiosForFiles.post(`/calibracoes/${calibracaoId}/atualizar_certificado/`, formData);
+    } else {
+      await axios.post(`/calibracoes/${calibracaoId}/atualizar_certificado/`, {
+        certificado_id: certificadoId,
+        numero: numero ?? '',
+      });
+    }
+  };
 
   const {
     mutate: mutateEdit,
     isLoading: isLoadingEdit,
   } = useMutation({
     mutationFn: edit,
-    onSuccess: () => {
+    onSuccess: async (result, variables) => {
+      const formData = result?._formData;
+      const calibracaoId = variables?.id;
+      const certificadoId = formData?.certificadoId;
+      const newNumero = formData?.numero;
+      const arquivo = formData?.arquivo;
+
+      const shouldUpdateCertificate = certificadoId && calibracaoId && (
+        (arquivo && arquivo instanceof File) ||
+        (String(newNumero ?? '').trim() !== String(selectedCalibration?.certificados?.[0]?.numero ?? '').trim())
+      );
+
+      if (shouldUpdateCertificate) {
+        try {
+          await updateCertificate(calibracaoId, certificadoId, newNumero ?? '', arquivo);
+        } catch (e) {
+          console.error('Erro ao atualizar certificado:', e);
+          enqueueSnackbar('Calibração atualizada, mas atualização do certificado falhou.', {
+            variant: 'warning'
+          });
+        }
+      }
+
       queryClient.invalidateQueries({ queryKey: ['calibracoes'] });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] });
       setOpenEdit(false);
