@@ -1,8 +1,8 @@
 ---
 banner:
-  title: Soluções eficientes através da metrologia, qualidade e inovação.
+  title: Seu sucesso é a nossa medida
   video: https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/videos/video-institucional.MOV
-  content: Serviços de calibração e ensaio de instrumentos de medição, garantindo a confiabilidade e precisão dos resultados para atendimento de diversas demandas normativas, requisitos de clientes e controle de qualidade.
+  content: Serviços de calibração e ensaio de instrumentos de medição, garantindo a confiabilidade e precisão dos resultados para atendimento de diversas demandas normativas, requisitos de clientes e controle de qualidade
   button:
     label: "Entre em contato"
     link: "/contato"
