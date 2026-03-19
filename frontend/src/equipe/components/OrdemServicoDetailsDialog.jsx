@@ -243,7 +243,7 @@ const OS_LAYOUTS = {
       {
         key: 'tipo_servico',
         header: 'Tipo de Serviço',
-        render: (row) => row.tipoDeServico ? (row.tipoServico === "A" ? 'Acreditado' :  'Não Acreditado') : "—",
+        render: (row) => !!row.tipoServico ? (row.tipoServico === "A" ? 'Acreditado' :  'Não Acreditado') : "—",
       },
       {
         key: 'numero_certificado',
@@ -725,7 +725,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
   const statusColor = getStatusColor(currentStatus);
   const isARealizar = currentStatus === 'AR' || currentStatus === 'a_realizar';
   const editButtonLabel = isARealizar ? 'Preencher OS' : 'Editar';
-
+  console.log(items, 'AAAAAAAAAa')
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="xl" fullScreen={isMobile}>
