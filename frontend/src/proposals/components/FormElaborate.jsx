@@ -35,7 +35,7 @@ import Iconify from '../../components/Iconify';
 import FormAdress from '../../auth/components/FormAddress';
 import { truncateString } from '../../utils/formatString';
 import useUsers from '../../auth/hooks/useUsers';
-import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
+import InstrumentServiceSelectionTable, { getSuggestedPreco } from './InstrumentServiceSelectionTable';
 
 
 function FormElaborate(props) {
@@ -52,8 +52,10 @@ function FormElaborate(props) {
   const [totalComDesconto, setTotalComDesconto] = useState(data?.totalComDesconto);
 
   const [items, setItems] = useState([]);
-  console.log(items, "ITEMS")
-  const total = items.reduce((acc, it) => acc + (Number(it.preco) || 0), 0);
+  const total = items.reduce((acc, it) => {
+    const p = it.preco != null ? Number(it.preco) : getSuggestedPreco(it, it.local || 'P');
+    return acc + (p || 0);
+  }, 0);
 
   useEffect(() => {
     const instrumentos = data?.instrumentos || [];
@@ -163,7 +165,7 @@ function FormElaborate(props) {
   const userValue = (user) => user?.firstName || user?.username;
 
   return (
-    <Dialog fullScreen open={open} onClose={handleClose}>
+    <Dialog maxWidth="xl" open={open} onClose={handleClose}>
       <DialogTitle>Elaboração da proposta</DialogTitle>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
         <DialogContent>

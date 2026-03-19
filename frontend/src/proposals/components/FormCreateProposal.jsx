@@ -12,6 +12,7 @@ import {
 import { verifyError } from '../../utils/error';
 import VirtualizedInstrumentAutocomplete from './VirtualizedInstrumentAutocomplete';
 import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
+import useResponsive from '../../theme/hooks/useResponsive';
 
 function FormCreateProposal(props) {
   const { 
@@ -29,12 +30,13 @@ function FormCreateProposal(props) {
   
   const instruments = formCreateProposal?.watch("instrumentos");
   const client = formCreateProposal?.watch('cliente');
-
+  const isMobile = useResponsive('down', 'md');
   return (
     <Dialog
       open={open}
       onClose={onClose}
-      fullWidth
+      fullScreen={isMobile}
+      maxWidth="xl"
     >
       <DialogTitle>Criar novo pedido de calibração</DialogTitle>
       <DialogContent>

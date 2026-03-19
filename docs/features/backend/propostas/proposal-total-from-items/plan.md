@@ -4,6 +4,65 @@
 
 Replace the current proposal total calculation (based on proposal-level `local` and instrument catalog prices) with a model where the total is the sum of a **per-item price** stored on `PropostaInstrumento`. Add a new field `preco` on `PropostaInstrumento` as the source of truth for each item's value; support pre-fill from instrument prices (with priority for alternative price) and allow manual override. Revisit discount logic so it applies consistently to this new total.
 
+---
+
+## Fix: Proposal Elaboration Flow (2025-03)
+
+### Problem Statement (Current Broken Behavior)
+
+1. **Local changes not reflected in PDF**: When the team changes `local` per instrument during elaboration, the PDF still uses `proposta.local` (proposal-level) for all instruments. Per-item `PropostaInstrumento.local` is persisted but the PDF template ignores it.
+2. **Total depends on frontend-sent prices**: When `preco` is null, the backend uses `Decimal("0")` instead of resolving from alternative/catalog. If the frontend omits prices, the total is wrong.
+3. **Alternative price not visible**: The elaboration form does not show the client's alternative price (`preco_alternativo_calibracao`), so the team cannot make informed decisions.
+4. **Backend not source of truth**: Total calculation can diverge when frontend sends incomplete data.
+
+### Expected Behavior After Fix
+
+- **Backend is source of truth** for total calculation.
+- **Per-item `local`** edited during elaboration is persisted on `PropostaInstrumento` and used everywhere (including PDF).
+- **Price resolution** when `preco` is null: use alternative price if set, else catalog by item's `local` (P→laboratorio, C→cliente, T→no automatic value).
+- **PDF** uses `instrumentos_selecoes` (PropostaInstrumento) with per-item local and resolved price.
+- **Frontend** displays alternative price clearly for each instrument.
+
+### Final Price Precedence Rules
+
+1. **Manual `preco`** on `PropostaInstrumento` (if filled) → use it.
+2. **Alternative price** (`InstrumentoDoCliente.preco_alternativo_calibracao`) if set → use it (for P and C).
+3. **Catalog by local**:
+   - `local == "P"` (Instalações Permanentes) → `Instrumento.preco_calibracao_no_laboratorio`
+   - `local == "C"` (Cliente) → `Instrumento.preco_calibracao_no_cliente`
+   - `local == "T"` (Terceirizado) → no catalog price; user must enter manually (fallback: 0).
+4. **If no valid value**: use 0 (explicit, safe).
+
+### Persistence Rules
+
+- `local`, `service_kind`, `preco` are persisted on `PropostaInstrumento` when elaboration form is saved.
+- When `preco` is null in payload, backend resolves and persists the suggested value (alternative → catalog by local → 0).
+
+### PDF Impact
+
+- PDF receives `instrumentos_selecoes` (PropostaInstrumento) instead of `instrumentos` (InstrumentoDoCliente).
+- For each row: show `pi.local`, resolved unit price (from `pi.preco` or fallback).
+- Total comes from `total_com_desconto` (unchanged).
+
+### Edge Cases
+
+- Terceirizado (T): no catalog; if no manual price, use 0.
+- Missing catalog prices: use 0.
+- Empty instrument list: total = 0.
+
+### Test Plan
+
+1. Client creates proposal with one `local`, team changes it during elaboration, save succeeds, PDF reflects the new value.
+2. Manual `preco` filled → total uses manual price.
+3. Manual `preco` empty + local = `instalacoes_permanentes` (P) → uses `preco_calibracao_no_laboratorio`.
+4. Manual `preco` empty + local = `cliente` (C) → uses `preco_calibracao_no_cliente`.
+5. Alternative price visibility appears in frontend.
+6. Backend calculates correct total even when frontend sends incomplete price data (preco: null).
+7. Editing existing proposal does not regress previous behavior.
+8. Multi-instrument proposal total is aggregated correctly.
+9. Missing fallback prices are handled explicitly (use 0).
+10. PDF uses persisted final values from `instrumentos_selecoes`.
+
 ## User Value
 
 ### Current Behavior (Being Replaced)

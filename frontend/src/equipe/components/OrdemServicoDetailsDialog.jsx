@@ -728,7 +728,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="md" fullScreen={isMobile}>
+      <Dialog open={open} onClose={onClose} maxWidth="xl" fullScreen={isMobile}>
         <DialogTitle>
           <Box display="flex" justifyContent="space-between" alignItems="center">
             <Typography variant="h6" component="span">

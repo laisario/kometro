@@ -24,6 +24,7 @@ const useOrdemServicoMutations = () => {
         queryClient.invalidateQueries({ queryKey: ['ordem-servico', osIdToUse] });
       }
       queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
       enqueueSnackbar('Ordem de serviço atualizada com sucesso!', {
         variant: 'success',
       });
@@ -62,6 +63,7 @@ const useOrdemServicoMutations = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ordem-servico', variables.id] });
       queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
       enqueueSnackbar('Status atualizado com sucesso!', {
         variant: 'success',
       });
@@ -91,6 +93,7 @@ const useOrdemServicoMutations = () => {
     mutationFn: createOS,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
       enqueueSnackbar('Ordem de serviço criada com sucesso!', {
         variant: 'success',
       });
@@ -143,6 +146,7 @@ const useOrdemServicoMutations = () => {
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['ordem-servico', variables.osId] });
       queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
       enqueueSnackbar('Número de certificado gerado e atribuído com sucesso!', {
         variant: 'success',
       });

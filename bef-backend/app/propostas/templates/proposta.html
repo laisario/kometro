@@ -274,40 +274,30 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for instrumento in instrumentos %}
+                    {% for pi in instrumentos_selecoes %}
                     <tr>
                         <td>{{ forloop.counter }}</td>
-                        <td>{{ instrumento.instrumento.tipo_de_instrumento.descricao|default_if_none:"" }}</td>
+                        <td>{{ pi.instrumento.instrumento.tipo_de_instrumento.descricao|default_if_none:"" }}</td>
                         <td>
-                            {% if proposta.local == "P" %}
+                            {% if pi.local == "P" %}
                             Instalação permanente
-                            {% else %}
-                            {% if proposta.local == "C" %}
+                            {% elif pi.local == "C" %}
                             Instalação cliente
                             {% else %}
                             Terceirizada
                             {% endif %}
-                            {% endif %}
                         </td>
-                        <td>{% if instrumento.instrumento.tipo_de_servico == "A" %}
+                        <td>{% if pi.instrumento.instrumento.tipo_de_servico == "A" %}
                             Acreditado
                             {% else %}
                             Não acreditado
                             {% endif %}</td>
-                        <td>{% if instrumento.preco_alternativo_calibracao %}
-                            R$ {{ instrumento.preco_alternativo_calibracao|default_if_none:"" }}
-                            {% else %}
-                            {% if proposta.local == "C" %}
-                            R$ {{ instrumento.instrumento.preco_calibracao_no_cliente|default_if_none:"" }}
-                            {% else %}
-                            R$ {{ instrumento.instrumento.preco_calibracao_no_laboratorio|default_if_none:"" }}
-                            {% endif %}
-                            {% endif %}</td>
-                        <td>{% if proposta.local == 'T'  %}
-                                {% if instrumento.dias_uteis > 1 %}
-                                {{ instrumento.dias_uteis|default_if_none:"" }} dias
+                        <td>R$ {{ pi.preco|default_if_none:"" }}</td>
+                        <td>{% if pi.local == 'T' %}
+                                {% if pi.instrumento.dias_uteis > 1 %}
+                                {{ pi.instrumento.dias_uteis|default_if_none:"" }} dias
                                 {% else %}
-                                {{ instrumento.dias_uteis|default_if_none:"" }} dia
+                                {{ pi.instrumento.dias_uteis|default_if_none:"" }} dia
                                 {% endif %}
                             {% else %}
                                 {% if proposta.dias_uteis > 1 %}

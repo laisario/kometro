@@ -77,14 +77,18 @@ def gerar_pdf_proposta(proposta_id, revisao_id, total_com_desconto, aplicar_selo
         proposta = Proposta.objects.get(id=proposta_id)
         rev = Revisao.objects.get(id=revisao_id)
         
-        instrumentos = proposta.instrumentos.all()
+        instrumentos_selecoes = list(
+            proposta.instrumentos_selecoes.select_related(
+                "instrumento", "instrumento__instrumento", "instrumento__instrumento__tipo_de_instrumento"
+            ).all()
+        )
         logo = static("logo.png")
         selo = static("selo-acreditado-inmetro.jpg") if aplicar_selo else None
 
         pdf = render_to_pdf(
             f"{os.path.dirname(__file__)}/templates/proposta.html",
             {
-                "instrumentos": instrumentos,
+                "instrumentos_selecoes": instrumentos_selecoes,
                 "proposta": proposta,
                 "data": date.today().strftime("%d/%m/%Y"),
                 "condicao_pagamento": proposta.condicao_de_pagamento,

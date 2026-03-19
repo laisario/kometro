@@ -11,7 +11,7 @@ from instrumentos.serializers import (
     InstrumentoDoClienteAvailableSerializer
 )
 from .models import Proposta, Revisao, Anexo, PropostaInstrumento
-from .services import recompute_total
+from .services import recompute_total, get_resolved_preco
 from decimal import Decimal, InvalidOperation
 
 
@@ -210,7 +210,7 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                 local = inst_data.get('local', proposta.local)
                 preco = inst_data.get('preco')
                 if preco is None:
-                    preco = Decimal("0")
+                    preco = get_resolved_preco(instrumento, local)
                 PropostaInstrumento.objects.create(
                     proposta=proposta,
                     instrumento=instrumento,
@@ -221,7 +221,7 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                 instrument_ids.append(instrumento_id)
             
             proposta.instrumentos.set(instrument_ids)
-            # recompute_total(proposta)
+            recompute_total(proposta)
         
         return proposta
 
@@ -252,7 +252,7 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                     local = inst_data.get('local', instance.local)
                     preco = inst_data.get('preco')
                     if preco is None:
-                        preco = Decimal("0")
+                        preco = get_resolved_preco(instrumento, local)
                     PropostaInstrumento.objects.update_or_create(
                         proposta=instance,
                         instrumento=instrumento,
@@ -436,7 +436,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                     local = inst_data.get('local', instance.local)
                     preco = inst_data.get('preco')
                     if preco is None:
-                        preco = Decimal("0")
+                        preco = get_resolved_preco(instrumento, local)
                     PropostaInstrumento.objects.update_or_create(
                         proposta=instance,
                         instrumento=instrumento,

@@ -110,6 +110,11 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                         Tipo: {tipoServico === 'A' ? 'Acreditado' : 'Não Acreditado'}
                       </Typography>
                     )}
+                    {showPreco && (instrument.precoAlternativoCalibracao ?? instrument.preco_alternativo_calibracao) != null && (
+                      <Typography variant="caption" color="info.main" display="block" sx={{ mt: 0.5 }}>
+                        Preço alternativo: R$ {instrument.precoAlternativoCalibracao ?? instrument.preco_alternativo_calibracao}
+                      </Typography>
+                    )}
                   </Box>
                 </TableCell>
                 <TableCell>

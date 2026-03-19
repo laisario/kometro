@@ -73,6 +73,7 @@ Align the frontend with the new backend model where the proposal total is the su
   - Total = sum of item prices; discount = total * (1 - percent/100). Send in payload: instrumentos (or instrumentos_selecoes) with `preco` per item, plus other fields (desconto_percentual, etc.).
 - **InstrumentServiceSelectionTable.jsx** (or equivalent):
   - Add a **Preço** column. Bind to the same per-item price that is used in the total. Allow edit; on change, update parent state and recalc total.
+  - **Show alternative price** (`preco_alternativo_calibracao`) clearly for each instrument when `showPreco` is true, so the team can make informed decisions.
   - When local changes, optionally update the suggested price in the cell (or just update suggestion for new items; product decision).
 - **Assets.jsx / CardInformation**: If the proposal detail view shows instrument list, consider showing per-item price when available (from instrumentos_selecoes). Not mandatory for first version if the main edit flow is FormElaborate + table.
 - **Proposal details / InformationProposal or ProposalDetailsPreview**: They already show total and total_com_desconto from API; no change in formula, only ensure they display the values returned by the backend after the new total is implemented.
