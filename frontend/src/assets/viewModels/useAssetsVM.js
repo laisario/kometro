@@ -109,7 +109,7 @@ const useAssetsVm = (id, idSetor) => {
     setError,
     mutateChangePosition,
     duplicateInstrument
-  } = useAssetMutations(handleCloseCreateInstrument);
+  } = useAssetMutations(handleCloseCreateInstrument, false);
 
   const handleCreate = (selectedItem) => {
     const params = {

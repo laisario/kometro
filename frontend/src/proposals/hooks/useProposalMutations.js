@@ -18,7 +18,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
     }) || [];
     
     await axios.post('/propostas/', { 
-      instrumentos: !!instrumentos.length ? instrumentos : null,
+      instrumentos: instrumentos.length ? instrumentos : null,
       cliente: data?.cliente?.id ? data?.cliente?.id : null, 
       informacoes_adicionais: data?.informacoesAdicionais
     });

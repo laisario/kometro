@@ -142,7 +142,7 @@ function useAssetMutations(handleClose, adminPreview) {
     isLoading: isLoadingCreateClient, 
   } = useMutation({
     mutationFn: createInstrumentClient,
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       
@@ -152,7 +152,7 @@ function useAssetMutations(handleClose, adminPreview) {
       }
       handleClose('create')
       enqueueSnackbar('Instrumento criado com sucesso!', {
-        variant: 'success'
+        variant: 'success',
       });
     },
     onError: (erro) => {

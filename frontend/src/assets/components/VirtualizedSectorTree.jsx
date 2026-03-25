@@ -141,7 +141,7 @@ function VirtualizedSectorTree({
   const [newSectorName, setNewSectorName] = useState('');
   
   const containerRef = useRef(null);
-  const [containerHeight, setContainerHeight] = useState(600);
+  const [containerHeight, setContainerHeight] = useState(280);
   
   useEffect(() => {
     if (!creatingSector) {
@@ -302,7 +302,7 @@ function VirtualizedSectorTree({
   
   if (flatList.length === 0) {
     return (
-      <Box sx={{ height: '100%', minWidth: 300, display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ flex: 1, minHeight: 0, height: '100%', minWidth: 300, display: 'flex', flexDirection: 'column' }}>
         <TreeHeader
           handleCreate={handleCreate}
           openFormCreateInstrument={openFormCreateInstrument}
@@ -333,7 +333,7 @@ function VirtualizedSectorTree({
   }
   
   return (
-    <Box sx={{ height: '100%', minHeight: 400, minWidth: 300, display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ flex: 1, minHeight: 0, height: '100%', minWidth: 300, display: 'flex', flexDirection: 'column' }}>
       <TreeHeader
         handleCreate={handleCreate}
         openFormCreateInstrument={openFormCreateInstrument}

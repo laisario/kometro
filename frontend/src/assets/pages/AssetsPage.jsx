@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async';
 import { Box, Button, Container, Stack, Typography, Tabs, Tab } from '@mui/material';
 import GetAppIcon from '@mui/icons-material/GetApp';
@@ -89,18 +89,35 @@ function AssetsPage() {
   } = useAssetsVm(id, idSetor);
 
   return (
-    <>
+    <Box
+      sx={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+      }}
+    >
       <Helmet>
         <title> Instrumentos | Kometro </title>
       </Helmet>
 
-      <Container>
+      <Container
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
         <Stack
             direction="row"
             alignItems="center"
             justifyContent="space-between"
             flexWrap="wrap"
             mb={3}
+            flexShrink={0}
             >
             <Typography variant="h4" gutterBottom>
               Meus Instrumentos
@@ -142,7 +159,7 @@ function AssetsPage() {
             </Box>
           </Stack>
 
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3, flexShrink: 0 }}>
             <Tabs 
               value={currentTab} 
               onChange={handleTabChange}
@@ -163,7 +180,15 @@ function AssetsPage() {
             </Tabs>
           </Box>
 
-          <Box>
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
             <ExportFilter
               handleClose={handleClose}
               open={open}
@@ -184,7 +209,15 @@ function AssetsPage() {
               handleChangeRowsPerPage={handleChangeRowsPerPage}
             />
             {currentTab === 'tree' && (
-            
+                <Box
+                  sx={{
+                    flex: 1,
+                    minHeight: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                >
                 <SectorTreeView
                   isMobile={isMobile}
                   asset={asset}
@@ -219,18 +252,25 @@ function AssetsPage() {
                   mutateDeleteClient={mutateDeleteClient}
                   mutateChangePosition={mutateChangePosition}
                 />
-          
+                </Box>
             )}
 
-            {/* Table View Tab Content */}
             {currentTab === 'table' && (
-              <Box sx={{ height: 'calc(100vh - 250px)' }}>
+              <Box
+                sx={{
+                  flex: 1,
+                  minHeight: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
+              >
                 <InstrumentosTable />
               </Box>
             )}
           </Box>
       </Container>
-    </>
+    </Box>
   )
 }
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
 import { useQuery } from 'react-query';
 import { axios } from '../../api';
 import useAuth from '../../auth/hooks/useAuth';

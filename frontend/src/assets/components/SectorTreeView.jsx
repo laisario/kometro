@@ -56,18 +56,38 @@ function SectorTreeView({
   }
 
   return (
-      <Grid container sx={{ height: 'calc(100vh - 250px)' }} spacing={4}>
+      <Grid
+        container
+        spacing={4}
+        sx={{
+          flex: 1,
+          minHeight: 0,
+          height: '100%',
+        }}
+      >
         <Grid
           item
           xs={12}
-          md={4}
+          md={5}
           sx={{
             borderRight: { md: '1px solid #ddd' },
             height: { xs: 'auto', md: '100%' },
+            minHeight: { xs: 360, md: 320 },
+            display: 'flex',
+            flexDirection: 'column',
             overflowY: 'hidden',
-            pr: 1
+            pr: 1,
           }}
         >
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+          >
           <VirtualizedSectorTree
             onEditSetor={onEditSetor}
             onDeleteSetor={onDeleteSetor}
@@ -92,15 +112,17 @@ function SectorTreeView({
             handleCloseCreateSector={handleCloseCreateSector}
             setSelectedItem={setSelectedItem}
           />
+          </Box>
         </Grid>
 
         <Grid
           item
           xs={12}
-          md={8}
+          md={7}
           sx={{
             overflowY: 'hidden',
-            height: '100%',
+            minHeight: 0,
+            height: { xs: 'auto', md: '100%' },
             display: 'flex',
             flexDirection: 'column',
             gap: 2,

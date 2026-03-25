@@ -252,8 +252,10 @@ const TreeRow = React.memo(function TreeRow({
             </IconButton>
           </Box>
         ) : (
-          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
-            {node.label}
+          <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
+            <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {node.label}
+            </Box>
             {isSector && hasChildren && <DotIcon />}
           </Box>
         )}

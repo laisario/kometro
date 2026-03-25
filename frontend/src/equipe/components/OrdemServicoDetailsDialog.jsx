@@ -243,7 +243,7 @@ const OS_LAYOUTS = {
       {
         key: 'tipo_servico',
         header: 'Tipo de Serviço',
-        render: (row) => !!row.tipoServico ? (row.tipoServico === "A" ? 'Acreditado' :  'Não Acreditado') : "—",
+        render: (row) => row.tipoServico ? (row.tipoServico === "A" ? 'Acreditado' :  'Não Acreditado') : "—",
       },
       {
         key: 'numero_certificado',
