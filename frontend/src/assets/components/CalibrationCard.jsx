@@ -59,6 +59,9 @@ function CalibrationCard({ calibration, theme, isMobile }) {
 
   const certificado = !!calibration?.ContentRowcertificados?.length && calibration?.certificados[0]
 
+  const setorNome =
+    calibration?.setor?.nome ?? calibration?.instrumento?.setor?.nome
+
   return (
     <Card 
       sx={{ 
@@ -75,9 +78,7 @@ function CalibrationCard({ calibration, theme, isMobile }) {
         {calibration?.local && (
           <ContentRow title="Local" value={calibration?.local} />
         )}
-        { !!calibration?.setor && (
-          <ContentRow title="Setor" value={calibration?.setor?.nome} />
-        )}
+        <ContentRow title="Setor" value={setorNome ?? 'Sem setor'} />
         {calibration?.observacoes && (
           <ContentRow title="Observações:" isMobile={readMore?.readMoreObservation?.readMore} value={truncateString(calibration?.observacoes, readMore?.readMoreObservation?.readUntil)} />
         )}

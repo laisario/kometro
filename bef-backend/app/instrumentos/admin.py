@@ -483,7 +483,7 @@ class InstrumentoResource(ModelResource):
         procedimento = row["procedimento relacionado"]
         unidade = row["unidade"]
         sinal = row["sinal"]
-        nome_setor = row["setor"]
+        nome_setor = row.get("setor")
 
         if descricao is not None:
             tipo_instrumento, created = TipoInstrumento.objects.get_or_create(
@@ -526,18 +526,17 @@ class InstrumentoResource(ModelResource):
             instrumento, created = Instrumento.objects.get_or_create(
                 **instrument_parameters
             )
-            if nome_setor is not None:
+            nome_setor_stripped = (
+                str(nome_setor).strip() if nome_setor is not None else ""
+            )
+            if nome_setor_stripped:
                 setor_data, created = Setor.objects.get_or_create(
-                    nome=nome_setor,
+                    nome=nome_setor_stripped,
                     cliente=Cliente.objects.filter(id=self.cliente).first()
                 )
                 row["setor"] = setor_data
             else:
-                setor_padrao, created = Setor.objects.get_or_create(
-                    nome="Padrão",
-                    cliente=Cliente.objects.filter(id=self.cliente).first()
-                )
-                row["setor"] = setor_padrao
+                row["setor"] = None
 
             row["instrumento"] = instrumento.pk
             row["cliente"] = self.cliente

@@ -799,7 +799,12 @@ class SetorViewSet(viewsets.ModelViewSet):
                     {"detail": "Setor de destino não encontrado."},
                     status=status.HTTP_404_NOT_FOUND
                 )
-        
+            if target_setor.cliente_id != instance.cliente_id:
+                return response.Response(
+                    {"detail": "Setor de destino não pertence ao cliente."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
         result = instance.delete(
             action=action_type,
             instruments_to_move=instruments_to_move,

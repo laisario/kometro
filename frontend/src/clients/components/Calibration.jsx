@@ -64,6 +64,9 @@ function Calibration(props) {
   });
   const { hasCreatePermission, hasEditPermission, hasDeletePermission } = useAuth()
 
+  const setorNome =
+    calibration?.setor?.nome ?? calibration?.instrumento?.setor?.nome
+
   const handleClose = () => {
     setSelectedCalibration({})
     setOpenEdit(false)
@@ -155,9 +158,7 @@ function Calibration(props) {
           {calibration?.local && (
             <ContentRow title="Local" value={localLabels[calibration?.local]} />
           )}
-          {calibration?.setor && (
-            <ContentRow title="Setor" value={calibration?.setor?.nome} />
-          )}
+          <ContentRow title="Setor" value={setorNome ?? 'Sem setor'} />
           {calibration?.observacoes && (
             <ContentRow isMobile title="Observações:" value={calibration?.observacoes} />
           )}

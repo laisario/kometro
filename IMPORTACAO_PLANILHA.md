@@ -142,7 +142,7 @@ Os campos `frequencia calibracao periodo` e `frequencia checagem periodo` aceita
 | Nome da Coluna | Tipo | Obrigatório | Descrição | Valores Aceitos |
 |----------------|------|-------------|-----------|-----------------|
 | `status` | Texto | ❌ Não | Posição do instrumento | **U**, **E**, **I**, **F**, **C** |
-| `setor` | Texto | ❌ Não | Setor onde o instrumento está localizado | `Produção`, `Qualidade`, `Laboratório` |
+| `setor` | Texto | ❌ Não | Setor onde o instrumento está localizado. Se vazio ou omitido, o instrumento fica **sem setor** (não é criado setor "Padrão" automaticamente). | `Produção`, `Qualidade`, `Laboratório` |
 | `local` | Texto | ❌ Não | Local específico da calibração | `Instalação permanente`, `Cliente`, `Terceirizada` |
 
 ### Datas

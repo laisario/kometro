@@ -400,7 +400,7 @@ class Calibracao(models.Model):
     tracker = FieldTracker(fields=["data"])
     setor = models.ForeignKey(
         "Setor",
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="calibracoes",
@@ -656,9 +656,6 @@ class Setor(models.Model):
         target_setor=None,
         new_setor_name=None,
     ):
-        if self.nome == "Padrão":
-            return {'success': False, 'error': 'Não é possível excluir o setor Padrão.'}
-        
         instruments_to_move = instruments_to_move or []
         instruments_to_delete = instruments_to_delete or []
         

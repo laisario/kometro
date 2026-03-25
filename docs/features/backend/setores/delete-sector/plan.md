@@ -34,18 +34,19 @@ Organizational restructuring requires removing sectors while properly handling t
 5. Cache invalidated
 
 ### Action Options
-- Default: Move to "Padrão" sector
-- delete_all: Delete all instruments
-- transfer_existing: Move to specified sector
-- transfer_new: Create new sector and move
+- **transfer_existing** (default in API): Move selected instruments to a specified sector (must belong to the same client)
+- **transfer_new**: Create a new sector and move instruments there
+- **delete_all**: Delete all instruments in the sector
+- **Implicit model path** (`action is None` in `Setor.delete`, not the HTTP default): Move instruments to "Padrão" via `get_or_create` — distinct from `transfer_existing` in `SetorViewSet.destroy` (which defaults to `transfer_existing`)
 
 ## Acceptance Criteria
 
-- [ ] Cannot delete "Padrão" sector
+- [ ] Any sector can be deleted (including nome `"Padrão"`) when instrument handling rules are satisfied
 - [ ] Handles instruments per action parameter
 - [ ] Deletes subsectors
 - [ ] Invalidates cache
 - [ ] Returns appropriate status
+- [ ] `transfer_existing` rejects a target sector that belongs to another client (400)
 
 ## Backend Behavior
 
@@ -63,25 +64,26 @@ Organizational restructuring requires removing sectors while properly handling t
 ```
 
 ### Action Types
-- `null` — Move all to "Padrão"
+- `null` (model only, not HTTP default) — Move all to "Padrão" via `get_or_create`
 - `delete_all` — Delete all instruments
-- `transfer_existing` — Move to target sector
+- `transfer_existing` — Move to target sector (same `cliente` as the sector being deleted)
 - `transfer_new` — Create new sector and move
 
 ### Business Rules
-- "Padrão" sector is protected
 - Subsectors processed recursively
 - Custom delete() method on model
+- `Calibracao.setor` uses `on_delete=SET_NULL`: deleting a sector nulls calibration rows that pointed at it (calibrações are not cascade-deleted)
 
 ### Validations
 - Sector must exist
-- Cannot be "Padrão"
+- Target sector for `transfer_existing` must belong to the same client as the sector being deleted
 
 ## Data & Permissions
 
 ### Entities Touched
 - `Setor` — Read/Delete
 - `InstrumentoDoCliente` — Update/Delete
+- `Calibracao` — `setor_id` may be set to NULL when a sector is removed
 - Cache — Delete
 
 ### Permissions
@@ -90,7 +92,8 @@ Organizational restructuring requires removing sectors while properly handling t
 ## Edge Cases & Failures
 
 ### Validation Errors
-- Deleting "Padrão": Return 400
+- Target sector not found: Return 404
+- Target sector belongs to another client: Return 400
 
 ### Missing Data
 - Target sector not found: Return 404
@@ -103,4 +106,3 @@ Organizational restructuring requires removing sectors while properly handling t
 ## Open Questions
 
 - [ ] Should deletion require confirmation?
-
