@@ -267,15 +267,23 @@ function CreateInstrument(props) {
       const paramEdit = adminPreview ? adminPayload : clientPayload
       mutate(paramEdit);
     } else {
-      // When creating from table view, use the selected setorId (can be null/optional)
-      // Otherwise, use the setor prop from the sector tree selection
+      const setorPk = tableViewCreate
+        ? (setorId ? Number(setorId) : null)
+        : (setor?.type === 'sector' ? Number(setor?.id) : Number(setor?.parentId));
       const paramCreate = adminPreview ? payload : ({
         ...payload,
         previousSetorId: null,
-        setor: tableViewCreate
-          ? (setorId ? Number(setorId) : null)
-          : (setor?.type === 'sector' ? Number(setor?.id) : Number(setor?.parentId)),
-      })
+        setor: setorPk,
+      });
+      if (import.meta.env.DEV) {
+        console.debug('[CreateInstrument] create payload setor', {
+          tableViewCreate,
+          adminPreview,
+          setorProp: setor,
+          setorIdLocal: setorId,
+          setorPk,
+        });
+      }
       mutate(paramCreate);
     }
   }

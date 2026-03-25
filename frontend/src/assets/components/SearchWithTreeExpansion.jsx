@@ -13,7 +13,7 @@ function SearchWithTreeExpansion({
   data, 
   onSelectInstrument 
 }) {
-  const { expandPathToSector, nodes } = useSectorTreeContext();
+  const { expandPathToSector, selectNode } = useSectorTreeContext();
   
   const handleSelect = useCallback((item) => {
     // Extract sector ID from instrument
@@ -25,7 +25,12 @@ function SearchWithTreeExpansion({
     } else {
       console.warn('[SearchWithTreeExpansion] Instrument has no sector:', item);
     }
-    
+
+    const instrumentNodeId = item?.id != null ? `instrument-${item.id}` : null;
+    if (instrumentNodeId) {
+      selectNode(instrumentNodeId);
+    }
+
     // Call parent's onSelect handler with formatted item
     if (onSelectInstrument) {
       onSelectInstrument({
@@ -34,7 +39,7 @@ function SearchWithTreeExpansion({
         parentId: sectorId
       });
     }
-  }, [expandPathToSector, onSelectInstrument, nodes]);
+  }, [expandPathToSector, onSelectInstrument, selectNode]);
   
   return (
     <SearchWithDropdown

@@ -1,5 +1,6 @@
 import { useContext, useEffect, useState } from "react";
 import AssetsContext from "../components/context";
+import { useSectorTreeContext } from "../contexts/SectorTreeContext";
 import useResponsive from '../../theme/hooks/useResponsive';
 import useAsset from "../hooks/useAsset";
 import useSectorMutations from "../hooks/useSectorMutations";
@@ -30,10 +31,13 @@ const useAssetsVm = (id, idSetor) => {
   const [expandedItems, setExpandedItems] = useState([])
   const [selectedItem, setSelectedItem] = useState(null)
   const [creatingSector, setCreatingSector] = useState(false);
-  
+
+  const { selectNode } = useSectorTreeContext();
+
   useEffect(() => {
     if (id && idSetor) {
       setSelectedItem({id: `instrument-${id}`, type: 'instrument', parentId: idSetor})
+      selectNode(`instrument-${id}`);
       setExpandedItems(prevExpandedItems => {
         const idSetorStr = String(idSetor);
         if (prevExpandedItems?.includes(idSetorStr)) {
@@ -42,7 +46,7 @@ const useAssetsVm = (id, idSetor) => {
         return [...(prevExpandedItems || []), idSetorStr];
       })
     }
-  }, [id, idSetor])
+  }, [id, idSetor, selectNode])
 
   const [openFormCreateInstrument, setOpenFormCreateInstrument] = useState({
     status: false,
