@@ -39,7 +39,7 @@ class InstrumentoOSSerializer(serializers.ModelSerializer):
         return obj.carga_maxima
     
     def get_tipo_servico(self, obj):
-        """Return computed tipo_servico from instrumento.instrumento.tipo_de_servico"""
+        """Return computed tipo_servico from InstrumentoDoCliente.tipo_de_servico"""
         return obj.tipo_servico
     
     def get_numero_certificado(self, obj):

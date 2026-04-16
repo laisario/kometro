@@ -6,6 +6,7 @@ logger = logging.getLogger(__name__)
 from propostas.models import Proposta
 from ordem_servico.models import OrdemServico
 from ordem_servico.utils import agrupar_instrumentos_os, criar_os_do_grupo
+from instrumentos.models import TipoServico
 
 
 @shared_task(bind=True, max_retries=3)
@@ -54,7 +55,7 @@ def criar_ordens_servico_proposta(self, proposta_id):
                 'instrumento': instrumento,
                 'service_kind': 'calibracao',  # Default
                 'local': proposta.local,
-                'tipo_servico': instrumento.instrumento.tipo_de_servico or '-',
+                'tipo_servico': instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
             }
     
     grupos = agrupar_instrumentos_os(list(instrumentos_data.values()))

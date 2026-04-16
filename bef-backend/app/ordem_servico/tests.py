@@ -1,13 +1,87 @@
+from unittest.mock import MagicMock
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework.authtoken.models import Token
 
 from .models import OrdemServico, StatusOS, TipoOS
+from .utils import agrupar_instrumentos_os
 from propostas.models import Proposta
+from instrumentos.models import TipoServico
 
 
 User = get_user_model()
+
+
+def _make_instrumento_mock(tipo_de_servico):
+    """Return a mock InstrumentoDoCliente with given tipo_de_servico."""
+    inst = MagicMock()
+    inst.tipo_de_servico = tipo_de_servico
+    # instrumento.instrumento.tipo_de_instrumento.descricao — used by is_instrumento_balanca
+    inst.instrumento.tipo_de_instrumento.descricao = "Termômetro"
+    return inst
+
+
+class AgruparInstrumentosOSTipoServicoTest(TestCase):
+    """
+    Grouping uses InstrumentoDoCliente.tipo_de_servico as the key dimension.
+    Verify that:
+    - all-acreditado instruments group together under 'A'
+    - all-nao_acreditado instruments group together under 'NA'
+    - mixed instruments land in separate groups
+    - null tipo_de_servico defaults to NAO_ACREDITADO
+    - base Instrumento.tipo_de_servico is NOT consulted (mock has wrong value there)
+    """
+
+    def _make_data(self, tipo_de_servico, local='P', service_kind='calibracao'):
+        instrumento = _make_instrumento_mock(tipo_de_servico)
+        # Set the BASE instrument's tipo_de_servico to the opposite value — confirms we're NOT reading it
+        instrumento.instrumento.tipo_de_servico = (
+            TipoServico.NAO_ACREDITADO if tipo_de_servico == TipoServico.ACREDITADO else TipoServico.ACREDITADO
+        )
+        return {'instrumento': instrumento, 'local': local, 'service_kind': service_kind}
+
+    def test_all_acreditado_single_group(self):
+        data = [
+            self._make_data(TipoServico.ACREDITADO),
+            self._make_data(TipoServico.ACREDITADO),
+        ]
+        grupos = agrupar_instrumentos_os(data)
+        self.assertEqual(len(grupos), 1)
+        key = list(grupos.keys())[0]
+        self.assertIn(TipoServico.ACREDITADO, key)
+
+    def test_all_nao_acreditado_single_group(self):
+        data = [
+            self._make_data(TipoServico.NAO_ACREDITADO),
+            self._make_data(TipoServico.NAO_ACREDITADO),
+        ]
+        grupos = agrupar_instrumentos_os(data)
+        self.assertEqual(len(grupos), 1)
+        key = list(grupos.keys())[0]
+        self.assertIn(TipoServico.NAO_ACREDITADO, key)
+
+    def test_mixed_instruments_two_groups(self):
+        data = [
+            self._make_data(TipoServico.ACREDITADO),
+            self._make_data(TipoServico.NAO_ACREDITADO),
+        ]
+        grupos = agrupar_instrumentos_os(data)
+        self.assertEqual(len(grupos), 2)
+
+    def test_null_tipo_de_servico_defaults_to_nao_acreditado(self):
+        data = [self._make_data(None)]
+        grupos = agrupar_instrumentos_os(data)
+        key = list(grupos.keys())[0]
+        self.assertIn(TipoServico.NAO_ACREDITADO, key)
+
+    def test_interno_treated_as_its_own_value(self):
+        data = [self._make_data(TipoServico.INTERNO)]
+        grupos = agrupar_instrumentos_os(data)
+        key = list(grupos.keys())[0]
+        self.assertIn(TipoServico.INTERNO, key)
+
+
 
 
 class OrdemServicoUpdateStatusTests(TestCase):

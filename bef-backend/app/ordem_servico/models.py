@@ -248,9 +248,9 @@ class InstrumentoOS(models.Model):
     @property
     def tipo_servico(self):
         """
-        Computed property: returns instrumento.instrumento.tipo_de_servico.
-        Returns None if any link in the chain is missing.
+        Computed property: returns InstrumentoDoCliente.tipo_de_servico.
+        Returns None if instrumento link is missing.
         """
-        if self.instrumento and self.instrumento.instrumento:
-            return self.instrumento.instrumento.tipo_de_servico
+        if self.instrumento:
+            return self.instrumento.tipo_de_servico
         return None

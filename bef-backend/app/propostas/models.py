@@ -237,7 +237,7 @@ class Proposta(models.Model):
                 'instrumento': InstrumentoDoCliente instance,
                 'service_kind': 'calibracao' | 'manutencao',
                 'local': 'C' | 'P' | 'T',
-                'tipo_servico': 'A' | 'NA'  # Read from instrumento.instrumento.tipo_de_servico
+                'tipo_servico': 'A' | 'NA'  # Read from InstrumentoDoCliente.tipo_de_servico
             }
         }
         """
@@ -250,11 +250,11 @@ class Proposta(models.Model):
                 'instrumento': sel.instrumento,
                 'service_kind': sel.service_kind,
                 'local': sel.local,
-                'tipo_servico': sel.instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+                'tipo_servico': sel.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
             }
             for sel in selecoes
         }
-    
+
     def get_instrumento_selecao(self, instrumento_id):
         """Get selection for specific instrument"""
         try:
@@ -264,7 +264,7 @@ class Proposta(models.Model):
             return {
                 'service_kind': sel.service_kind,
                 'local': sel.local,
-                'tipo_servico': sel.instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+                'tipo_servico': sel.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
             }
         except PropostaInstrumento.DoesNotExist:
             # Fallback to proposta.local for backward compatibility
@@ -273,7 +273,7 @@ class Proposta(models.Model):
                 return {
                     'service_kind': 'calibracao',  # Default assumption
                     'local': self.local,
-                    'tipo_servico': instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
+                    'tipo_servico': instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO,
                 }
             except:
                 return {

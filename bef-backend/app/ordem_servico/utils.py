@@ -26,7 +26,7 @@ def agrupar_instrumentos_os(instrumentos_data):
     Group instruments into OS based on:
     1. If instrument is scale (balança) → OS Balanças
     2. Location (cliente / permanente / terceirizado) - from proposal selection
-    3. Service type (acreditado / nao_acreditado) - from instrument.tipo_de_servico
+    3. Service type (acreditado / nao_acreditado) - from InstrumentoDoCliente.tipo_de_servico
     4. Service kind (calibracao / manutencao) - from proposal selection
     
     Args:
@@ -49,7 +49,7 @@ def agrupar_instrumentos_os(instrumentos_data):
     for inst_data in instrumentos_data:
         instrumento = inst_data['instrumento']
         local = inst_data['local']
-        tipo_servico = instrumento.instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO
+        tipo_servico = instrumento.tipo_de_servico or TipoServico.NAO_ACREDITADO
         service_kind = inst_data['service_kind']  # 'calibracao' or 'manutencao'
         
         # Check if scale
