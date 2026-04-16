@@ -85,7 +85,6 @@ function FormElaborate(props) {
     total: total,
     descontoPercentual: Number(data?.descontoPercentual).toFixed(0) || 0,
     local: data?.local || 'P',
-    tipoServico: data?.tipoServico || '',
   }), [data])
   
   const form = useForm({ defaultValues });
@@ -102,7 +101,6 @@ function FormElaborate(props) {
     validade,
     responsavel,
     local,
-    tipoServico,
   } = useWatch({ control: form.control })
   
   const { users } = useUsers(null, { isStaff: true });
@@ -265,21 +263,6 @@ function FormElaborate(props) {
               <MenuItem value="C">Cliente</MenuItem>
               <MenuItem value="T">Terceirizado</MenuItem>
             </TextField>
-            <FormControl sx={{ width: '30%' }} size="small">
-              <InputLabel id="select-tipo-servico">Tipo de serviço</InputLabel>
-              <Select
-                labelId="select-tipo-servico"
-                id="select-tipo-servico"
-                name="tipoServico"
-                label="Tipo de serviço"
-                fullWidth
-                value={tipoServico || ''}
-                onChange={(e) => form.setValue("tipoServico", e.target.value)}
-              >
-                <MenuItem value="acreditado">Acreditado</MenuItem>
-                <MenuItem value="nao_acreditado">Não acreditado</MenuItem>
-              </Select>
-            </FormControl>
             {form.watch('local') !== "T" && (<TextField
               id="diasUteis"
               label="Dias Úteis"
