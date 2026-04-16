@@ -360,7 +360,7 @@ class InstrumentoDoClienteAvailableSerializer(serializers.ModelSerializer):
     """Serializer leve para lista de instrumentos disponíveis"""
     tipo_instrumento = TipoInstrumentoSimpleSerializer(source="instrumento.tipo_de_instrumento", read_only=True)
     tipo_servico = serializers.CharField(source="instrumento.tipo_de_servico", read_only=True)
-    
+
     class Meta:
         model = InstrumentoDoCliente
         fields = [
@@ -369,6 +369,7 @@ class InstrumentoDoClienteAvailableSerializer(serializers.ModelSerializer):
             "numero_de_serie",
             "tipo_instrumento",
             "tipo_servico",
+            "tipo_de_servico",
         ]
 
 
@@ -643,7 +644,8 @@ class InstrumentoDoClienteReadSerializer(serializers.ModelSerializer):
             "data_criacao",
             "preco_alternativo_calibracao",
             "criterio_frequencia",
-            "checagens"
+            "checagens",
+            "tipo_de_servico",
         )
 
     def get_checagens(self, obj):
