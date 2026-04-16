@@ -59,8 +59,15 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
 
   const handlePrecoChange = (instrumentId, value) => {
     const num = value === '' || value == null ? null : Number(value);
-    const updated = instruments?.map(inst => 
+    const updated = instruments?.map(inst =>
       inst?.id === instrumentId ? { ...inst, preco: isNaN(num) ? inst.preco : num } : inst
+    );
+    onChange(updated);
+  };
+
+  const handleTipoDeServicoChange = (instrumentId, value) => {
+    const updated = instruments?.map(inst =>
+      inst?.id === instrumentId ? { ...inst, tipoDeServico: value || null } : inst
     );
     onChange(updated);
   };
@@ -77,6 +84,7 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
             <TableCell>Instrumento</TableCell>
             <TableCell>Tipo de Serviço</TableCell>
             <TableCell>Local</TableCell>
+            <TableCell>Tipo</TableCell>
             {showPreco && <TableCell align="right">Preço (R$)</TableCell>}
             <TableCell align="right">Ações</TableCell>
           </TableRow>
@@ -158,6 +166,20 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                         {instrumentErrors.local}
                       </Typography>
                     )}
+                  </FormControl>
+                </TableCell>
+                <TableCell>
+                  <FormControl fullWidth size="small">
+                    <Select
+                      value={instrument.tipoDeServico || ''}
+                      onChange={(e) => handleTipoDeServicoChange(instrument.id, e.target.value)}
+                      displayEmpty
+                    >
+                      <MenuItem value=""><em>Não definido</em></MenuItem>
+                      <MenuItem value="A">Acreditado</MenuItem>
+                      <MenuItem value="NA">Não acreditado</MenuItem>
+                      <MenuItem value="I">Interno</MenuItem>
+                    </Select>
                   </FormControl>
                 </TableCell>
                 {showPreco && (
