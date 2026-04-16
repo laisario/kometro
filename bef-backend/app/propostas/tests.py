@@ -156,3 +156,91 @@ class ElaborarPropostaTipoDeServicoTest(TestCase):
         self.assertEqual(resp.status_code, 200, resp.data)
         self.instrumento.refresh_from_db()
         self.assertEqual(self.instrumento.tipo_de_servico, TipoServico.INTERNO)
+
+
+class ShouldApplySealTest(TestCase):
+    """
+    Seal rule: apply seal iff at least one InstrumentoDoCliente in the proposal
+    has tipo_de_servico = TipoServico.ACREDITADO ('A').
+    Checks InstrumentoDoCliente.tipo_de_servico, NOT the base Instrumento field.
+    """
+
+    def setUp(self):
+        from propostas.models import Proposta, PropostaInstrumento
+        empresa = Empresa.objects.create(razao_social="Empresa Selo", cnpj="00000000000005")
+        self.cliente = Cliente.objects.create(empresa=empresa)
+        self.PropostaInstrumento = PropostaInstrumento
+        self.Proposta = Proposta
+        self._tag_counter = 0
+
+    def _make_proposta(self):
+        return self.Proposta.objects.create(cliente=self.cliente)
+
+    def _make_instrumento_cliente(self, tipo_de_servico=None):
+        self._tag_counter += 1
+        tipo = TipoInstrumento.objects.create(
+            descricao=f"Instrumento {self._tag_counter}",
+            fabricante="F",
+            modelo="M",
+        )
+        instr = Instrumento.objects.create(tipo_de_instrumento=tipo)
+        return InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=instr,
+            tag=f"TAG-SELO-{self._tag_counter}",
+            tipo_de_servico=tipo_de_servico,
+        )
+
+    def _link(self, proposta, instrumento_cliente):
+        self.PropostaInstrumento.objects.create(
+            proposta=proposta,
+            instrumento=instrumento_cliente,
+            service_kind='calibracao',
+            local='P',
+        )
+        proposta.instrumentos.add(instrumento_cliente)
+
+    def test_all_nao_acreditado_no_seal(self):
+        proposta = self._make_proposta()
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.NAO_ACREDITADO))
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.NAO_ACREDITADO))
+        self.assertFalse(proposta.should_apply_seal())
+
+    def test_all_interno_no_seal(self):
+        proposta = self._make_proposta()
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.INTERNO))
+        self.assertFalse(proposta.should_apply_seal())
+
+    def test_one_acreditado_seal_applied(self):
+        proposta = self._make_proposta()
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.ACREDITADO))
+        self.assertTrue(proposta.should_apply_seal())
+
+    def test_mixed_one_acreditado_seal_applied(self):
+        proposta = self._make_proposta()
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.NAO_ACREDITADO))
+        self._link(proposta, self._make_instrumento_cliente(TipoServico.ACREDITADO))
+        self.assertTrue(proposta.should_apply_seal())
+
+    def test_null_tipo_de_servico_no_seal(self):
+        proposta = self._make_proposta()
+        self._link(proposta, self._make_instrumento_cliente(None))
+        self.assertFalse(proposta.should_apply_seal())
+
+    def test_base_instrument_acreditado_does_not_trigger_seal(self):
+        """InstrumentoDoCliente.tipo_de_servico=None, but base Instrumento.tipo_de_servico=ACREDITADO.
+        Seal must NOT apply — the rule uses the customer instrument, not the base."""
+        tipo = TipoInstrumento.objects.create(descricao="Base Acred", fabricante="F", modelo="M")
+        base_instr = Instrumento.objects.create(
+            tipo_de_instrumento=tipo,
+            tipo_de_servico=TipoServico.ACREDITADO,
+        )
+        cliente_instr = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=base_instr,
+            tag="TAG-BASE-ACRED",
+            tipo_de_servico=None,
+        )
+        proposta = self._make_proposta()
+        self._link(proposta, cliente_instr)
+        self.assertFalse(proposta.should_apply_seal())

@@ -325,16 +325,18 @@ class Proposta(models.Model):
         from instrumentos.models import TipoServico as InstrumentoTipoServico
 
         # Check selections table first (new structure)
+        # instrumento__tipo_de_servico traverses PropostaInstrumento → InstrumentoDoCliente.tipo_de_servico
         has_accredited_selection = self.instrumentos_selecoes.filter(
-            instrumento__instrumento__tipo_de_servico=InstrumentoTipoServico.ACREDITADO
+            instrumento__tipo_de_servico=InstrumentoTipoServico.ACREDITADO
         ).exists()
 
         if has_accredited_selection:
             return self.TIPO_SERVICO_ACREDITADO
 
         # Fallback to legacy M2M if needed
+        # tipo_de_servico is the field directly on InstrumentoDoCliente
         has_accredited_instrument = self.instrumentos.filter(
-            instrumento__tipo_de_servico=InstrumentoTipoServico.ACREDITADO
+            tipo_de_servico=InstrumentoTipoServico.ACREDITADO
         ).exists()
 
         if has_accredited_instrument:
