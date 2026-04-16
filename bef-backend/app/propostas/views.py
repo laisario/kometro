@@ -207,11 +207,13 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                     instrumento_id = item.get('id') or item.get('pk')
                     service_kind = item.get('service_kind', 'calibracao')
                     local = item.get('local', proposta.local or 'P')
+                    tipo_de_servico = item.get('tipo_de_servico')
                 else:
                     # Backward compatibility: just an ID
                     instrumento_id = item
                     service_kind = 'calibracao'
                     local = proposta.local or 'P'
+                    tipo_de_servico = None
                 
                 if instrumento_id is None:
                     continue
@@ -249,6 +251,7 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                         'service_kind': service_kind,
                         'local': local,
                         'preco': preco,
+                        'tipo_de_servico': tipo_de_servico,
                     })
                     
                 except InstrumentoDoCliente.DoesNotExist:
@@ -272,6 +275,9 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                         'preco': item_data['preco'],
                     }
                 )
+                if item_data.get('tipo_de_servico') is not None:
+                    item_data['instrumento'].tipo_de_servico = item_data['tipo_de_servico']
+                    item_data['instrumento'].save(update_fields=['tipo_de_servico'])
             
             recompute_total(proposta)
             proposta.status = "AA"
