@@ -638,7 +638,6 @@ class InstrumentoDoClienteReadSerializer(serializers.ModelSerializer):
             "historico_posicoes",
             "data_proxima_checagem",
             "data_ultima_checagem",
-            "criterios_aceitacao",
             "observacao",
             "historico_setores",
             "data_criacao",
