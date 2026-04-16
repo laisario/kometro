@@ -138,6 +138,17 @@ class InstrumentoDoCliente(models.Model):
         null=True, blank=True,
         verbose_name="Critério de frequência"
     )
+    tipo_de_servico = models.CharField(
+        max_length=20,
+        choices=[
+            ("acreditado", "Acreditado"),
+            ("nao_acreditado", "Não acreditado"),
+            ("interno", "Interno"),
+        ],
+        null=True,
+        blank=True,
+        verbose_name="Tipo de serviço",
+    )
 
     def __str__(self):
         return f"{self.tag}"
