@@ -14,7 +14,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
         id: inst.id,
         service_kind: inst.service_kind || 'calibracao',
         local,
-        tipo_de_servico: inst.tipoDeServico || null,
+        tipo_de_servico: inst.tipoDeServico ?? null,
       };
     }) || [];
     
@@ -91,7 +91,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
         service_kind: instrument.service_kind || 'calibracao',
         local,
         preco: preco != null ? preco : null,
-        tipo_de_servico: instrument.tipoDeServico || null,
+        tipo_de_servico: instrument.tipoDeServico ?? null,
       };
     }) || [];
     
@@ -183,7 +183,7 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
       service_kind: it.service_kind || 'calibracao',
       local: it.local || 'P',
       preco: it.preco != null ? it.preco : null,
-      tipo_de_servico: it.tipoDeServico || null,
+      tipo_de_servico: it.tipoDeServico ?? null,
     })) || null;
 
     const commonData = {
