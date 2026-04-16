@@ -126,11 +126,17 @@ class InstrumentosField(serializers.Field):
                         raise serializers.ValidationError(
                             f"preco deve ser um número válido, recebeu: {preco}"
                         )
+                tipo_de_servico = item.get('tipo_de_servico')
+                if tipo_de_servico is not None and tipo_de_servico not in ['A', 'NA', 'I']:
+                    raise serializers.ValidationError(
+                        f"tipo_de_servico deve ser 'A', 'NA' ou 'I', recebeu: {tipo_de_servico}"
+                    )
                 normalized.append({
                     'id': instrumento_id,
                     'service_kind': service_kind,
                     'local': local,
                     'preco': preco,
+                    'tipo_de_servico': tipo_de_servico,
                 })
             elif isinstance(item, (int, str)):
                 try:
@@ -145,6 +151,7 @@ class InstrumentosField(serializers.Field):
                     'service_kind': 'calibracao',
                     'local': 'P',
                     'preco': None,
+                    'tipo_de_servico': None,
                 })
             else:
                 raise serializers.ValidationError(
@@ -160,6 +167,13 @@ class InstrumentosField(serializers.Field):
         if isinstance(value, list):
             return [item.get('id') if isinstance(item, dict) else item for item in value]
         return []
+
+
+def _persist_tipo_de_servico(instrumento, inst_data):
+    tipo = inst_data.get('tipo_de_servico')
+    if tipo is not None:
+        instrumento.tipo_de_servico = tipo
+        instrumento.save(update_fields=['tipo_de_servico'])
 
 
 class WritePropostaSerializer(serializers.ModelSerializer):
@@ -218,8 +232,9 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                     local=local,
                     preco=preco,
                 )
+                _persist_tipo_de_servico(instrumento, inst_data)
                 instrument_ids.append(instrumento_id)
-            
+
             proposta.instrumentos.set(instrument_ids)
             recompute_total(proposta)
         
@@ -262,13 +277,14 @@ class WritePropostaSerializer(serializers.ModelSerializer):
                             'preco': preco,
                         }
                     )
+                    _persist_tipo_de_servico(instrumento, inst_data)
                     instrument_ids.append(instrumento_id)
-                
+
                 instance.instrumentos.set(instrument_ids)
             else:
                 instance.instrumentos.clear()
             recompute_total(instance)
-        
+
         return instance
 
 
@@ -390,17 +406,18 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                     )
                 
                 local = inst_data.get('local', proposta.local)
-           
+
                 PropostaInstrumento.objects.create(
                     proposta=proposta,
                     instrumento=instrumento,
                     service_kind=inst_data.get('service_kind', 'calibracao'),
                     local=local,
                 )
+                _persist_tipo_de_servico(instrumento, inst_data)
                 instrument_ids.append(instrumento_id)
-            
+
             proposta.instrumentos.set(instrument_ids)
-        
+
         return proposta
 
     def update(self, instance, validated_data):
@@ -446,8 +463,9 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
                             'preco': preco,
                         }
                     )
+                    _persist_tipo_de_servico(instrumento, inst_data)
                     instrument_ids.append(instrumento_id)
-                
+
                 instance.instrumentos.set(instrument_ids)
             else:
                 instance.instrumentos.clear()
@@ -460,7 +478,7 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
             total = proposta.total
             if total is None:
                 return Decimal("0")
-            
+
             desconto = proposta.desconto_percentual
             if not desconto:
                 return Decimal(total)
