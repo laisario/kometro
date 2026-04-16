@@ -54,6 +54,9 @@ function CardInformation({ instrument, isMobile, admin, removeInstrumentProposal
         {!!instrument?.tag && (
           <ContentRow colorValue="black" title="Tag" value={instrument?.tag} />
         )}
+        {!!instrument?.local && (
+          <ContentRow colorValue="black" title="Local" value={{ P: 'Instalações Permanentes', C: 'Cliente', T: 'Terceirizado' }[instrument.local] || instrument.local} />
+        )}
       </CardContent>
     
       <CardActions sx={{ display: 'flex', justifyContent: 'space-between' }}>

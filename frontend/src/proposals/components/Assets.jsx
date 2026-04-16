@@ -62,15 +62,18 @@ function Assets(props) {
               {(isLoadingAdd || isRemoving) 
                 ? <CircularProgress /> 
                 : data?.instrumentos?.map(
-                  (instrument, index) => (
+                  (instrument, index) => {
+                    const sel = data?.instrumentosSelecoes?.find(s => s.instrumentoId === instrument.id);
+                    return (
                       <CardInformation
-                        instrument={instrument}
+                        instrument={{ ...instrument, local: sel?.local }}
                         key={index}
                         isMobile={isMobile}
                         admin={admin}
                         removeInstrumentProposal={removeInstrumentProposal}
                       />
-                  )
+                    );
+                  }
               )}
             </Box>
           : <EmptyYet content="instrumentosProposta" isMobile={isMobile} />

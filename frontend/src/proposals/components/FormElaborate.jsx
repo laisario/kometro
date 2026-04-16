@@ -84,7 +84,6 @@ function FormElaborate(props) {
     diasUteis: data?.diasUteis || null,
     total: total,
     descontoPercentual: Number(data?.descontoPercentual).toFixed(0) || 0,
-    local: data?.local || 'P',
   }), [data])
   
   const form = useForm({ defaultValues });
@@ -100,7 +99,6 @@ function FormElaborate(props) {
     enderecoDeEntrega,
     validade,
     responsavel,
-    local,
   } = useWatch({ control: form.control })
   
   const { users } = useUsers(null, { isStaff: true });
@@ -251,19 +249,6 @@ function FormElaborate(props) {
               </Select>
             </FormControl>
             <TextField
-              id="local"
-              label="Local"
-              sx={{ width: '30%' }}
-              select
-              size="small"
-              defaultValue="P"
-              {...form?.register("local")}
-            >
-              <MenuItem value="P">Permanente</MenuItem>
-              <MenuItem value="C">Cliente</MenuItem>
-              <MenuItem value="T">Terceirizado</MenuItem>
-            </TextField>
-            {form.watch('local') !== "T" && (<TextField
               id="diasUteis"
               label="Dias Úteis"
               name="diasUteis"
@@ -272,7 +257,7 @@ function FormElaborate(props) {
               sx={{ width: '30%' }}
               {...form.register("diasUteis")}
               size="small"
-            />)}
+            />
           </Box>
           <FormControl sx={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 2, my: 1 }}>
             <FormLabel id="aprovacao">Endereço de entrega: </FormLabel>

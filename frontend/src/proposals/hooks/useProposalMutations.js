@@ -196,7 +196,6 @@ const useProposalMutations = (formCreateProposal, handleClose, setError, id) => 
       responsavel: formValues?.responsavel || null,
       diasUteis: formValues?.diasUteis || null,
       descontoPercentual: formValues?.descontoPercentual || null,
-      local: formValues?.local || null,
       instrumentos: instrumentos?.length ? instrumentos : null,
     };
 
