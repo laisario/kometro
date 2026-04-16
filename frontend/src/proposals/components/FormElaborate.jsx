@@ -66,7 +66,7 @@ function FormElaborate(props) {
         const local = sel?.local ?? 'P';
         const serviceKind = sel?.serviceKind ?? sel?.service_kind ?? 'calibracao';
         const preco = sel?.preco != null ? Number(sel.preco) : null;
-        return { ...inst, local, service_kind: serviceKind, preco, tipoDeServico: inst.tipoDeServico ?? null };
+        return { ...inst, local, service_kind: serviceKind, preco, tipoDeServico: inst.tipoDeServico ?? inst.tipo_de_servico ?? null };
       }));
     } else {
       setItems([]);

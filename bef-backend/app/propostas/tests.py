@@ -1,4 +1,5 @@
-from django.test import TestCase
+from unittest.mock import patch
+from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from clientes.models import Cliente, Empresa
@@ -105,3 +106,53 @@ class AdicionarInstrumentoTipoDeServicoTest(TestCase):
             format='json',
         )
         self.assertEqual(resp.status_code, 400)
+
+
+class WritePropostaSerializerTipoDeServicoTest(TestCase):
+    def setUp(self):
+        empresa = Empresa.objects.create(razao_social="Empresa 3", cnpj="00000000000003")
+        self.cliente = Cliente.objects.create(empresa=empresa)
+        self.user = User.objects.create_user(username='client_user', password='pass')
+        self.user.clientes.add(self.cliente)
+        self.instrumento = _make_instrumento(self.cliente)
+        self.instrumento.tag = 'TAG-003'
+        self.instrumento.save(update_fields=['tag'])
+
+    def test_create_persists_tipo_de_servico(self):
+        from propostas.serializers import WritePropostaSerializer
+        request = RequestFactory().post('/')
+        request.user = self.user
+        serializer = WritePropostaSerializer(
+            data={'instrumentos': [{'id': self.instrumento.id, 'service_kind': 'calibracao', 'local': 'P', 'tipo_de_servico': TipoServico.ACREDITADO}]},
+            context={'request': request},
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        self.instrumento.refresh_from_db()
+        self.assertEqual(self.instrumento.tipo_de_servico, TipoServico.ACREDITADO)
+
+
+class ElaborarPropostaTipoDeServicoTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        empresa = Empresa.objects.create(razao_social="Empresa 4", cnpj="00000000000004")
+        self.cliente = Cliente.objects.create(empresa=empresa)
+        self.user = User.objects.create_user(username='staff2', password='pass', is_staff=True)
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+        self.instrumento = _make_instrumento(self.cliente)
+        self.instrumento.tag = 'TAG-004'
+        self.instrumento.save(update_fields=['tag'])
+        from propostas.models import Proposta
+        self.proposta = Proposta.objects.create(cliente=self.cliente)
+
+    @patch('propostas.views.gerar_pdf_proposta')
+    def test_elaborar_persists_tipo_de_servico(self, _mock_pdf):
+        resp = self.api.patch(
+            f'/propostas/{self.proposta.id}/elaborar/',
+            {'cliente': self.cliente.id, 'instrumentos': [{'id': self.instrumento.id, 'service_kind': 'calibracao', 'local': 'P', 'tipo_de_servico': TipoServico.INTERNO}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.instrumento.refresh_from_db()
+        self.assertEqual(self.instrumento.tipo_de_servico, TipoServico.INTERNO)

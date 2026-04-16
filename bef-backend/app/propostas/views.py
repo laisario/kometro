@@ -17,6 +17,7 @@ from .serializers import (
     ReadPropostaSerializer,
     WritePropostaSerializer,
     AnexoSerializer,
+    _persist_tipo_de_servico,
 )
 from .filters import PropostaFilter
 from instrumentos.models import InstrumentoDoCliente, TipoServico
@@ -283,9 +284,7 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                         'preco': item_data['preco'],
                     }
                 )
-                if item_data.get('tipo_de_servico') is not None:
-                    item_data['instrumento'].tipo_de_servico = item_data['tipo_de_servico']
-                    item_data['instrumento'].save(update_fields=['tipo_de_servico'])
+                _persist_tipo_de_servico(item_data['instrumento'], item_data)
             
             recompute_total(proposta)
             proposta.status = "AA"
