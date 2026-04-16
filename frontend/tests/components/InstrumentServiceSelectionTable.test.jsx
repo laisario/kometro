@@ -63,10 +63,8 @@ describe('InstrumentServiceSelectionTable — Tipo column', () => {
       />
     );
 
-    // Find the Tipo select — it's the last Select in the row (after the Local select).
-    // MUI Select renders its trigger as a div with role="combobox".
-    const comboboxes = screen.getAllByRole('combobox');
-    const tipoSelect = comboboxes[comboboxes.length - 1];
+    // Find the Tipo select by aria-label
+    const tipoSelect = screen.getByRole('combobox', { name: 'Tipo' });
 
     // Open the dropdown
     fireEvent.mouseDown(tipoSelect);

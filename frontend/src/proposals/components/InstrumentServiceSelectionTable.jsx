@@ -174,6 +174,7 @@ function InstrumentServiceSelectionTable({ instruments, onChange, onRemove, erro
                       value={instrument.tipoDeServico || ''}
                       onChange={(e) => handleTipoDeServicoChange(instrument.id, e.target.value)}
                       displayEmpty
+                      inputProps={{ 'aria-label': 'Tipo' }}
                     >
                       <MenuItem value=""><em>Não definido</em></MenuItem>
                       <MenuItem value="A">Acreditado</MenuItem>
