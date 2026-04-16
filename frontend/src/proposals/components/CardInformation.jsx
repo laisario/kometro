@@ -57,9 +57,9 @@ function CardInformation({ instrument, isMobile, admin, removeInstrumentProposal
       </CardContent>
     
       <CardActions sx={{ display: 'flex', justifyContent: 'space-between' }}>
-        {!!instrument?.instrumento?.tipoDeServico && (
+        {!!instrument?.tipoDeServico && (
           <Typography fontWeight="900" color="black" variant="body1">
-            {instrument?.instrumento?.tipoDeServico === 'A' ? 'Acreditado' : 'Não acreditado'}
+            {instrument?.tipoDeServico === 'A' ? 'Acreditado' : instrument?.tipoDeServico === 'I' ? 'Interno' : 'Não acreditado'}
           </Typography>
         )}
         {admin && (
