@@ -5,7 +5,7 @@ from clientes.models import Cliente
 from clientes.serializers import ClienteSerializer, UserSerializer
 from enderecos.models import Endereco
 from enderecos.serializers import ReadEnderecoSerializer, WriteEnderecoSerializer
-from instrumentos.models import InstrumentoDoCliente, Local
+from instrumentos.models import InstrumentoDoCliente, Local, TipoServico
 from instrumentos.serializers import (
     InstrumentoDoClienteReadSerializer,
     InstrumentoDoClienteAvailableSerializer
@@ -13,6 +13,9 @@ from instrumentos.serializers import (
 from .models import Proposta, Revisao, Anexo, PropostaInstrumento
 from .services import recompute_total, get_resolved_preco
 from decimal import Decimal, InvalidOperation
+
+
+_VALID_TIPO_DE_SERVICO = [c[0] for c in TipoServico.choices]
 
 
 class RevisaoSerializer(serializers.ModelSerializer):
@@ -127,9 +130,9 @@ class InstrumentosField(serializers.Field):
                             f"preco deve ser um número válido, recebeu: {preco}"
                         )
                 tipo_de_servico = item.get('tipo_de_servico')
-                if tipo_de_servico is not None and tipo_de_servico not in ['A', 'NA', 'I']:
+                if tipo_de_servico is not None and tipo_de_servico not in _VALID_TIPO_DE_SERVICO:
                     raise serializers.ValidationError(
-                        f"tipo_de_servico deve ser 'A', 'NA' ou 'I', recebeu: {tipo_de_servico}"
+                        f"tipo_de_servico deve ser um de {_VALID_TIPO_DE_SERVICO}, recebeu: {tipo_de_servico}"
                     )
                 normalized.append({
                     'id': instrumento_id,
@@ -170,6 +173,7 @@ class InstrumentosField(serializers.Field):
 
 
 def _persist_tipo_de_servico(instrumento, inst_data):
+    """Update InstrumentoDoCliente.tipo_de_servico if provided in payload."""
     tipo = inst_data.get('tipo_de_servico')
     if tipo is not None:
         instrumento.tipo_de_servico = tipo
