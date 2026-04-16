@@ -35,6 +35,18 @@ class CriterioFrequencia(models.TextChoices):
     CALENDARIO = "C", _("Tempo de calendário")
     SERVICO = "S", _("Tempo de serviço")
 
+
+class TipoServico(models.TextChoices):
+    ACREDITADO = "A", _("Acreditado")
+    NAO_ACREDITADO = "NA", _("Não acreditado")
+    INTERNO = "I", _("Interno")
+
+
+class TipoSinal(models.TextChoices):
+    ANALOGICO = "A", _("Analógico")
+    DIGITAL = "D", _("Digital")
+
+
 class InstrumentoDoCliente(models.Model):
     class Posicao(models.TextChoices):
         EM_USO = "U", _("Em uso")
@@ -139,12 +151,8 @@ class InstrumentoDoCliente(models.Model):
         verbose_name="Critério de frequência"
     )
     tipo_de_servico = models.CharField(
-        max_length=20,
-        choices=[
-            ("acreditado", "Acreditado"),
-            ("nao_acreditado", "Não acreditado"),
-            ("interno", "Interno"),
-        ],
+        max_length=2,
+        choices=TipoServico.choices,
         null=True,
         blank=True,
         verbose_name="Tipo de serviço",
@@ -468,18 +476,6 @@ class Calibracao(models.Model):
     class Meta:
         verbose_name = "Calibração"
         verbose_name_plural = "Calibrações"
-
-
-class TipoServico(models.TextChoices):
-    ACREDITADO = "A", _("Acreditado")
-    NAO_ACREDITADO = "NA", _("Não acreditado")
-    INTERNO = "I", _("Interno")
-
-
-class TipoSinal(models.TextChoices):
-    ANALOGICO = "A", _("Analógico")
-    DIGITAL = "D", _("Digital")
-
 
 class CapacidadeMedicao(models.Model):
     valor = models.FloatField()
