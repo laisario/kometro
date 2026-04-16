@@ -66,7 +66,7 @@ function FormElaborate(props) {
         const local = sel?.local ?? 'P';
         const serviceKind = sel?.serviceKind ?? sel?.service_kind ?? 'calibracao';
         const preco = sel?.preco != null ? Number(sel.preco) : null;
-        return { ...inst, local, service_kind: serviceKind, preco };
+        return { ...inst, local, service_kind: serviceKind, preco, tipoDeServico: inst.tipoDeServico ?? null };
       }));
     } else {
       setItems([]);
@@ -379,6 +379,7 @@ function FormElaborate(props) {
                     service_kind: it.service_kind || 'calibracao',
                     local: it.local || 'P',
                     preco: it.preco != null ? it.preco : null,
+                    tipoDeServico: it.tipoDeServico ?? null,
                   })) || [];
                   const dataToSubmit = {
                     ...submitData,
