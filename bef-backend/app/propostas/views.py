@@ -19,7 +19,7 @@ from .serializers import (
     AnexoSerializer,
 )
 from .filters import PropostaFilter
-from instrumentos.models import InstrumentoDoCliente
+from instrumentos.models import InstrumentoDoCliente, TipoServico
 from django.core.files.base import ContentFile
 from .admin import PropostaExportResource
 from clientes.mixins import ClienteScopedQuerysetMixin
@@ -241,7 +241,15 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                             {"detail": f"local deve ser 'P', 'C' ou 'T', recebeu: {local}"},
                             status=status.HTTP_400_BAD_REQUEST,
                         )
-                    
+
+                    # Validate tipo_de_servico
+                    _valid_tipos = [c[0] for c in TipoServico.choices]
+                    if tipo_de_servico is not None and tipo_de_servico not in _valid_tipos:
+                        return response.Response(
+                            {"detail": f"tipo_de_servico deve ser um de {_valid_tipos}, recebeu: {tipo_de_servico}"},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+
                     preco = item.get('preco') if isinstance(item, dict) else None
                     if preco is None:
                         preco = Decimal("0")
