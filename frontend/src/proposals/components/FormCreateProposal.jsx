@@ -6,24 +6,22 @@ import {
   DialogContent,
   DialogActions,
   Dialog,
-  Autocomplete,
   Typography,
 } from '@mui/material';
 import { verifyError } from '../../utils/error';
 import VirtualizedInstrumentAutocomplete from './VirtualizedInstrumentAutocomplete';
 import InstrumentServiceSelectionTable from './InstrumentServiceSelectionTable';
+import ClientAutocomplete from './ClientAutocomplete';
 import useResponsive from '../../theme/hooks/useResponsive';
 
 function FormCreateProposal(props) {
-  const { 
-    onClose, 
-    open, 
+  const {
+    onClose,
+    open,
     user,
     mutateCreateProposal,
     isLoadingCreateProposal,
     formCreateProposal,
-    clients,
-    isLoadingClients,
     error,
     setError,
   } = props;
@@ -41,28 +39,12 @@ function FormCreateProposal(props) {
       <DialogTitle>Criar novo pedido de calibração</DialogTitle>
       <DialogContent>
         {user?.admin && (
-          <Autocomplete
-            autoHighlight
-            options={clients?.results || []}
-            isOptionEqualToValue={(option, value) => option?.id === value?.id}
-            getOptionLabel={
-              (client) => client?.empresa
-            }
-            loading={isLoadingClients}
-            name="cliente"
+          <ClientAutocomplete
+            user={user}
             value={client || null}
-            loadingText="Carregando..."
-            noOptionsText="Sem resultados"
-            onChange={(event, newValue) => {verifyError("cliente", error, setError); formCreateProposal?.setValue('cliente', newValue)}}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Cliente"
-                placeholder="Pesquisar cliente"
-                helperText={!!error['cliente']?.length && error['cliente'][0]}
-                error={!!error['cliente']?.length}
-              />
-            )}
+            onChange={(event, newValue) => { verifyError("cliente", error, setError); formCreateProposal?.setValue('cliente', newValue); }}
+            error={!!error['cliente']?.length}
+            helperText={!!error['cliente']?.length && error['cliente'][0]}
             sx={{ my: 2 }}
           />
         )}

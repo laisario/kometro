@@ -53,8 +53,6 @@ function ProposalsPage() {
     mutateCreateProposal,
     isLoadingCreateProposal,
     formCreateProposal,
-    clients,
-    isLoadingClients,
     error,
     setError,
     exportOrders,
@@ -199,8 +197,6 @@ function ProposalsPage() {
           mutateCreateProposal={mutateCreateProposal}
           isLoadingCreateProposal={isLoadingCreateProposal}
           formCreateProposal={formCreateProposal}
-          clients={clients}
-          isLoadingClients={isLoadingClients}
           error={error}
           setError={setError}
         />

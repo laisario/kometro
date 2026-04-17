@@ -1,12 +1,10 @@
-import { useContext, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import useAuth from '../../auth/hooks/useAuth';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { axios } from '../../api';
 import useProposals from '../hooks/useProposals';
 import useProposalMutations from '../hooks/useProposalMutations';
-import useClients from '../../clients/hooks/useClients';
-
 function useProposalsVM() {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [csvContent, setCsvContent] = useState(null);
@@ -35,11 +33,6 @@ function useProposalsVM() {
     deleteOrder,
     mutateCreateProposal,
   } = useProposalMutations(formCreateProposal, handleClose, setError);
-
-  const {
-    clients,
-    isLoadingClients,
-  } = useClients(user)
 
   const navigate = useNavigate()
 
@@ -94,8 +87,6 @@ function useProposalsVM() {
     selectedOrders,
     setSelectedOrders,
     formCreateProposal,
-    clients,
-    isLoadingClients,
     mutateCreateProposal,
     error,
     setError,
