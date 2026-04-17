@@ -105,11 +105,15 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         if self.request.user.is_staff:
             client = self.request.query_params.get("client")
             if client:
-                return queryset.filter(cliente_id=client).order_by('-id')
-            return queryset.order_by('-id')
+                queryset = queryset.filter(cliente_id=client)
 
-        queryset = queryset.filter(cliente__usuarios=self.request.user)
-        
+        else:
+            queryset = queryset.filter(cliente__usuarios=self.request.user)
+
+        proposta_id = self.request.query_params.get("proposta")
+        if proposta_id:
+            queryset = queryset.exclude(propostas__id=proposta_id)
+
         return queryset.order_by('-id')
     
 

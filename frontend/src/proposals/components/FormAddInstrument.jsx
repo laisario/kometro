@@ -62,6 +62,7 @@ function FormAddInstrument(props) {
       <DialogContent>
         <VirtualizedInstrumentAutocomplete
           clientId={data?.cliente?.id}
+          proposalId={data?.id}
           value={instruments}
           onChange={handleInstrumentChange}
           label="Instrumentos"

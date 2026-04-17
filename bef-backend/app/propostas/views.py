@@ -197,10 +197,25 @@ class PropostaViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
+        # Reject any instrument already linked to this proposal
+        requested_ids = []
+        for item in instrumentos_data:
+            raw_id = (item.get('id') or item.get('pk')) if isinstance(item, dict) else item
+            if raw_id is not None:
+                requested_ids.append(int(raw_id))
+        already_linked = list(
+            proposta.instrumentos.filter(id__in=requested_ids).values_list('id', flat=True)
+        )
+        if already_linked:
+            return response.Response(
+                {"detail": f"Instrumento(s) {already_linked} já pertencem à proposta."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         with transaction.atomic():
             instruments_to_add = []
             proposta_instrumentos_to_create = []
-            
+
             # First pass: validate all instruments
             for item in instrumentos_data:
                 # Support both formats: dict with id/service_kind/local or just id

@@ -107,6 +107,23 @@ class AdicionarInstrumentoTipoDeServicoTest(TestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_duplicate_instrument_returns_400(self):
+        proposta = self._create_proposta()
+        # Add instrument once (should succeed)
+        resp = self.api.post(
+            f'/propostas/{proposta.id}/adicionar_instrumento/',
+            {'instrumentos': [{'id': self.instrumento.id, 'service_kind': 'calibracao', 'local': 'P'}]},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        # Attempt to add the same instrument again (should be rejected)
+        resp2 = self.api.post(
+            f'/propostas/{proposta.id}/adicionar_instrumento/',
+            {'instrumentos': [{'id': self.instrumento.id, 'service_kind': 'calibracao', 'local': 'P'}]},
+            format='json',
+        )
+        self.assertEqual(resp2.status_code, 400)
+
 
 class WritePropostaSerializerTipoDeServicoTest(TestCase):
     def setUp(self):

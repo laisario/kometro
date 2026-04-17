@@ -11,6 +11,7 @@ import useClientAssets from '../../assets/hooks/useClientAsset';
 
 const VirtualizedInstrumentAutocomplete = ({
   clientId,
+  proposalId,
   value,
   onChange,
   error,
@@ -27,7 +28,7 @@ const VirtualizedInstrumentAutocomplete = ({
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useClientAssets(clientId, false, true);
+  } = useClientAssets(clientId, false, true, proposalId);
 
   const listboxRef = useRef(null);
   const scrollPositionRef = useRef(0);

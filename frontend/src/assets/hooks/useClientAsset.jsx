@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import _, {debounce} from 'lodash';
 import { axios } from "../../api";
 
-const useClientAssets = (clientId, table = false, infinite = false) => {
+const useClientAssets = (clientId, table = false, infinite = false, proposalId = null) => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [search, setSearch] = useState('');
@@ -14,15 +14,17 @@ const useClientAssets = (clientId, table = false, infinite = false) => {
     error: errorAssets, 
     isLoading: isLoadingAssets, 
   } = useQuery({
-    queryKey: ['instrumentos', clientId, debouncedSearch, page, rowsPerPage], 
+    queryKey: ['instrumentos', clientId, debouncedSearch, page, rowsPerPage, proposalId],
     queryFn: async () => {
-      const response = await axios.get(`/instrumentos/`, { 
-        params: { 
-          page_size: table ? rowsPerPage : 20, 
-          client: clientId,  
+      const response = await axios.get(`/instrumentos/`, {
+        params: {
+          page_size: table ? rowsPerPage : 20,
+          client: clientId,
           page: page + 1,
-          search: debouncedSearch, 
-      }});
+          search: debouncedSearch,
+          ...(proposalId && { proposta: proposalId }),
+        },
+      });
       return response?.data;
     },
     enabled: !!clientId && !infinite,
@@ -36,7 +38,7 @@ const useClientAssets = (clientId, table = false, infinite = false) => {
     isFetching: isFetchingInfinite,
     isFetchingNextPage,
   } = useInfiniteQuery({
-    queryKey: ['instrumentos-infinite', clientId, debouncedSearch],
+    queryKey: ['instrumentos-infinite', clientId, debouncedSearch, proposalId],
     queryFn: async ({ pageParam = 1 }) => {
       const response = await axios.get('/instrumentos/', {
         params: {
@@ -44,6 +46,7 @@ const useClientAssets = (clientId, table = false, infinite = false) => {
           client: clientId,
           page: pageParam,
           search: debouncedSearch,
+          ...(proposalId && { proposta: proposalId }),
         },
       });
       return response?.data;
