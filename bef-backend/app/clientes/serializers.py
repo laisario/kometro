@@ -20,7 +20,7 @@ class LoginSerializer(TokenObtainPairSerializer):
             user.first_name or user.username
         )
         token["admin"] = user.is_staff
-        token["cliente"] = user.clientes.first().id if user.clientes.exists() else user.id
+        token["cliente"] = user.clientes.first().id if user.clientes.exists() else None
         return token
 
 

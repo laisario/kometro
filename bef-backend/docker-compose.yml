@@ -13,6 +13,38 @@ services:
       - 'db:/var/lib/mysql'
     command: ['mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci']
 
+  minio:
+    container_name: 'minio'
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio_local}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio_local_secret}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - minio_data:/data
+
+  createbuckets:
+    container_name: 'createbuckets'
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ACCESS_KEY:-minio_local} ${MINIO_SECRET_KEY:-minio_local_secret} &&
+      mc mb local/${MINIO_BUCKET_NAME:-kometro-local} --ignore-existing &&
+      mc anonymous set public local/${MINIO_BUCKET_NAME:-kometro-local} &&
+      exit 0
+      "
+
   web:
     container_name: 'web'
     build: .
@@ -37,12 +69,22 @@ services:
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      USE_MINIO: ${USE_MINIO:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio_local}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minio_local_secret}
+      MINIO_ENDPOINT_URL: ${MINIO_ENDPOINT_URL:-http://minio:9000}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kometro-local}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
     ports:
       - "8000:8000"
       - "8953:8953"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
+      minio:
+        condition: service_healthy
     restart: always
     volumes:
       - ./app:/kometro
@@ -73,6 +115,12 @@ services:
       EMAIL_HOST_USER: ${EMAIL_HOST_USER}
       EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD}
       DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL}
+      USE_MINIO: ${USE_MINIO:-false}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minio_local}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minio_local_secret}
+      MINIO_ENDPOINT_URL: ${MINIO_ENDPOINT_URL:-http://minio:9000}
+      MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kometro-local}
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
     depends_on:
       - redis
       - web
@@ -99,3 +147,4 @@ services:
 
 volumes:
   db:
+  minio_data:

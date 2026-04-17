@@ -24,10 +24,12 @@ export default function RegisterFromInvite() {
   const navigate = useNavigate();
   const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
+  const [paraEquipe, setParaEquipe] = useState(false)
+
   useEffect(() => {
     const decoded = jwtDecode(token)
     setClientId(decoded?.cliente_id)
-
+    setParaEquipe(!!decoded?.para_equipe)
   }, [])
 
   const handleRegister = async () => {
@@ -64,8 +66,10 @@ export default function RegisterFromInvite() {
       </Typography>
 
       <Typography variant="body1" sx={{ mb: 5 }}>
-        Bem-vindo! Você recebeu um convite para acessar o sistema da empresa <strong>{company}</strong>.
-        Por favor, crie sua conta preenchendo o formulário abaixo.
+        {paraEquipe
+          ? 'Bem-vindo! Você recebeu um convite para acessar o sistema como membro da equipe interna. Por favor, crie sua conta preenchendo o formulário abaixo.'
+          : <>Bem-vindo! Você recebeu um convite para acessar o sistema da empresa <strong>{company}</strong>. Por favor, crie sua conta preenchendo o formulário abaixo.</>
+        }
       </Typography>
 
       <Stack spacing={3}>

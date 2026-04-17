@@ -38,7 +38,7 @@ def criar_grupos(apps, schema_editor):
                             content_type=ContentType.objects.get(app_label=app_label, model=model)
                         )
                         grupo.permissions.add(perm)
-                    except Permission.DoesNotExist:
+                    except (ContentType.DoesNotExist, Permission.DoesNotExist):
                         print(f"[WARN] Permissão {codename} para {app_label}.{model} não encontrada")
 
 

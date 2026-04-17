@@ -233,27 +233,42 @@ LOGGING = {
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATIC_URL = "static/"
 STATIC_ROOT = "./static/"
-
 MEDIA_URL = "/media/"
 MEDIA_ROOT = "./media/"
-AWS_ACCESS_KEY_ID = os.getenv("DIGITAL_OCEAN_ACCESS_KEY_ID")
-AWS_SECRET_ACCESS_KEY = os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
 
-AWS_STORAGE_BUCKET_NAME = "kometro"
-AWS_S3_REGION_NAME = "nyc3"
-AWS_S3_ENDPOINT_URL = "https://kometro.nyc3.digitaloceanspaces.com"
-AWS_S3_OBJECT_PARAMETERS = {
-    "CacheControl": "max-age=86400",
-}
-AWS_LOCATION = "static"
-AWS_DEFAULT_ACL = "public-read"
+USE_MINIO = os.getenv("USE_MINIO", "false").lower() == "true"
 
-STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-STATIC_URL = "%s/%s/" % (AWS_S3_ENDPOINT_URL, AWS_LOCATION)
+if USE_MINIO:
+    AWS_ACCESS_KEY_ID = os.getenv("MINIO_ACCESS_KEY", "minio_local")
+    AWS_SECRET_ACCESS_KEY = os.getenv("MINIO_SECRET_KEY", "minio_local_secret")
+    AWS_STORAGE_BUCKET_NAME = os.getenv("MINIO_BUCKET_NAME", "kometro-local")
+    AWS_S3_ENDPOINT_URL = os.getenv("MINIO_ENDPOINT_URL", "http://minio:9000")
+    AWS_S3_REGION_NAME = "us-east-1"
+    AWS_S3_OBJECT_PARAMETERS = {}
+    AWS_LOCATION = "static"
+    AWS_DEFAULT_ACL = "public-read"
+    AWS_S3_ADDRESSING_STYLE = "path"
+    AWS_QUERYSTRING_AUTH = False
 
-DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
+    STATICFILES_STORAGE = "django.contrib.staticfiles.storage.StaticFilesStorage"
+    STATIC_URL = "static/"
+    DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MinIOMediaStorage"
+else:
+    AWS_ACCESS_KEY_ID = os.getenv("DIGITAL_OCEAN_ACCESS_KEY_ID")
+    AWS_SECRET_ACCESS_KEY = os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
+    AWS_STORAGE_BUCKET_NAME = "kometro"
+    AWS_S3_REGION_NAME = "nyc3"
+    AWS_S3_ENDPOINT_URL = "https://kometro.nyc3.digitaloceanspaces.com"
+    AWS_S3_OBJECT_PARAMETERS = {
+        "CacheControl": "max-age=86400",
+    }
+    AWS_LOCATION = "static"
+    AWS_DEFAULT_ACL = "public-read"
+
+    STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+    STATIC_URL = "%s/%s/" % (AWS_S3_ENDPOINT_URL, AWS_LOCATION)
+    DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 
 # celery
 

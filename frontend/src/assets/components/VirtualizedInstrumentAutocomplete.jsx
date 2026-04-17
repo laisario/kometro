@@ -54,7 +54,7 @@ const InstrumentOption = ({ index, style, data, adminPreview, onDelete, setInstr
   const procedimento = option?.procedimentoRelacionado?.codigo || '—';
   const tipoServico =
     option?.tipoDeServico === 'A' ? 'Acreditado'
-    : option?.tipoDeServico === 'N' ? 'Não Acreditado'
+    : option?.tipoDeServico === 'NA' ? 'Não Acreditado'
     : option?.tipoDeServico === 'I' ? 'Interna' : '—';
   const tipoSinal =
     option?.tipoSinal === 'A' ? 'Analógico'

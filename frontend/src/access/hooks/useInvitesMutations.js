@@ -12,7 +12,7 @@ function useInvitesMutations(grupo, setConviteUrl) {
   const createInvite = async () => {
     return await axios.post("invites/create/", {
       grupo,
-      cliente: user?.cliente,
+      ...(user?.admin ? {} : { cliente: user?.cliente }),
     });
   };
   

@@ -83,12 +83,15 @@ class Cliente(models.Model):
 
 
 class Convite(models.Model):
-    token_jti = models.CharField(max_length=255) 
+    token_jti = models.CharField(max_length=255)
     grupo = models.ForeignKey("auth.Group", on_delete=models.CASCADE)
     criado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites')
     criado_em = models.DateTimeField(auto_now_add=True)
     usado = models.BooleanField(default=False)
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='invites')
+    # Nullable: staff-created invitations have no client association
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.CASCADE, related_name='invites', null=True, blank=True
+    )
 
 
 class PasswordReset(models.Model):

@@ -213,13 +213,14 @@ class DashboardViewSet(viewsets.ViewSet):
         )
 
 
-def gerar_token_convite(grupo_id, criado_por_id, cliente_id):
+def gerar_token_convite(grupo_id, criado_por_id, cliente_id, para_equipe=False):
     jti = str(uuid.uuid4())
     payload = {
         "jti": jti,
         "grupo_id": grupo_id,
         "criado_por": criado_por_id,
         "cliente_id": cliente_id,
+        "para_equipe": para_equipe,
         "type": "invite",
         "exp": timezone.now() + timezone.timedelta(days=7)
     }
@@ -246,18 +247,30 @@ class CriarConviteView(APIView):
 
     def post(self, request):
         grupo_id = request.data.get("grupo")
-        cliente_id = request.data.get("cliente")
 
-        if not grupo_id or not cliente_id:
-            return Response({"error": "grupo_id e cliente_id são obrigatórios"}, status=400)
+        if not grupo_id:
+            return Response({"error": "grupo_id é obrigatório"}, status=400)
 
-        token, jti = gerar_token_convite(grupo_id, request.user.id, cliente_id)
+        inviter_is_staff = request.user.is_staff
+
+        if inviter_is_staff:
+            # Staff invite: no client association, invited user will become staff
+            cliente_id = None
+        else:
+            # Client invite: must target the inviter's own client
+            cliente_id = request.data.get("cliente")
+            if not cliente_id:
+                return Response({"error": "cliente_id é obrigatório para usuários não-staff"}, status=400)
+            if not request.user.clientes.filter(id=cliente_id).exists():
+                return Response({"error": "Não autorizado a criar convite para este cliente"}, status=403)
+
+        token, jti = gerar_token_convite(grupo_id, request.user.id, cliente_id, para_equipe=inviter_is_staff)
 
         invite = Convite.objects.create(
             token_jti=jti,
             grupo_id=grupo_id,
             criado_por=request.user,
-            cliente_id=cliente_id
+            cliente_id=cliente_id,
         )
         site = settings.SITE
         invite_url = f"{site}/#/register/invite/{token}"
@@ -297,18 +310,26 @@ class RegistroDoConviteView(APIView):
         if not all([name, email, password]):
             return Response({"error": "Campos obrigatórios: nome, email, senha"}, status=400)
 
+        para_equipe = payload.get("para_equipe", False)
+
         user = User.objects.create_user(
             first_name=name,
             username=email,
-            password=password
+            password=password,
+            is_staff=para_equipe,
         )
 
         group = Group.objects.get(id=payload["grupo_id"])
         user.groups.add(group)
 
-        cliente = Cliente.objects.get(id=payload["cliente_id"])
-        cliente.usuarios.add(user)  
-        cliente.save()
+        if not para_equipe:
+            cliente_id = payload.get("cliente_id")
+            if not cliente_id:
+                return Response({"error": "Convite inválido: cliente não especificado"}, status=400)
+            cliente = Cliente.objects.get(id=cliente_id)
+            cliente.usuarios.add(user)
+            cliente.save()
+
         convite.usado = True
         convite.save()
 
