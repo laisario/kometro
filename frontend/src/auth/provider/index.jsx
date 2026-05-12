@@ -22,6 +22,7 @@ const AuthProvider = ({ children }) => {
           admin: decoded?.admin, 
           id: decoded?.user_id, 
           cliente: decoded?.cliente, 
+          empresaNome: decoded?.empresa_nome,
           roles: userResponse?.data?.groups
         });
       }

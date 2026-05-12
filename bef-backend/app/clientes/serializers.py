@@ -21,6 +21,13 @@ class LoginSerializer(TokenObtainPairSerializer):
         )
         token["admin"] = user.is_staff
         token["cliente"] = user.clientes.first().id if user.clientes.exists() else None
+        
+        cliente = user.clientes.first()
+        if cliente and cliente.empresa:
+            token["empresa_nome"] = cliente.empresa.razao_social or cliente.empresa.nome_fantasia or None
+        else:
+            token["empresa_nome"] = None
+        
         return token
 
 

@@ -5,17 +5,23 @@ import { enqueueSnackbar } from 'notistack';
 import { getErrorMessage } from '../../utils/error';
 import { axios } from '../../api';
 
-function useInvitesMutations(grupo, setConviteUrl, overrideClienteId) {
+function useInvitesMutations(grupo, setConviteUrl, overrideClienteId, origin = "access_page") {
   const queryClient = useQueryClient();
   const { user } = useAuth()
 
   const createInvite = async () => {
-    const clienteId = overrideClienteId || user?.cliente;
-    return await axios.post("invites/create/", {
-      grupo,
-      ...(user?.admin ? {} : { cliente: user?.cliente }),
-      cliente: clienteId,
-    });
+    const payload = { grupo, origin };
+    if (!user?.admin) {
+      const clienteId = overrideClienteId || user?.cliente;
+      if (clienteId) {
+        payload.cliente = clienteId;
+      }
+    } else if (origin === "client_page") {
+      if (overrideClienteId) {
+        payload.cliente = overrideClienteId;
+      }
+    }
+    return await axios.post("invites/create/", payload);
   };
   
   const { 

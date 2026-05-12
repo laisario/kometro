@@ -31,7 +31,7 @@ export default function InviteList({ clienteId, showTitle = true, clientView = f
   };
 
   return (
-    <Paper elevation={clientView? 0 : 3} sx={{ p: clientView? 0 : 4, width: "100%", maxWidth: 500, maxHeight: 400, display: 'flex', flexDirection: 'column', ...sx }}>
+    <Paper elevation={clientView? 0 : 3} sx={{ p: clientView? 0 : 4, width: "100%", maxHeight: 400, display: 'flex', flexDirection: 'column', ...sx }}>
       {showTitle && (
         <>
           <Typography variant="h6" gutterBottom>

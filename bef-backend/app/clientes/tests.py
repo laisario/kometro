@@ -32,14 +32,14 @@ class CriarConviteStaffTest(TestCase):
         self.api.force_authenticate(user=self.staff_user)
 
     def test_staff_can_create_invite_without_client(self):
-        resp = self.api.post("/invites/create/", {"grupo": self.grupo.id}, format="json")
+        resp = self.api.post("/invites/create/", {"grupo": self.grupo.id, "origin": "access_page"}, format="json")
         self.assertEqual(resp.status_code, 200, resp.data)
         self.assertIn("convite_url", resp.data)
         convite = Convite.objects.get(id=resp.data["convite"]["id"])
         self.assertIsNone(convite.cliente)
 
-    def test_staff_invite_ignores_sent_cliente(self):
-        """Even if the frontend mistakenly sends a client, staff invite must ignore it."""
+    def test_staff_invite_uses_provided_cliente(self):
+        """When staff provides cliente_id, use that client for the invite."""
         cliente = _make_cliente("2")
         resp = self.api.post(
             "/invites/create/",
@@ -48,7 +48,7 @@ class CriarConviteStaffTest(TestCase):
         )
         self.assertEqual(resp.status_code, 200, resp.data)
         convite = Convite.objects.get(id=resp.data["convite"]["id"])
-        self.assertIsNone(convite.cliente)
+        self.assertEqual(convite.cliente, cliente)
 
     def test_staff_invite_registration_creates_staff_user_with_no_client(self):
         resp = self.api.post("/invites/create/", {"grupo": self.grupo.id}, format="json")
@@ -65,6 +65,43 @@ class CriarConviteStaffTest(TestCase):
         new_user = User.objects.get(username="novo@k.com")
         self.assertTrue(new_user.is_staff)
         self.assertFalse(new_user.clientes.exists())
+
+    def test_staff_access_page_invite_creates_staff_user(self):
+        """Staff from access_page can create staff invite."""
+        resp = self.api.post("/invites/create/", {"grupo": self.grupo.id, "origin": "access_page"}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        token = resp.data["convite_url"].split("/")[-1]
+
+        anon = APIClient()
+        reg = anon.post(
+            f"/invites/register/{token}/",
+            {"first_name": "Novo", "username": "novo2@k.com", "password": "StrongPass123!"},
+            format="json",
+        )
+        self.assertEqual(reg.status_code, 200, reg.data)
+        new_user = User.objects.get(username="novo2@k.com")
+        self.assertTrue(new_user.is_staff)
+
+    def test_staff_client_page_invite_never_creates_staff_user(self):
+        """Staff from client page cannot create staff invite - invited user is always client."""
+        cliente = _make_cliente("3")
+        resp = self.api.post(
+            "/invites/create/",
+            {"grupo": self.grupo.id, "cliente": cliente.id, "origin": "client_page"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200, resp.data)
+        token = resp.data["convite_url"].split("/")[-1]
+
+        anon = APIClient()
+        reg = anon.post(
+            f"/invites/register/{token}/",
+            {"first_name": "Novo", "username": "novo3@k.com", "password": "StrongPass123!"},
+            format="json",
+        )
+        self.assertEqual(reg.status_code, 200, reg.data)
+        new_user = User.objects.get(username="novo3@k.com")
+        self.assertFalse(new_user.is_staff)
 
 
 class CriarConviteClienteTest(TestCase):
@@ -137,6 +174,22 @@ class CriarConviteClienteTest(TestCase):
             format="json",
         )
         self.assertEqual(resp2.status_code, 400)
+
+    def test_client_user_invite_infers_cliente_from_single_client(self):
+        """When client user has exactly one client and sends no cliente, infer from user."""
+        resp = self.api.post("/invites/create/", {"grupo": self.grupo.id}, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        convite = Convite.objects.get(id=resp.data["convite"]["id"])
+        self.assertEqual(convite.cliente, self.cliente)
+
+    def test_client_user_with_multiple_clients_requires_cliente(self):
+        """When client user has multiple clients and sends no cliente, return 400."""
+        outro_cliente = _make_cliente("B")
+        self.client_user.clientes.add(outro_cliente)
+        resp = self.api.post("/invites/create/", {"grupo": self.grupo.id}, format="json")
+        self.assertEqual(resp.status_code, 400)
+
+
 from django.contrib.auth.models import User, Group
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status

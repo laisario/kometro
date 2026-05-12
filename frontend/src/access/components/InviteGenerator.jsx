@@ -10,7 +10,8 @@ function InviteGenerator({ overrideClienteId, clientPage = false }) {
   const [grupo, setGrupo] = useState('');
   const [conviteUrl, setConviteUrl] = useState("");
   const { groups, isFetching } = useGroups()
-  const { createInviteMutation, isLoading: isGenerating } = useInvitesMutations(grupo, setConviteUrl, overrideClienteId)
+  const origin = clientPage ? "client_page" : "access_page";
+  const { createInviteMutation, isLoading: isGenerating } = useInvitesMutations(grupo, setConviteUrl, overrideClienteId, origin)
 
   const handleCopy = async () => {
     if (conviteUrl) {

@@ -4,7 +4,6 @@ import {
   Typography,
   Box,
   Chip,
-  Stack,
   IconButton,
   CircularProgress,
   Table,
@@ -13,10 +12,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
-  InputAdornment,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
 import { permissionLabel } from "../../utils/permission";
 import RemoveUserDialog from "../../clients/components/RemoveUserDialog";
@@ -27,16 +23,7 @@ import { getErrorMessage } from "../../utils/error";
 
 export default function UserList({ users, isFetching, currentUser, clienteId, isAdmin }) {
   const [removingUser, setRemovingUser] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
-
-  const filteredUsers = users?.filter((u) => {
-    const searchLower = searchTerm.toLowerCase();
-    const name = (u?.firstName || u?.username || "").toLowerCase();
-    const email = (u?.username || "").toLowerCase();
-    const groups = u?.groups?.map((g) => g.name).join(" ").toLowerCase();
-    return name.includes(searchLower) || email.includes(searchLower) || groups.includes(searchLower);
-  });
 
   const { mutate: removeUser, isLoading: isRemovingUser } = useMutation({
     mutationFn: async ({ userId }) => {
@@ -80,36 +67,19 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
       </Paper>
     );
   }
+  console.log(users)
 
   return (
     <Paper elevation={3} sx={{ p: 4, width: "100%" }}>
-      <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, justifyContent: "space-between", alignItems: { xs: "flex-start", md: "center" }, mb: 2, gap: 2 }}>
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Usuários com acesso
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {isAdmin 
-              ? "Lista de usuários administradores do sistema"
-              : "Lista de usuários deste cliente"}
-          </Typography>
-        </Box>
-        <TextField
-          size="small"
-          placeholder="Buscar usuário..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-            },
-          }}
-          sx={{ minWidth: 250 }}
-        />
+      <Box sx={{ mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          Usuários com acesso
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {isAdmin 
+            ? "Lista de usuários administradores do sistema"
+            : "Lista de usuários deste cliente"}
+        </Typography>
       </Box>
 
       <TableContainer sx={{ maxHeight: 400 }}>
@@ -123,16 +93,16 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
             </TableRow>
           </TableHead>
           <TableBody>
-            {!filteredUsers || filteredUsers.length === 0 ? (
+            {!users || users?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   <Typography variant="body2" color="text.secondary">
-                    {searchTerm ? "Nenhum usuário encontrado" : "Nenhum usuário encontrado"}
+                    Nenhum usuário encontrado
                   </Typography>
                 </TableCell>
               </TableRow>
             ) : (
-              filteredUsers.map((u) => (
+              users?.map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>

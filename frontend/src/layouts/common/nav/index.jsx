@@ -96,6 +96,14 @@ export default function Nav({ openNav, onCloseNav, admin }) {
                       Sem permissões
                     </Typography>
                   )}
+                  {user?.cliente && user?.empresaNome && typeof user.empresaNome === 'string' && (
+                    <Typography
+                      variant="caption"
+                      sx={{ color: 'text.secondary', display: 'block', mt: 0.5, wordBreak: 'break-word' }}
+                    >
+                      {user.empresaNome}
+                    </Typography>
+                  )}
                 </Box>
               </Box>
             </StyledAccount>

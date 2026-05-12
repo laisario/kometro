@@ -316,6 +316,7 @@ class CriarConviteView(APIView):
 
     def post(self, request):
         grupo_id = request.data.get("grupo")
+        origin = request.data.get("origin", "access_page")
 
         if not grupo_id:
             return Response({"error": "grupo_id é obrigatório"}, status=400)
@@ -323,22 +324,35 @@ class CriarConviteView(APIView):
         inviter_is_staff = request.user.is_staff
 
         if inviter_is_staff:
-            # Staff invite: no client association, invited user will become staff
-            cliente_id = None
+            cliente_id = request.data.get("cliente")
         else:
-            # Client invite: must target the inviter's own client
             cliente_id = request.data.get("cliente")
             if not cliente_id:
-                return Response({"error": "cliente_id é obrigatório para usuários não-staff"}, status=400)
+                user_clientes = request.user.clientes.all()
+                if user_clientes.count() == 1:
+                    cliente_id = user_clientes.first().id
+                elif user_clientes.count() > 1:
+                    return Response({"error": "Especifique o cliente para criar convite"}, status=400)
+                else:
+                    return Response({"error": "Usuário não está vinculado a nenhum cliente"}, status=400)
             if not request.user.clientes.filter(id=cliente_id).exists():
                 return Response({"error": "Não autorizado a criar convite para este cliente"}, status=403)
 
-        token, jti = gerar_token_convite(grupo_id, request.user.id, cliente_id, para_equipe=inviter_is_staff)
+        if origin == "client_page":
+            para_equipe = False
+        elif origin == "access_page":
+            para_equipe = inviter_is_staff
+        else:
+            para_equipe = False
+
+        token, jti = gerar_token_convite(grupo_id, request.user.id, cliente_id, para_equipe=para_equipe)
 
         invite = Convite.objects.create(
             grupo_id=grupo_id,
             criado_por=request.user,
             cliente_id=cliente_id,
+            token=token,
+            token_jti=jti,
         )
         invite_url = invite.get_invite_url()
 

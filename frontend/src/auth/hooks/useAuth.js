@@ -56,7 +56,7 @@ export default function useAuth() {
         const token = data?.data?.access;
         const decoded = jwtDecode(token);
         window.localStorage.setItem('token', token);
-        const user = { token, nome: decoded?.nome, id: decoded?.user_id, admin: decoded?.admin, cliente: decoded?.cliente }
+        const user = { token, nome: decoded?.nome, id: decoded?.user_id, admin: decoded?.admin, cliente: decoded?.cliente, empresaNome: decoded?.empresa_nome }
         setUser(user);
         window.localStorage.setItem('user', JSON.stringify(user));
         

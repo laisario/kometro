@@ -30,7 +30,7 @@ export const navConfig = (admin, hasPermission) => {
     },
   ]
   
-  if (admin && hasPermission) {
+  if (admin) {
     data.push({
       title: 'Ordens de Serviço',
       path: '/admin/ordens-servico',
