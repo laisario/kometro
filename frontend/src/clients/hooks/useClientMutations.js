@@ -2,9 +2,11 @@ import React from 'react'
 import { useMutation, useQueryClient } from 'react-query'
 import { axios } from '../../api'
 import { enqueueSnackbar } from 'notistack';
+import { getErrorMessage } from '../../utils/error';
 
 function useClientMutations(handleClose) {
     const queryClient = useQueryClient();
+    const closeFn = typeof handleClose === 'function' ? handleClose : () => {};
   
     const { 
       mutate: updateCriterion, 
@@ -47,11 +49,35 @@ function useClientMutations(handleClose) {
         });
       }
     })
+
+    const {
+      mutate: removeUser,
+      isLoading: isRemovingUser,
+    } = useMutation({
+      mutationFn: async ({ clienteId, userId }) => {
+        await axios.delete(`/clientes/${clienteId}/usuarios/${userId}/`);
+      },
+      onSuccess: (_, { clienteId, userId }) => {
+        queryClient.invalidateQueries({ queryKey: ['clientes'] });
+        enqueueSnackbar('Usuário excluído', {
+          variant: 'success',
+          autoHideDuration: 2000
+        });
+      },
+      onError: (error) => {
+        enqueueSnackbar(getErrorMessage(error?.status), {
+          variant: 'error',
+          autoHideDuration: 2000
+        });
+      }
+    });
   
   return {
     updateCriterion,
     deleteClients,
-    isDeleting
+    isDeleting,
+    removeUser,
+    isRemovingUser
   }
 }
 

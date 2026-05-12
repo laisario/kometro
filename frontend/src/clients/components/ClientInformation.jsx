@@ -1,100 +1,72 @@
-// import React from 'react'
-// import { Box, Divider, Paper, Stack, Typography } from '@mui/material'
-// import ApartmentIcon from '@mui/icons-material/Apartment';
-// import LocationCityIcon from '@mui/icons-material/LocationCity';
-// import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
-// import PhoneIcon from '@mui/icons-material/Phone';
-// import BadgeIcon from '@mui/icons-material/Badge';
-// import HomeIcon from '@mui/icons-material/Home';
-// import EmailIcon from '@mui/icons-material/Email';
-
-// const Information = ({ icon, value }) => (
-//   <Stack alignItems="center" direction="row" gap={1}>
-//     {icon}
-//     <Typography 
-//       sx={{
-//         whiteSpace: 'normal',
-//         wordWrap: 'break-word',
-//       }}
-//       variant='body1'
-//       fontWeight="500" 
-//       width="100%"
-//     >
-//       {value}
-//     </Typography>
-//   </Stack>
-// )
-
-
-// function ClientInformation({ data, isMobile }) {
-//   return (
-//     <Paper sx={{ padding: 4, gap:2, display: "flex", justifyContent: "space-around", flexDirection: isMobile ? 'column' : 'row' }}>
-//       <Box>
-//         {!!data?.empresa?.cnpj && <Information value={data?.empresa?.cnpj} icon={<ApartmentIcon fontSize='small' />} />}
-//         {!data?.empresa?.isento && !!data?.empresa?.ie && (<Information value={data?.empresa?.ie} icon={<strong>IE</strong>} />)}
-//         {!!data?.usuario?.username && <Information value={data?.usuario?.username} icon={<EmailIcon fontSize='small' />} />}
-//         {!!data?.telefone && <Information value={data?.telefone} icon={<PhoneIcon fontSize='small' />} />}
-//       </Box>
-
-//       {!isMobile && <Divider orientation="vertical" flexItem />}
-
-//       <Box>
-//         {!!data?.empresa?.filial && <Information value={data?.empresa?.filial} icon={<LocationCityIcon fontSize='small' />} />}
-//         {!!data?.empresa?.nomeFantasia && <Information value={data?.empresa?.nomeFantasia} icon={<DriveFileRenameOutlineIcon fontSize='small' />} />}
-//         {!!data?.cpf && (
-//             <Information icon={<BadgeIcon fontSize='small' />} value={data?.cpf} />
-//         )}
-//         {!!data?.endereco?.logradouro && (<Information value={`${data?.endereco?.logradouro}, ${data?.endereco?.numero} - ${data?.endereco?.bairro?.nome}, ${data?.endereco?.bairro?.cidade?.nome} - ${data?.endereco?.bairro?.cidade?.uf?.sigla}`} icon={<HomeIcon fontSize='small' />} />)}
-//       </Box>
-//     </Paper>
-//   )
-// }
-
-// export default ClientInformation
-
-import React from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardHeader,
   CardContent,
-  Grid,
   Typography,
   Box,
   Divider,
   Chip,
   Stack,
+  IconButton,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import BusinessIcon from "@mui/icons-material/Business";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
 import BarChartIcon from "@mui/icons-material/BarChart";
-import GroupIcon from "@mui/icons-material/Group";
+import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
+import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import EditIcon from "@mui/icons-material/Edit";
 import { permissionLabel } from "../../utils/permission";
+import useClientMutations from "../hooks/useClientMutations";
+import RemoveUserDialog from "./RemoveUserDialog";
+import InviteUserDialog from "./InviteUserDialog";
+import CreateClient from "./CreateClient";
+import InviteList from "../../access/components/InviteList";
 
+const ClientInformation = ({ data, isMobile, user: currentUser }) => {
+  const [removingUser, setRemovingUser] = useState(null);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
 
-const ClientInformation = ({ data, isMobile }) => {
   const empresa = data?.empresa;
   const endereco = data?.endereco;
   const usuarios = data?.usuarios ?? [];
+  const clienteId = data?.id;
+  const isAdmin = currentUser?.admin;
+
+  const { removeUser, isRemovingUser } = useClientMutations();
+
+  const handleRemoveUser = () => {
+    if (removingUser) {
+      removeUser({ clienteId, userId: removingUser.id });
+      setRemovingUser(null);
+    }
+  };
+
+  const handleEditClose = () => {
+    setEditDialogOpen(false);
+  };
 
   return (
-    <Box 
-      sx={{ 
-        display: 'flex', 
-        flexDirection: isMobile ? 'column' : 'row',
-        alignItems: 'flex-start',
-        gap: 2
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+        gap: 2,
       }}
     >
-      {/* Empresa Card (with address) */}
-      <Card 
-        variant="outlined" 
-        sx={{ 
-          width: isMobile ? '100%' : 'auto',
-          minWidth: isMobile ? 'auto' : '280px',
-          flex: isMobile ? 'none' : 1,
-          height: '240px',
-          display: 'flex',
-          flexDirection: 'column'
+      {/* Empresa Card */}
+      <Card
+        variant="outlined"
+        sx={{
+          width: isMobile ? "100%" : "auto",
+          minWidth: isMobile ? "auto" : "280px",
+          flex: isMobile ? "none" : 1,
+          height: 280,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <CardHeader
@@ -104,12 +76,23 @@ const ClientInformation = ({ data, isMobile }) => {
               Empresa
             </Typography>
           }
+          action={
+            isAdmin ? (
+              <IconButton
+                size="small"
+                onClick={() => setEditDialogOpen(true)}
+                title="Editar cliente"
+              >
+                <EditIcon />
+              </IconButton>
+            ) : null
+          }
           sx={{ pb: 1 }}
         />
-        <CardContent sx={{ flex: 1, pt: 0 }}>
+        <CardContent sx={{ flex: 1, pt: 0, overflowY: "auto" }}>
           <Stack spacing={1}>
             {empresa?.razaoSocial && (
-              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+              <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
                 <strong>Razão Social:</strong> {empresa?.razaoSocial}
               </Typography>
             )}
@@ -119,7 +102,7 @@ const ClientInformation = ({ data, isMobile }) => {
               </Typography>
             )}
             {empresa?.nomeFantasia && (
-              <Typography variant="body2" sx={{ wordBreak: 'break-word' }}>
+              <Typography variant="body2" sx={{ wordBreak: "break-word" }}>
                 <strong>Nome fantasia:</strong> {empresa?.nomeFantasia}
               </Typography>
             )}
@@ -130,10 +113,19 @@ const ClientInformation = ({ data, isMobile }) => {
               <strong>Inscrição Estadual:</strong>{" "}
               {empresa?.isento ? "Isento" : empresa?.ie || "Não informado"}
             </Typography>
+            {data?.criterioFrequenciaPadrao && (
+              <Typography variant="body2">
+                <strong>Critério frequência:</strong>{" "}
+                {data?.criterioFrequenciaPadrao === "C" ? "Tempo de calendário" : "Tempo de serviço"}
+              </Typography>
+            )}
             {endereco?.enderecoCompleto && (
               <>
                 <Divider sx={{ my: 1 }} />
-                <Typography variant="body2" sx={{ wordBreak: 'break-word', lineHeight: 1.4 }}>
+                <Typography
+                  variant="body2"
+                  sx={{ wordBreak: "break-word", lineHeight: 1.4 }}
+                >
                   <strong>Endereço:</strong> {endereco?.enderecoCompleto}
                 </Typography>
               </>
@@ -143,15 +135,15 @@ const ClientInformation = ({ data, isMobile }) => {
       </Card>
 
       {/* Estatísticas Card */}
-      <Card 
-        variant="outlined" 
-        sx={{ 
-          width: isMobile ? '100%' : 'auto',
-          minWidth: isMobile ? 'auto' : '240px',
-          flex: isMobile ? 'none' : 1,
-          height: '240px',
-          display: 'flex',
-          flexDirection: 'column'
+      <Card
+        variant="outlined"
+        sx={{
+          width: isMobile ? "100%" : "auto",
+          minWidth: isMobile ? "auto" : "240px",
+          flex: isMobile ? "none" : 1,
+          height: 280,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <CardHeader
@@ -163,7 +155,7 @@ const ClientInformation = ({ data, isMobile }) => {
           }
           sx={{ pb: 1 }}
         />
-        <CardContent sx={{ flex: 1, pt: 0 }}>
+        <CardContent sx={{ flex: 1, pt: 0, overflowY: "auto" }}>
           <Stack spacing={1.5}>
             <Box display="flex" justifyContent="space-between" alignItems="center">
               <Typography color="error" fontWeight={600}>
@@ -202,81 +194,145 @@ const ClientInformation = ({ data, isMobile }) => {
       </Card>
 
       {/* Usuários Card */}
-      <Card 
-        variant="outlined" 
-        sx={{ 
-          width: isMobile ? '100%' : 'auto',
-          minWidth: isMobile ? 'auto' : '280px',
-          flex: isMobile ? 'none' : 1,
-          height: '240px',
-          display: 'flex',
-          flexDirection: 'column'
+      <Card
+        variant="outlined"
+        sx={{
+          width: isMobile ? "100%" : "auto",
+          minWidth: isMobile ? "auto" : "280px",
+          flex: isMobile ? "none" : 1,
+          height: 280,
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <CardHeader
-          avatar={<GroupIcon color="warning" />}
           title={
-            <Typography variant="subtitle1" fontWeight={600}>
-              Usuários
-            </Typography>
+             <Tabs 
+            value={activeTab} 
+            onChange={(_, newValue) => setActiveTab(newValue)}
+            sx={{ minHeight: 36, '& .MuiTab-root': { minHeight: 36, py: 0 } }}
+          >
+            <Tab label="Usuários" sx={{ minHeight: 36 }} />
+            <Tab label="Acessos" sx={{ minHeight: 36 }} />
+          </Tabs>
           }
-          sx={{ pb: 1 }}
+          action={
+            isAdmin ? (
+              <IconButton
+                size="small"
+                onClick={() => setInviteDialogOpen(true)}
+                title="Convidar novo usuário"
+              >
+                <PersonAddIcon />
+              </IconButton>
+            ) : null
+          }
+          sx={{ pb: 0 }}
         />
-        <CardContent 
-          sx={{ 
-            flex: 1, 
-            pt: 0,
-            overflowY: 'auto',
-            '&::-webkit-scrollbar': {
-              width: '4px',
+        <CardContent
+          sx={{
+            flex: 1,
+            pt: 1,
+            overflowY: "auto",
+            overflowX: "hidden",
+            "&::-webkit-scrollbar": {
+              width: "4px",
             },
-            '&::-webkit-scrollbar-track': {
-              background: '#f1f1f1',
-              borderRadius: '4px',
+            "&::-webkit-scrollbar-track": {
+              background: "#f1f1f1",
+              borderRadius: "4px",
             },
-            '&::-webkit-scrollbar-thumb': {
-              background: '#c1c1c1',
-              borderRadius: '4px',
+            "&::-webkit-scrollbar-thumb": {
+              background: "#c1c1c1",
+              borderRadius: "4px",
             },
           }}
         >
-          {usuarios?.length ? (
-            <Stack spacing={1.5}>
-              {usuarios?.map((u, idx) => (
-                <Box key={idx}>
-                  <Typography variant="subtitle2" fontWeight={600}>
-                    {u?.firstName || "Usuário sem nome"}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {u?.username ?? "—"}
-                  </Typography>
-                  <Box mt={0.5}>
-                    {u?.groups?.length
-                      ? u?.groups?.map((g) => (
+          {activeTab === 0 ? (
+          <Box>
+            {usuarios?.length ? (
+              <Stack>
+                {usuarios?.map((u, idx) => (
+                  <Box key={idx}>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center",justifyContent: 'space-between' }}>
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        {u?.firstName || "Usuário sem nome"}
+                      </Typography>
+                      {isAdmin && u?.id !== currentUser?.id && (
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setRemovingUser(u)}
+                          title={`Remover ${u?.username}`}
+                        >
+                          <PersonRemoveIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                    </Box>
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary"
+                      sx={{ wordBreak: "break-all" }}
+                    >
+                      {u?.username ?? "—"}
+                    </Typography>
+                    <Box mt={0.5} sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {u?.groups?.length ? (
+                        u?.groups?.map((g) => (
                           <Chip
                             key={g.id}
                             label={permissionLabel[g.name] ?? "—"}
                             size="small"
-                            sx={{ mr: 0.5, mb: 0.5 }}
                           />
                         ))
-                      : (
-                        <Chip
-                          label="Sem grupo"
-                          size="small"
-                          sx={{ mr: 0.5 }}
-                        />
+                      ) : (
+                        <Chip label="Sem grupo" size="small" />
                       )}
+                    </Box>
+                    {idx < usuarios?.length - 1 && <Divider sx={{ mt: 1 }} />}
                   </Box>
-                  {idx < usuarios?.length - 1 && <Divider sx={{ mt: 1 }} />}
-                </Box>
-              ))}
-            </Stack>
-          ) : (
-            <Typography variant="body2">Nenhum usuário cadastrado</Typography>
+                ))}
+              </Stack>
+            ) : (
+              <Typography variant="body2">Nenhum usuário cadastrado</Typography>
+            )}
+          </Box>
+        ) : (
+          <Box sx={{ mt: 1 }}>
+            <InviteList 
+              clienteId={clienteId} 
+              showTitle={false} 
+              clientView
+              sx={{ p: 0, boxShadow: 'none' }}
+            />
+          </Box>
           )}
         </CardContent>
       </Card>
+
+      {/* Remove User Dialog */}
+      <RemoveUserDialog
+        open={!!removingUser}
+        user={removingUser}
+        onClose={() => setRemovingUser(null)}
+        onConfirm={handleRemoveUser}
+        isRemoving={isRemovingUser}
+      />
+
+      {/* Invite User Dialog */}
+      <InviteUserDialog
+        open={inviteDialogOpen}
+        onClose={() => setInviteDialogOpen(false)}
+        overrideClienteId={clienteId}
+        isAdmin={isAdmin}
+      />
+
+      {/* Edit Client Dialog */}
+      <CreateClient
+        open={editDialogOpen}
+        onClose={handleEditClose}
+        clientData={data}
+      />
     </Box>
   );
 };

@@ -15,7 +15,6 @@ function useLocationInfoVM() {
       complemento: "",
     },
     mode: "onBlur",
-    // reValidateMode: ['onSubmit', 'onBlur'],
   })
 
   const control = form?.control && form?.control;

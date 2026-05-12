@@ -18,6 +18,7 @@ export default function RegisterFromInvite() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [tokenError, setTokenError] = useState(null);
   const [clientId, setClientId] = useState(null);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const { client } = useClient(clientId)
@@ -27,9 +28,17 @@ export default function RegisterFromInvite() {
   const [paraEquipe, setParaEquipe] = useState(false)
 
   useEffect(() => {
-    const decoded = jwtDecode(token)
-    setClientId(decoded?.cliente_id)
-    setParaEquipe(!!decoded?.para_equipe)
+    if (!token || typeof token !== 'string') {
+      setTokenError('Token de convite inválido ou ausente');
+      return;
+    }
+    try {
+      const decoded = jwtDecode(token)
+      setClientId(decoded?.cliente_id)
+      setParaEquipe(!!decoded?.para_equipe)
+    } catch (err) {
+      setTokenError('Token de convite expirado ou inválido');
+    }
   }, [])
 
   const handleRegister = async () => {
@@ -59,6 +68,17 @@ export default function RegisterFromInvite() {
   };
 
   const company = client?.empresa?.razaoSocial || client?.empresa?.nomeFantasia
+  
+  if (tokenError) {
+    return (
+      <Container maxWidth="sm">
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {tokenError}
+        </Alert>
+      </Container>
+    )
+  }
+  
   return (
     <Container maxWidth="sm">
       <Typography variant="h3" gutterBottom>

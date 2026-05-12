@@ -83,7 +83,8 @@ class Cliente(models.Model):
 
 
 class Convite(models.Model):
-    token_jti = models.CharField(max_length=255)
+    token_jti = models.CharField(max_length=255) 
+    token = models.TextField(blank=True, default="")
     grupo = models.ForeignKey("auth.Group", on_delete=models.CASCADE)
     criado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites')
     criado_em = models.DateTimeField(auto_now_add=True)
@@ -92,6 +93,20 @@ class Convite(models.Model):
     cliente = models.ForeignKey(
         Cliente, on_delete=models.CASCADE, related_name='invites', null=True, blank=True
     )
+
+    def save(self, *args, **kwargs):
+        if not self.token and self.grupo_id and self.criado_por_id and self.cliente_id:
+            from clientes.utils import gerar_token_convite
+            token, jti = gerar_token_convite(self.grupo_id, self.criado_por_id, self.cliente_id)
+            self.token = token
+            if not self.token_jti:
+                self.token_jti = jti
+        super().save(*args, **kwargs)
+
+    def get_invite_url(self):
+        from django.conf import settings
+        site = getattr(settings, 'SITE', 'http://localhost:5173')
+        return f"{site}/#/register/invite/{self.token}"
 
 
 class PasswordReset(models.Model):

@@ -23,6 +23,8 @@ from .serializers import (
     DashboardRevisaoSerializer,
     ResetPasswordRequestSerializer,
     ResetPasswordSerializer,
+    ClienteCreateSerializer,
+    ClienteUpdateSerializer,
 )
 from .tasks import enviar_email_reset_senha
 import logging
@@ -83,14 +85,37 @@ class ClienteViewSet(viewsets.ModelViewSet):
     search_fields = ["empresa__razao_social", "empresa__nome_fantasia"]
 
     def get_serializer_class(self):
-        if self.action in ['list', 'create']:
+        if self.action == 'create':
+            return ClienteCreateSerializer
+        if self.action in ['update', 'partial_update']:
+            return ClienteUpdateSerializer
+        if self.action in ['list']:
             return ClientesSerializer
         return ClienteSerializer
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Cliente.objects.filter(usuarios__is_staff=False).distinct()
+            return Cliente.objects.exclude(usuarios__is_staff=True).distinct()
         return Cliente.objects.filter(usuarios=self.request.user)
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [permissions.IsAuthenticated()]
+        return super().get_permissions()
+
+    def create(self, request, *args, **kwargs):
+        if not request.user.is_staff:
+            return Response(
+                {"detail": "Only staff users can create clients."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        cliente = serializer.save()
+        return Response(
+            ClienteSerializer(cliente).data,
+            status=status.HTTP_201_CREATED
+        )
         
     @action(detail=True, methods=["patch"], permission_classes=[NivelPermission])
     def atualizar_criterio_frequencia_padrao(self, request, pk=None):
@@ -98,6 +123,50 @@ class ClienteViewSet(viewsets.ModelViewSet):
         criterio = request.data.get("criterio_frequencia")
         cliente.criterio_frequencia_padrao = criterio
         cliente.save(update_fields=["criterio_frequencia_padrao"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=["delete"], url_path="usuarios/(?P<user_id>[^/.]+)")
+    def remover_usuario(self, request, pk=None, user_id=None):
+        try:
+            cliente = Cliente.objects.get(pk=pk)
+        except Cliente.DoesNotExist:
+            return Response(
+                {"detail": "Cliente não encontrado"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "Usuário não encontrado"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        if not cliente.usuarios.filter(pk=user_id).exists():
+            return Response(
+                {"detail": "Usuário não está vinculado a este cliente"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if user == request.user:
+            return Response(
+                {"detail": "Não é possível remover seu próprio acesso"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        is_staff = request.user.is_staff
+        is_gerente = request.user.groups.filter(name='gerente').exists()
+        user_in_same_client = cliente.usuarios.filter(pk=request.user.id).exists()
+
+        if not is_staff and not (is_gerente and user_in_same_client):
+            return Response(
+                {"detail": "Apenas administradores ou gerentes deste cliente podem remover usuários."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        user.delete()
+
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -267,13 +336,11 @@ class CriarConviteView(APIView):
         token, jti = gerar_token_convite(grupo_id, request.user.id, cliente_id, para_equipe=inviter_is_staff)
 
         invite = Convite.objects.create(
-            token_jti=jti,
             grupo_id=grupo_id,
             criado_por=request.user,
             cliente_id=cliente_id,
         )
-        site = settings.SITE
-        invite_url = f"{site}/#/register/invite/{token}"
+        invite_url = invite.get_invite_url()
 
         return Response({
             "convite_url": invite_url,

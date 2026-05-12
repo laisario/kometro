@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { 
   Card, 
   Checkbox, 
@@ -10,8 +10,10 @@ import {
   TableContainer, 
   TablePagination, 
   TableRow, 
-  Typography 
+  Typography,
+  Button
 } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
 import { Helmet } from 'react-helmet-async';
 import TableToolbar from '../components/TableToolbar';
 import TableHeader from '../../components/TableHeader';
@@ -19,6 +21,7 @@ import Loading from '../../components/Loading';
 import EmptyYet from '../../components/EmptyYet';
 import useClientsVM from '../viewModels/useClientsVM';
 import { headCells } from '../../utils/clients';
+import CreateClient from '../components/CreateClient';
 
 
 function ClientsPage() {
@@ -40,6 +43,8 @@ function ClientsPage() {
     user
   } = useClientsVM();
 
+  const [openCreateClient, setOpenCreateClient] = useState(false);
+
   const areThereClients = useMemo(() => !!clients?.results?.length, [clients?.results]);
   
   return (
@@ -54,6 +59,17 @@ function ClientsPage() {
               Clientes
             </Typography>
           </Grid>
+          {user?.admin && (
+            <Grid item>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setOpenCreateClient(true)}
+              >
+                Novo Cliente
+              </Button>
+            </Grid>
+          )}
         </Grid>
 
         {isLoadingClients
@@ -125,6 +141,10 @@ function ClientsPage() {
           : <EmptyYet content="cliente" isMobile={isMobile} />
         }
       </Container>
+      <CreateClient 
+        open={openCreateClient} 
+        onClose={() => setOpenCreateClient(false)} 
+      />
     </>
   );
 }

@@ -189,19 +189,93 @@ class ClienteSerializer(serializers.ModelSerializer):
             "criterio_frequencia_padrao"
         )
 
+    def update(self, instance, validated_data):
+        empresa_data = validated_data.get("empresa")
+        endereco_data = validated_data.get("endereco")
+        criterio = validated_data.get("criterio_frequencia_padrao")
+
+        if criterio is not None:
+            instance.criterio_frequencia_padrao = criterio
+            instance.save()
+
+        if empresa_data and instance.empresa:
+            empresa = instance.empresa
+            if empresa_data.get("razao_social") is not None:
+                empresa.razao_social = empresa_data.get("razao_social")
+            if empresa_data.get("cnpj") is not None:
+                empresa.cnpj = empresa_data.get("cnpj")
+            if "ie" in empresa_data:
+                empresa.ie = empresa_data.get("ie")
+            if "nome_fantasia" in empresa_data:
+                empresa.nome_fantasia = empresa_data.get("nome_fantasia")
+            if "filial" in empresa_data:
+                empresa.filial = empresa_data.get("filial")
+            if "isento" in empresa_data:
+                empresa.isento = empresa_data.get("isento")
+            empresa.save()
+
+        if endereco_data and instance.endereco:
+            endereco = instance.endereco
+            
+            has_geo_update = (
+                endereco_data.get("uf") is not None or 
+                endereco_data.get("cidade") is not None or 
+                endereco_data.get("bairro") is not None
+            )
+            
+            if has_geo_update:
+                old_uf = endereco.bairro.cidade.uf
+                old_cidade = endereco.bairro.cidade
+                old_bairro = endereco.bairro
+                
+                new_uf = old_uf
+                new_cidade = old_cidade
+                new_bairro = old_bairro
+                
+                if endereco_data.get("uf") is not None:
+                    new_uf, _ = UF.objects.get_or_create(sigla=endereco_data.get("uf"))
+                
+                if endereco_data.get("cidade") is not None:
+                    new_cidade, _ = Cidade.objects.get_or_create(uf=new_uf, nome=endereco_data.get("cidade"))
+                
+                if endereco_data.get("bairro") is not None:
+                    new_bairro, _ = Bairro.objects.get_or_create(cidade=new_cidade, nome=endereco_data.get("bairro"))
+                elif new_cidade != old_cidade:
+                    new_bairro, _ = Bairro.objects.get_or_create(cidade=new_cidade, nome="Centro")
+                
+                endereco.bairro = new_bairro
+            
+            if endereco_data.get("logradouro") is not None:
+                endereco.logradouro = endereco_data.get("logradouro")
+            if endereco_data.get("numero") is not None:
+                endereco.numero = endereco_data.get("numero")
+            if "complemento" in endereco_data:
+                endereco.complemento = endereco_data.get("complemento")
+            if endereco_data.get("cep") is not None:
+                endereco.cep = endereco_data.get("cep")
+            endereco.save()
+
+        return instance
+
 
 class ConviteSerializer(serializers.ModelSerializer):
     grupo = GroupSerializer()
     criado_por = UserSerializer()
     expira_em = serializers.SerializerMethodField()
+    convite_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Convite
-        fields = ["id", "token_jti", "grupo", "criado_por", "criado_em", "usado", "cliente", 'expira_em']
-        read_only_fields = ["id", "token_jti", "criado_por", "criado_em", "usado", 'expira_em'] 
+        fields = ["id", "token_jti", "token", "grupo", "criado_por", "criado_em", "usado", "cliente", 'expira_em', 'convite_url']
+        read_only_fields = ["id", "token_jti", "token", "criado_por", "criado_em", "usado", 'expira_em', 'convite_url']
 
     def get_expira_em(self, obj):
         return obj.criado_em + datetime.timedelta(8)
+    
+    def get_convite_url(self, obj):
+        if obj.token:
+            return obj.get_invite_url()
+        return ""
     
 
 class DashboardTipoInstrumentoSerializer(serializers.ModelSerializer):
@@ -303,3 +377,147 @@ class ResetPasswordSerializer(serializers.Serializer):
         write_only=True, required=True, validators=[validate_password]
     )
     confirm_password = serializers.CharField(write_only=True, required=True)
+
+
+class EnderecoNestedSerializer(serializers.Serializer):
+    uf = serializers.CharField(required=False, max_length=2)
+    cidade = serializers.CharField(required=False, max_length=212)
+    bairro = serializers.CharField(required=False, max_length=212)
+    logradouro = serializers.CharField(required=False, max_length=255)
+    numero = serializers.IntegerField(required=False)
+    complemento = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=255)
+    cep = serializers.CharField(required=False, max_length=10)
+
+
+class EmpresaNestedSerializer(serializers.Serializer):
+    razao_social = serializers.CharField(required=False, max_length=512)
+    cnpj = serializers.CharField(required=False, max_length=25)
+    ie = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=50)
+    nome_fantasia = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=512)
+    filial = serializers.CharField(required=False, allow_blank=True, allow_null=True, max_length=512)
+    isento = serializers.BooleanField(required=False, default=False)
+
+
+class ClienteUpdateSerializer(serializers.Serializer):
+    empresa = EmpresaNestedSerializer(required=False)
+    endereco = EnderecoNestedSerializer(required=False)
+    criterio_frequencia_padrao = serializers.ChoiceField(
+        choices=["C", "S"],
+        required=False,
+    )
+
+    def update(self, instance, validated_data):
+        empresa_data = validated_data.get("empresa")
+        endereco_data = validated_data.get("endereco")
+        criterio = validated_data.get("criterio_frequencia_padrao")
+
+        if criterio is not None:
+            instance.criterio_frequencia_padrao = criterio
+            instance.save()
+
+        if empresa_data and instance.empresa:
+            empresa = instance.empresa
+            if empresa_data.get("razao_social") is not None:
+                empresa.razao_social = empresa_data.get("razao_social")
+            if empresa_data.get("cnpj") is not None:
+                empresa.cnpj = empresa_data.get("cnpj")
+            if "ie" in empresa_data:
+                empresa.ie = empresa_data.get("ie")
+            if "nome_fantasia" in empresa_data:
+                empresa.nome_fantasia = empresa_data.get("nome_fantasia")
+            if "filial" in empresa_data:
+                empresa.filial = empresa_data.get("filial")
+            if "isento" in empresa_data:
+                empresa.isento = empresa_data.get("isento")
+            empresa.save()
+
+        if endereco_data and instance.endereco:
+            endereco = instance.endereco
+            
+            has_geo_update = (
+                endereco_data.get("uf") is not None or 
+                endereco_data.get("cidade") is not None or 
+                endereco_data.get("bairro") is not None
+            )
+            
+            if has_geo_update:
+                old_uf = endereco.bairro.cidade.uf
+                old_cidade = endereco.bairro.cidade
+                old_bairro = endereco.bairro
+                
+                new_uf = old_uf
+                new_cidade = old_cidade
+                new_bairro = old_bairro
+                
+                if endereco_data.get("uf") is not None:
+                    new_uf, _ = UF.objects.get_or_create(sigla=endereco_data.get("uf"))
+                
+                if endereco_data.get("cidade") is not None:
+                    new_cidade, _ = Cidade.objects.get_or_create(uf=new_uf, nome=endereco_data.get("cidade"))
+                
+                if endereco_data.get("bairro") is not None:
+                    new_bairro, _ = Bairro.objects.get_or_create(cidade=new_cidade, nome=endereco_data.get("bairro"))
+                elif new_cidade != old_cidade:
+                    new_bairro, _ = Bairro.objects.get_or_create(cidade=new_cidade, nome="Centro")
+                
+                endereco.bairro = new_bairro
+            
+            if endereco_data.get("logradouro") is not None:
+                endereco.logradouro = endereco_data.get("logradouro")
+            if endereco_data.get("numero") is not None:
+                endereco.numero = endereco_data.get("numero")
+            if "complemento" in endereco_data:
+                endereco.complemento = endereco_data.get("complemento")
+            if endereco_data.get("cep") is not None:
+                endereco.cep = endereco_data.get("cep")
+            endereco.save()
+
+        instance.refresh_from_db()
+        return instance
+
+
+class ClienteCreateSerializer(serializers.Serializer):
+    empresa = EmpresaNestedSerializer(required=True)
+    endereco = EnderecoNestedSerializer(required=True)
+    criterio_frequencia_padrao = serializers.ChoiceField(
+        choices=["C", "S"],
+        required=False,
+        default="C"
+    )
+
+    def create(self, validated_data):
+        empresa_data = validated_data.get("empresa")
+        endereco_data = validated_data.get("endereco")
+        criterio = validated_data.get("criterio_frequencia_padrao", "C")
+        print(empresa_data, endereco_data, "AAAAAAAA")
+
+        empresa, created = Empresa.objects.get_or_create(
+            cnpj=empresa_data.get("cnpj"),
+            defaults={
+                "razao_social": empresa_data.get("razao_social"),
+                "ie": empresa_data.get("ie"),
+                "nome_fantasia": empresa_data.get("nome_fantasia"),
+                "filial": empresa_data.get("filial"),
+                "isento": empresa_data.get("isento", False),
+            }
+        )
+
+        uf, _ = UF.objects.get_or_create(sigla=endereco_data.get("uf"))
+        cidade, _ = Cidade.objects.get_or_create(uf=uf, nome=endereco_data.get("cidade"))
+        bairro, _ = Bairro.objects.get_or_create(cidade=cidade, nome=endereco_data.get("bairro"))
+
+        endereco, created = Endereco.objects.get_or_create(
+            cep=endereco_data.get("cep"),
+            numero=endereco_data.get("numero"),
+            bairro=bairro,
+            logradouro=endereco_data.get("logradouro"),
+            defaults={"complemento": endereco_data.get("complemento", "")}
+        )
+
+        cliente = Cliente.objects.create(
+            empresa=empresa,
+            endereco=endereco,
+            criterio_frequencia_padrao=criterio
+        )
+
+        return cliente

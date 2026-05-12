@@ -7,8 +7,11 @@ class ClienteScopedQuerysetMixin:
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
+        cliente_id = self.request.query_params.get("cliente")
 
         if user.is_staff:
+            if cliente_id:
+                qs = qs.filter(**{self.cliente_field: cliente_id})
             return qs
 
         return qs.filter(**{f"{self.cliente_field}__usuarios": user})

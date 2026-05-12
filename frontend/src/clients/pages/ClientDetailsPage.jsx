@@ -6,12 +6,14 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClientInformation from '../components/ClientInformation';
 import ClientInstrumentInformation from '../components/ClientInstrumentInformation';
 import useClientVM from '../viewModels/useClientVM';
+import useAuth from '../../auth/hooks/useAuth';
 import EmptyYet from '../../components/EmptyYet'
 import CreateInstrument from '../../assets/components/CreateInstrument';
 
 
 function ClientDetailsPage() {
   const { id } = useParams();
+  const { user } = useAuth();
   const { 
     client,
     isMobile,
@@ -44,6 +46,7 @@ function ClientDetailsPage() {
     error,
     setError, 
   } = useClientVM(id);
+  console.log(client, 'fffff')
 
   return (
     <>
@@ -60,7 +63,7 @@ function ClientDetailsPage() {
                 <CircularProgress />
               </Box>
             ) 
-          : <ClientInformation data={client} isMobile={isMobile} />}
+          : <ClientInformation data={client} isMobile={isMobile} user={user} />}
         <br />
         <Stack direction="row" alignItems="center" justifyContent="space-between" mb={2}  sx={{ flexWrap: 'wrap' }}>
           <Typography variant="h4" gutterBottom>

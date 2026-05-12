@@ -6,11 +6,11 @@ import { enqueueSnackbar } from 'notistack';
 import useInvitesMutations from '../hooks/useInvitesMutations';
 import { permissionLabel } from '../../utils/permission';
 
-function InviteGenerator() {
+function InviteGenerator({ overrideClienteId, clientPage = false }) {
   const [grupo, setGrupo] = useState('');
   const [conviteUrl, setConviteUrl] = useState("");
   const { groups, isFetching } = useGroups()
-  const { createInviteMutation } = useInvitesMutations(grupo, setConviteUrl)
+  const { createInviteMutation, isLoading: isGenerating } = useInvitesMutations(grupo, setConviteUrl, overrideClienteId)
 
   const handleCopy = async () => {
     if (conviteUrl) {
@@ -23,7 +23,7 @@ function InviteGenerator() {
 
 
   return (
-    <Paper elevation={3} sx={{ p: 4, width: "100%", maxWidth: 500 }}>
+    <Paper elevation={clientPage ? 0 : 3} sx={{ p: clientPage? 0 : 4, width: "100%" }}>
       <Typography variant="h6" gutterBottom>
         Criar link de convite
       </Typography>

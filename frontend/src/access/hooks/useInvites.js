@@ -2,16 +2,22 @@ import React from 'react'
 import { useQuery } from 'react-query';
 import { axios } from '../../api';
 
-function useInvites() {
+function useInvites(clienteId) {
+  const queryKey = clienteId 
+    ? ['convites', clienteId] 
+    : ['convites'];
+  
+  const params = clienteId 
+    ? { cliente: clienteId } 
+    : {};
+
   const { 
       data: invites,
       isFetching,
     } = useQuery({
-      queryKey: [
-        'convites', 
-      ], 
+      queryKey, 
       queryFn: async () => {
-        const response = await axios.get('/convites/');
+        const response = await axios.get('/convites/', { params });
         
         return response?.data;
       },

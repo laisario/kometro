@@ -1,6 +1,7 @@
 import { useQuery } from 'react-query';
 import { axios } from '../../api';
 
+
 function useClient(id) {
   const { 
     data: client, 
@@ -17,7 +18,7 @@ function useClient(id) {
     refetchOnWindowFocus: false,
     staleTime: 15 * 60 * 1000,
     cacheTime: 60 * 60 * 1000,
-    refetchOnMount: false,
+    refetchOnMount: true,
     refetchInterval: false,
   });
  
@@ -28,4 +29,4 @@ function useClient(id) {
   }
 }
 
-export default useClient
+export default useClient;
