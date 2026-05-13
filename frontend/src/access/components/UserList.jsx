@@ -67,7 +67,6 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
       </Paper>
     );
   }
-  console.log(users)
 
   return (
     <Paper elevation={3} sx={{ p: 4, width: "100%" }}>
@@ -93,7 +92,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
             </TableRow>
           </TableHead>
           <TableBody>
-            {!users?.usuarios || users?.usuarios?.length === 0 ? (
+            {!users || users?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   <Typography variant="body2" color="text.secondary">
@@ -102,7 +101,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
                 </TableCell>
               </TableRow>
             ) : (
-              users?.usuarios?.map((u) => (
+              users?.map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>
