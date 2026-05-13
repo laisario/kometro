@@ -93,7 +93,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
             </TableRow>
           </TableHead>
           <TableBody>
-            {!users || users?.length === 0 ? (
+            {!users?.usuarios || users?.usuarios?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   <Typography variant="body2" color="text.secondary">
@@ -102,7 +102,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
                 </TableCell>
               </TableRow>
             ) : (
-              users?.map((u) => (
+              users?.usuarios?.map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>
