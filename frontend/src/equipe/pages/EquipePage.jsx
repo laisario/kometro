@@ -8,6 +8,10 @@ import {
   Skeleton,
   Tabs,
   Tab,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import { Helmet } from 'react-helmet-async';
 import { useNavigate } from 'react-router';
@@ -18,7 +22,6 @@ import useResponsive from '../../theme/hooks/useResponsive';
 import useOrdensServico from '../hooks/useOrdensServico';
 import useMyOrdensServico from '../hooks/useMyOrdensServico';
 import OrdemServicoDetailsDialog from '../components/OrdemServicoDetailsDialog';
-import EmployeeListCard from '../components/EmployeeListCard';
 import OSSummaryRow from '../components/OSSummaryRow';
 import OSTable from '../components/OSTable';
 import useOSDetailsDialog from '../hooks/useOSDetailsDialog';
@@ -194,22 +197,8 @@ function EquipePage() {
         </Box>
 
         <Grid container spacing={3}>
-          {/* Left Side - Employee List Card (Only in "Todas" tab) */}
-          {activeTab === 'todas' && hasStaffMembers && (
-            <Grid item xs={12} md={3}>
-              <EmployeeListCard
-                staffUsers={staffUsers}
-                selectedEmployeeId={selectedEmployeeId}
-                onEmployeeSelect={handleEmployeeSelect}
-                onEmployeeDeselect={handleEmployeeDeselect}
-                isLoadingUsers={isLoadingUsers}
-                isLoadingOrdensServico={isLoadingOrdensServico}
-              />
-            </Grid>
-          )}
-
           {/* Right Side - OS Summary and Table */}
-          <Grid item xs={12} md={activeTab === 'todas' && hasStaffMembers ? 9 : 12}>
+          <Grid item xs={12} md={12}>
             {/* OS Summary Row (Above Table) */}
             {hasOS && (
               <Box mb={3}>
@@ -234,6 +223,36 @@ function EquipePage() {
                   : selectedEmployeeName 
                     ? `Ordens de serviço - ${selectedEmployeeName}` 
                     : 'Ordens de serviço'
+              }
+              action={
+                activeTab === 'todas' ? (
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel id="responsavel-filter-label">Responsável</InputLabel>
+                    <Select
+                      labelId="responsavel-filter-label"
+                      value={selectedEmployeeId || ''}
+                      label="Responsável"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '') {
+                          handleEmployeeDeselect();
+                        } else {
+                          handleEmployeeSelect(Number(value));
+                        }
+                      }}
+                      aria-label="Filtrar ordens de serviço por responsável"
+                    >
+                      <MenuItem value="">
+                        <em>Todos os responsáveis</em>
+                      </MenuItem>
+                      {staffUsers?.map((employee) => (
+                        <MenuItem key={employee.id} value={employee.id}>
+                          {getEmployeeDisplayName(employee)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : null
               }
               emptyMessage={
                 activeTab === 'minhas'

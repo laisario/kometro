@@ -131,7 +131,8 @@ function CreateInstrument(props) {
   const [showFormNewNorm, setShowFormNewNorm] = useState(false);
   const [inputNorm, setInputNorm] = useState('');
   const [setorId, setSetorId] = useState(currentAsset?.setor?.id ? currentAsset?.setor?.id : null);
-  const { normas } = useNorms(cliente);
+  const { normas: normasData } = useNorms(cliente);
+  const normas = Array.isArray(normasData) ? normasData : [];
 
   // Find the selected option by matching IDs (handle both string and number types)
   const selectedOption = useMemo(() => {
@@ -599,19 +600,22 @@ function CreateInstrument(props) {
             <Autocomplete
               multiple
               id="norms"
-              options={normas || []}
+              options={normas}
+              value={norms}
               getOptionLabel={(option) => {
+                if (!option) return '';
                 if (option === 'CRIAR_NOVO') return '';
-                return option?.nome || ''
+                return option?.nome || option?.id || '';
               }}
               filterOptions={(options, state) => {
-                const filtered = !!options?.length && options?.filter((opt) =>
+                if (!Array.isArray(options)) return ['CRIAR_NOVO'];
+                const filtered = options.filter((opt) =>
                   opt?.nome?.toLowerCase().includes(state.inputValue.toLowerCase())
                 );
-
                 return [...filtered, 'CRIAR_NOVO'];
               }}
               renderOption={(props, option) => {
+                if (!option) return null;
                 if (option === 'CRIAR_NOVO') {
                   return (
                     <MenuItem {...props} sx={{ justifyContent: 'center' }}>
@@ -621,7 +625,7 @@ function CreateInstrument(props) {
                     </MenuItem>
                   );
                 }
-                return <li {...props}>{option.nome}</li>;
+                return <li {...props}>{option?.nome || option?.id || ''}</li>;
               }}
               filterSelectedOptions
               renderTags={() => null}
@@ -633,12 +637,15 @@ function CreateInstrument(props) {
                 />
               )}
               onChange={(event, newValue) => {
+                if (!Array.isArray(newValue)) {
+                  setNorms([]);
+                  return;
+                }
                 const last = newValue[newValue.length - 1];
                 if (last === 'CRIAR_NOVO') {
                   setShowFormNewNorm(true);
                   return;
                 }
-
                 setNorms(newValue);
               }}
               inputValue={inputNorm}
@@ -647,12 +654,12 @@ function CreateInstrument(props) {
               }}
             />
             <Box mt={2} display="flex" gap={1} flexWrap="wrap">
-              {!!norms?.length && norms.map((norma, i) => (
+              {Array.isArray(norms) && norms.length > 0 && norms.map((norma, i) => (
                 <Chip
-                  key={norma?.id + i}
-                  label={norma?.nome}
+                  key={norma?.id ?? i}
+                  label={norma?.nome || ''}
                   onDelete={() =>
-                    setNorms((prev) => prev?.filter((n) => n.id !== norma.id))
+                    setNorms((prev) => (Array.isArray(prev) ? prev.filter((n) => n?.id !== norma?.id) : []))
                   }
                 />
               ))}

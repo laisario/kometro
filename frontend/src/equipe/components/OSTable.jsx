@@ -22,6 +22,7 @@ function OSTable({
   onRowClick,
   onUpdate,
   title,
+  action,
   emptyMessage,
   rowsPerPageOptions = [5, 10, 25, 50, 100],
   defaultRowsPerPage = 10,
@@ -61,7 +62,13 @@ function OSTable({
   }
   return (
     <Card>
-      {title && <CardHeader sx={{ pb: 2 }} title={title} />}
+      {title && (
+        <CardHeader
+          sx={{ pb: 2 }}
+          title={title}
+          action={action}
+        />
+      )}
       <TableContainer>
         <Table>
           <TableHead>

@@ -8,12 +8,13 @@ function useNorms(id) {
   } = useQuery({
     queryKey: ['normas', id], 
     queryFn: async () => {
-      const response = await axios.get(`/normativos/`, {params: { cliente: id || null }});
+      const params = id ? { cliente: id } : {};
+      const response = await axios.get(`/normativos/`, { params });
       return response?.data;
     },
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    enabled: !!id,
+    enabled: true,
     staleTime: 15 * 60 * 1000,
     cacheTime: 60 * 60 * 1000,
     refetchOnMount: false,
