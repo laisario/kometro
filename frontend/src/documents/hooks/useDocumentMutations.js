@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "react-query";
 import { axios, axiosForFiles } from "../../api";
 import { enqueueSnackbar } from "notistack";
+import { getApiErrorMessage } from "../../utils/error";
 
 const useDocumentMutations = (handleClose, setError) => {
   const queryClient = useQueryClient();
@@ -31,9 +32,14 @@ const useDocumentMutations = (handleClose, setError) => {
   },
   onError: (error) => {
     const erros = error?.response?.data
-    setError(erros)
-    enqueueSnackbar(errorMessage(error?.response?.status), {
-    variant: 'error'
+    console.error('[DOCUMENT_CREATE_ERROR]', error);
+    setError({
+      ...erros,
+      elaborador: erros?.elaborador || erros?.criador,
+    })
+    enqueueSnackbar(getApiErrorMessage(error, 'Não foi possível criar o documento.'), {
+      variant: 'error',
+      autoHideDuration: 4000,
     });
   }
   })

@@ -47,7 +47,7 @@ class DocumentoViewSet(ClienteScopedQuerysetMixin, viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if request.user.pk == revisao.revisor.pk:
+        if revisao.revisor_id and request.user.pk == revisao.revisor_id:
             return response.Response(
                 data={
                     "error": "Você não pode aprovar uma revisão feita por você mesmo!"

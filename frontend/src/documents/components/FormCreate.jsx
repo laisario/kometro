@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Button,
   TextField,
@@ -27,12 +27,11 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { useForm, useWatch } from 'react-hook-form';
 import useProcedures from '../hooks/useProcedures';
-import useUsers from '../../auth/hooks/useUsers';
 import { availableFormats } from '../../utils/documents';
 import useResponsive from '../../theme/hooks/useResponsive';
 import useClient from '../../clients/hooks/useClient';
 import useAuth from '../../auth/hooks/useAuth';
-import useUserWithPermission from '../hooks/useUserWithPermission';
+import { enqueueSnackbar } from 'notistack';
 
 export default function FormCreate(props) {
   const { 
@@ -50,7 +49,14 @@ export default function FormCreate(props) {
   const isMobile = useResponsive('down', 'md');
   const { procedures } = useProcedures();
   const { user } = useAuth();
-  const { client } = useClient(user?.cliente || null)
+  const { client, errorClient, isLoadingClient } = useClient(user?.cliente || null)
+
+  console.log(client, "AAAAAAAAAA", user)
+  const clientUsers = useMemo(
+    () => (client?.usuarios || []).filter((clientUser) => clientUser?.isActive !== false),
+    [client?.usuarios]
+  );
+
 
   const handleChange = (event) => {
     const { name, files } = event.target;
@@ -70,9 +76,6 @@ export default function FormCreate(props) {
     frequencia,
     arquivo,
   } = useWatch({ control: form.control })
-  const { usersWithPermission } = useUserWithPermission(client?.usuarios)
-
-  
   return (
     <>
       <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
@@ -167,12 +170,23 @@ export default function FormCreate(props) {
                       error={!!error?.elaborador}
                       helperText={!!error?.elaborador && error?.elaborador}
                     >
-                      {usersWithPermission?.map(({ username, id }) => (
+                      {isLoadingClient && (
+                        <MenuItem disabled value="">
+                          Carregando elaboradores...
+                        </MenuItem>
+                      )}
+                      {!isLoadingClient && clientUsers?.length === 0 && (
+                        <MenuItem disabled value="">
+                          Nenhum usuário ativo encontrado
+                        </MenuItem>
+                      )}
+                      {!isLoadingClient && clientUsers?.map(({ username, firstName, id }) => (
                         <MenuItem key={id} value={id}>
-                          {username}
+                          {firstName || username}
                         </MenuItem>
                       ))}
                     </Select>
+                    {!!error?.elaborador && <FormHelperText>{error?.elaborador}</FormHelperText>}
                   </FormControl>
                 </Grid>
                 <Grid item xs={6}>

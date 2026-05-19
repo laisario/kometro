@@ -263,7 +263,7 @@ const ClientInformation = ({ data, isMobile, user: currentUser }) => {
                           size="small"
                           color="error"
                           onClick={() => setRemovingUser(u)}
-                          title={`Remover ${u?.username}`}
+                          title={`Remover acesso de ${u?.username}`}
                         >
                           <PersonRemoveIcon fontSize="small" />
                         </IconButton>

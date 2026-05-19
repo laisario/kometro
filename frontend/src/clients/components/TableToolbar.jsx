@@ -11,9 +11,28 @@ function TableToolbar(props) {
     numSelected, 
     form, 
     selectedClients, 
+    onDeleteSuccess,
   } = props;
   const isDesktop = useResponsive('up', 'md');
   const { deleteClients, isDeleting } = useClientMutations();
+
+  const handleDeleteSelected = () => {
+    console.debug('[CLIENTS_DELETE_CLICK]', { selectedClients });
+
+    if (!selectedClients?.length) {
+      console.error('[CLIENTS_DELETE_STOPPED] Nenhum cliente selecionado no toolbar.', {
+        numSelected,
+        selectedClients,
+      });
+      return;
+    }
+
+    deleteClients(selectedClients, {
+      onSuccess: () => {
+        onDeleteSuccess?.();
+      },
+    });
+  };
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="pt-br">
@@ -34,7 +53,7 @@ function TableToolbar(props) {
                 variant="subtitle1"
                 component="div"
               >
-                {numSelected.length > 1 ? `${numSelected} selecionados` : `${numSelected} selecionado`}
+                {numSelected > 1 ? `${numSelected} selecionados` : `${numSelected} selecionado`}
               </Typography>
             ) : (
               <Grid container display="flex" justifyContent="flex-start" alignItems="center">
@@ -64,8 +83,12 @@ function TableToolbar(props) {
             ? <CircularProgress />
             : (
               <Tooltip title="Delete">
-                <IconButton>
-                  <DeleteIcon onClick={() => deleteClients(selectedClients)} />
+                <IconButton
+                  onClick={handleDeleteSelected}
+                  disabled={isDeleting}
+                  aria-label="Excluir clientes selecionados"
+                >
+                  <DeleteIcon />
                 </IconButton>
               </Tooltip>
             )

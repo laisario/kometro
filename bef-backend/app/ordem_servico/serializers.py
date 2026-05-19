@@ -1,7 +1,10 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 from .models import OrdemServico, InstrumentoOS, StatusOS, TipoOS
 from instrumentos.serializers import InstrumentoDoClienteListReadSerializer
 from clientes.models import Cliente
+
+User = get_user_model()
 
 
 class InstrumentoOSSerializer(serializers.ModelSerializer):
@@ -119,6 +122,12 @@ class OrdemServicoStatusUpdateSerializer(serializers.ModelSerializer):
 
 
 class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
+    responsavel = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = OrdemServico
         fields = [
@@ -158,6 +167,11 @@ class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
 
 class OrdemServicoTechnicalVisitCreateSerializer(serializers.ModelSerializer):
     cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
+    responsavel = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = OrdemServico

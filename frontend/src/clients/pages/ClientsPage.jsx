@@ -79,6 +79,8 @@ function ClientsPage() {
             <Card>
               <TableToolbar
                 numSelected={selectedClients?.length}
+                selectedClients={selectedClients}
+                onDeleteSuccess={() => setSelectedClients([])}
                 form={formFilter}
                 isLoadingClients={isLoadingClients}
               />

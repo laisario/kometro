@@ -19,3 +19,33 @@ const errorMessages = {
 export function getErrorMessage(status) {
   return errorMessages[status] || `Erro inesperado (status ${status}). Tente novamente.`;
 }
+
+function getApiMessage(data) {
+  if (!data) return null;
+  if (typeof data === 'string') return data;
+  if (typeof data.detail === 'string') return data.detail;
+  if (typeof data.error === 'string') return data.error;
+
+  const firstValue = Object.values(data)[0];
+  if (Array.isArray(firstValue)) return firstValue.join(' ');
+  if (typeof firstValue === 'string') return firstValue;
+
+  return null;
+}
+
+export function getErrorStatus(error) {
+  return error?.response?.status || error?.status;
+}
+
+export function getApiErrorMessage(error, fallbackMessage = 'Erro inesperado. Tente novamente.') {
+  const status = getErrorStatus(error);
+  const apiMessage = getApiMessage(error?.response?.data);
+
+  if (status === 400) return apiMessage || errorMessages[400];
+  if (status === 401) return 'Sessão expirada ou token inválido. Faça login novamente.';
+  if (status === 403) return 'Você não tem permissão para excluir estes clientes.';
+  if (status === 404) return 'Cliente não encontrado.';
+  if (status) return apiMessage || getErrorMessage(status);
+
+  return error?.message || fallbackMessage;
+}

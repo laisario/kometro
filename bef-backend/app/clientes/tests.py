@@ -578,6 +578,8 @@ class ClienteRemoveUserTestCase(TestCase):
         response = self.api_client.delete(f'/clientes/{self.cliente.id}/usuarios/{self.client_user.id}/')
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(self.cliente.usuarios.filter(pk=self.client_user.id).exists())
+        self.client_user.refresh_from_db()
+        self.assertTrue(self.client_user.is_active)
 
     def test_remove_user_not_linked_to_client(self):
         self.api_client.force_authenticate(user=self.staff_user)
@@ -668,6 +670,58 @@ class ClienteRemoveUserTestCase(TestCase):
         response = self.api_client.delete(f'/clientes/{self.cliente.id}/usuarios/{gerente_user.id}/')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Não é possível remover seu próprio acesso", response.data["detail"])
+
+
+class UserAdminSoftDeleteTestCase(APITestCase):
+    def setUp(self):
+        self.api_client = APIClient()
+        self.staff_user = User.objects.create_user(
+            username='admin_soft_delete',
+            password='adminpass',
+            is_staff=True
+        )
+        self.target_user = User.objects.create_user(
+            username='target_soft_delete',
+            password='targetpass',
+            is_staff=False
+        )
+
+    def test_destroy_soft_deletes_user(self):
+        self.api_client.force_authenticate(user=self.staff_user)
+        response = self.api_client.delete(f'/users/{self.target_user.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.target_user.refresh_from_db()
+        self.assertFalse(self.target_user.is_active)
+        self.assertTrue(User.objects.filter(pk=self.target_user.pk).exists())
+
+    def test_inactive_users_are_not_listed(self):
+        self.target_user.is_active = False
+        self.target_user.save(update_fields=["is_active"])
+        self.api_client.force_authenticate(user=self.staff_user)
+
+        response = self.api_client.get('/users/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        results = response.data.get("results", response.data)
+        user_ids = [user["id"] for user in results]
+        self.assertNotIn(self.target_user.id, user_ids)
+
+    def test_soft_delete_preserves_invites_created_by_user(self):
+        group = Group.objects.get_or_create(name="gerente")[0]
+        convite = Convite.objects.create(
+            token_jti="soft-delete-invite",
+            grupo=group,
+            criado_por=self.target_user,
+        )
+        self.api_client.force_authenticate(user=self.staff_user)
+
+        response = self.api_client.delete(f'/users/{self.target_user.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        convite.refresh_from_db()
+        self.assertIsNone(convite.criado_por)
+        self.assertTrue(Convite.objects.filter(pk=convite.pk).exists())
 
 
 class ConviteListAPITestCase(APITestCase):

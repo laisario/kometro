@@ -9,16 +9,25 @@ import {
   Typography,
 } from "@mui/material";
 
-const RemoveUserDialog = ({ open, user, onClose, onConfirm, isRemoving }) => (
+const RemoveUserDialog = ({ open, user, onClose, onConfirm, isRemoving, mode = "remove-access" }) => (
   <Dialog open={open} onClose={onClose}>
-    <DialogTitle>Excluir usuário {user?.username}?</DialogTitle>
+    <DialogTitle>
+      {mode === "deactivate-user"
+        ? `Desativar usuário ${user?.username}?`
+        : `Remover acesso de ${user?.username}?`}
+    </DialogTitle>
     <DialogContent>
-      <Typography>
-        Isso exclui <strong>{user?.username}</strong> permanentemente do sistema.
-      </Typography>
-      <Typography color="error" sx={{ mt: 1 }}>
-        Esta ação é IRREVERSÍVEL.
-      </Typography>
+      {mode === "deactivate-user" ? (
+        <Typography>
+          Isso desativa <strong>{user?.username}</strong> no sistema. O registro será preservado,
+          mas o usuário não aparecerá nas listagens comuns.
+        </Typography>
+      ) : (
+        <Typography>
+          Isso remove o acesso de <strong>{user?.username}</strong> a este cliente.
+          O usuário continuará ativo no sistema.
+        </Typography>
+      )}
     </DialogContent>
     <DialogActions>
       <Button onClick={onClose} disabled={isRemoving}>
@@ -30,7 +39,9 @@ const RemoveUserDialog = ({ open, user, onClose, onConfirm, isRemoving }) => (
         disabled={isRemoving}
         startIcon={isRemoving ? <CircularProgress size={16} /> : null}
       >
-        {isRemoving ? "Excluindo..." : "Excluir"}
+        {isRemoving
+          ? mode === "deactivate-user" ? "Desativando..." : "Removendo..."
+          : mode === "deactivate-user" ? "Desativar usuário" : "Remover acesso"}
       </Button>
     </DialogActions>
   </Dialog>

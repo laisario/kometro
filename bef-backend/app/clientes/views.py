@@ -73,7 +73,7 @@ class RegisterLocationView(generics.CreateAPIView):
 
 
 class RegisterAuthView(generics.CreateAPIView):
-    queryset = User.objects.all()
+    queryset = User.objects.filter(is_active=True)
     permission_classes = (AllowAny,)
     authentication_classes = []
     serializer_class = RegisterAuthSerializer
@@ -96,7 +96,7 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Cliente.objects.exclude(usuarios__is_staff=True).distinct()
+            return Cliente.objects.all()
         return Cliente.objects.filter(usuarios=self.request.user)
 
     def get_permissions(self):
@@ -218,7 +218,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        user.delete()
+        cliente.usuarios.remove(user)
+        logger.info(
+            "[CLIENT_USER_ACCESS_REMOVED] cliente_id=%s removed_user_id=%s removed_by_user_id=%s",
+            cliente.id,
+            user.id,
+            request.user.id,
+        )
 
         return Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -227,7 +233,10 @@ class UserAdminViewSet(viewsets.ModelViewSet):
     serializer_class = UserSerializer
 
     def get_queryset(self):
-        queryset = User.objects.all()
+        if self.action in ["destroy", "retrieve", "update", "partial_update"]:
+            queryset = User.objects.all()
+        else:
+            queryset = User.objects.filter(is_active=True)
         
         # Filtrar por is_staff se o parâmetro for passado
         is_staff = self.request.query_params.get('is_staff', None)
@@ -236,6 +245,27 @@ class UserAdminViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(is_staff=is_staff_bool)
         
         return queryset.order_by('first_name', 'username')
+
+    def destroy(self, request, *args, **kwargs):
+        user = self.get_object()
+        if not user.is_active:
+            logger.info(
+                "[USER_SOFT_DELETE_SKIPPED] user_id=%s username=%s requested_by_user_id=%s reason=already_inactive",
+                user.id,
+                user.username,
+                request.user.id if request.user.is_authenticated else None,
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        user.is_active = False
+        user.save(update_fields=["is_active"])
+        logger.info(
+            "[USER_SOFT_DELETED] user_id=%s username=%s requested_by_user_id=%s",
+            user.id,
+            user.username,
+            request.user.id if request.user.is_authenticated else None,
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DashboardViewSet(viewsets.ViewSet):

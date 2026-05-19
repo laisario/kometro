@@ -11,6 +11,7 @@ import {
   TableCell,
   TableContainer,
   TableHead,
+  TablePagination,
   TableRow,
 } from "@mui/material";
 import PersonRemoveIcon from "@mui/icons-material/PersonRemove";
@@ -19,29 +20,52 @@ import RemoveUserDialog from "../../clients/components/RemoveUserDialog";
 import { useMutation, useQueryClient } from "react-query";
 import { axios } from "../../api";
 import { enqueueSnackbar } from "notistack";
-import { getErrorMessage } from "../../utils/error";
+import { getApiErrorMessage } from "../../utils/error";
 
-export default function UserList({ users, isFetching, currentUser, clienteId, isAdmin }) {
+export default function UserList({
+  users,
+  isFetching,
+  currentUser,
+  clienteId,
+  isAdmin,
+  page,
+  rowsPerPage,
+  handleChangePage,
+  handleChangeRowsPerPage,
+  setPage,
+}) {
   const [removingUser, setRemovingUser] = useState(null);
   const queryClient = useQueryClient();
+  const userResults = users?.results || [];
+  const totalUsers = users?.count || 0;
 
   const { mutate: removeUser, isLoading: isRemovingUser } = useMutation({
     mutationFn: async ({ userId }) => {
-      await axios.delete(`/clientes/${clienteId}/usuarios/${userId}/`);
+      console.debug('[ACCESS_USERS_DEACTIVATE_REQUEST]', {
+        userId,
+        clienteId,
+        requestedByUserId: currentUser?.id,
+      });
+      await axios.delete(`/users/${userId}/`);
     },
     onSuccess: () => {
+      if (userResults.length <= 1 && page > 0) {
+        setPage(page - 1);
+      }
+      queryClient.invalidateQueries({ queryKey: ['access-users'] });
       queryClient.invalidateQueries({ queryKey: ['usuarios-staff'] });
       queryClient.invalidateQueries({ queryKey: ['clientes'] });
-      enqueueSnackbar('Usuário removido', {
+      enqueueSnackbar('Usuário desativado', {
         variant: 'success',
         autoHideDuration: 2000
       });
       setRemovingUser(null);
     },
     onError: (error) => {
-      enqueueSnackbar(getErrorMessage(error?.status), {
+      console.error('[ACCESS_USERS_REMOVE_ERROR]', error);
+      enqueueSnackbar(getApiErrorMessage(error, 'Não foi possível remover o acesso do usuário.'), {
         variant: 'error',
-        autoHideDuration: 2000
+        autoHideDuration: 4000
       });
     }
   });
@@ -92,7 +116,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
             </TableRow>
           </TableHead>
           <TableBody>
-            {!users || users?.length === 0 ? (
+            {userResults.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} align="center">
                   <Typography variant="body2" color="text.secondary">
@@ -101,7 +125,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
                 </TableCell>
               </TableRow>
             ) : (
-              users?.map((u) => (
+              userResults.map((u) => (
                 <TableRow key={u.id} hover>
                   <TableCell>
                     <Typography variant="body2" fontWeight={500}>
@@ -135,7 +159,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
                         size="small"
                         color="error"
                         onClick={() => setRemovingUser(u)}
-                        title={`Remover ${u?.username}`}
+                        title={`Remover acesso de ${u?.username}`}
                       >
                         <PersonRemoveIcon fontSize="small" />
                       </IconButton>
@@ -147,6 +171,16 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
           </TableBody>
         </Table>
       </TableContainer>
+      <TablePagination
+        rowsPerPageOptions={[5, 10, 25, 50, 100]}
+        component="div"
+        count={totalUsers}
+        rowsPerPage={rowsPerPage}
+        page={page}
+        onPageChange={handleChangePage}
+        onRowsPerPageChange={handleChangeRowsPerPage}
+        labelRowsPerPage="Linhas por páginas"
+      />
 
       <RemoveUserDialog
         open={!!removingUser}
@@ -154,6 +188,7 @@ export default function UserList({ users, isFetching, currentUser, clienteId, is
         onClose={() => setRemovingUser(null)}
         onConfirm={handleRemoveUser}
         isRemoving={isRemovingUser}
+        mode="deactivate-user"
       />
     </Paper>
   );

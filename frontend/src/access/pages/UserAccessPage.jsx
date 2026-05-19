@@ -12,7 +12,15 @@ function UserAccessPage() {
   const isAdmin = user?.admin;
   const clienteId = user?.cliente;
   
-  const { users, isFetching: isFetchingUsers } = useUsers(clienteId, isAdmin);
+  const {
+    users,
+    isFetching: isFetchingUsers,
+    page,
+    rowsPerPage,
+    handleChangePage,
+    handleChangeRowsPerPage,
+    setPage,
+  } = useUsers(clienteId, isAdmin);
 
   return (
     <>
@@ -44,6 +52,11 @@ function UserAccessPage() {
               currentUser={user}
               clienteId={clienteId}
               isAdmin={isAdmin}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              handleChangePage={handleChangePage}
+              handleChangeRowsPerPage={handleChangeRowsPerPage}
+              setPage={setPage}
             />
           </Grid>
         </Grid>

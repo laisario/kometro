@@ -21,9 +21,32 @@ class ReadDocumentoExternoSerializer(serializers.ModelSerializer):
 
 
 class WriteDocumentoSerializer(serializers.ModelSerializer):
+    criador = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = Documento
         exclude = ["arquivo"]
+
+    def validate_criador(self, value):
+        request = self.context.get("request")
+        if not value or not request:
+            return value
+
+        if request.user.is_staff:
+            return value
+
+        cliente = request.user.clientes.first()
+        if not cliente:
+            raise serializers.ValidationError("Usuário logado não está vinculado a nenhum cliente.")
+
+        if not value.clientes.filter(pk=cliente.pk).exists():
+            raise serializers.ValidationError("Elaborador deve pertencer ao mesmo cliente do usuário logado.")
+
+        return value
 
 
 class ReadAprovacaoSerializer(serializers.ModelSerializer):
@@ -81,7 +104,7 @@ class ReadRevisaoSerializer(serializers.ModelSerializer):
 
 class WriteRevisaoSerializer(serializers.ModelSerializer):
     aprovadores = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), many=True, required=True
+        queryset=User.objects.filter(is_active=True), many=True, required=True
     )
     alteracao = serializers.CharField(required=True)
 

@@ -19,6 +19,7 @@ function ReviewCard(props) {
   const userApproved = useMemo(() => revisao?.aprovacoes?.some(aprovacao => aprovacao?.aprovador?.id === user?.id), [user, revisao])
   const approversIds = useMemo(() => revisao?.aprovadores?.map((approver) => approver?.id ), [revisao])
   const { hasCreatePermission } = useAuth()
+  const inactiveUserLabel = "Usuário desativado";
   
   return (
     <Card sx={{ 
@@ -35,10 +36,10 @@ function ReviewCard(props) {
           <strong>{revisao?.tipo === 'revalidar' ? 'Revalidado' : 'Revisado'} {fDate(revisao?.dataRevisao)}</strong>
         </Typography>
         <Typography variant='body2' color="text.secondary">
-          Por: <strong>{revisao?.revisor?.username}</strong>
+          Por: <strong>{revisao?.revisor?.username || inactiveUserLabel}</strong>
         </Typography>
         <Typography  variant='body2' color="text.secondary">
-          Aprovadores: <strong>{revisao?.aprovadores?.map((ap) => ap?.username).slice().join(", ")}</strong>
+          Aprovadores: <strong>{revisao?.aprovadores?.map((ap) => ap?.username || inactiveUserLabel).slice().join(", ")}</strong>
         </Typography>
         <Typography 
           color='text.secondary' 
@@ -58,7 +59,7 @@ function ReviewCard(props) {
                   <Box display="flex" flexDirection="row">
                     <PersonIcon fontSize="small" />
                     <Typography variant='body2'>
-                      {aprovacao?.aprovador?.username}
+                      {aprovacao?.aprovador?.username || inactiveUserLabel}
                     </Typography>
                   </Box>
                   <Box display="flex" flexDirection="row">

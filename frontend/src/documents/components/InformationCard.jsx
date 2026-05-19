@@ -31,11 +31,9 @@ function InformationCard(props) {
               {data?.identificador}
             </Typography>
           }
-          {data?.criador &&
-            <Typography sx={{ mt: 1.5 }} variant="body1">
-              Elaborador: <strong>{titleCase(data?.criador?.username)}</strong>
-            </Typography>
-          }
+          <Typography sx={{ mt: 1.5 }} variant="body1">
+            Elaborador: <strong>{data?.criador?.username ? titleCase(data?.criador?.username) : "Usuário desativado"}</strong>
+          </Typography>
           {data?.codigo?.codigo &&
             <Typography sx={{ mt: 1 }} variant="body1">
               Código: <strong>{data?.codigo?.codigo}</strong>

@@ -51,6 +51,9 @@ def enviar_emails_documentos_expirados():
     documentos_expirados = Documento.objects.filter(vencido=True)
 
     for documento in documentos_expirados:
+        if not documento.criador or not documento.criador.is_active:
+            continue
+
         if (
             documento.ultima_notificacao is not None
             and timezone.now() - documento.ultima_notificacao >= intervalo_notificacao

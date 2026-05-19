@@ -14,6 +14,8 @@ from .models import Proposta, Revisao, Anexo, PropostaInstrumento
 from .services import recompute_total, get_resolved_preco
 from decimal import Decimal, InvalidOperation
 
+User = get_user_model()
+
 
 _VALID_TIPO_DE_SERVICO = [c[0] for c in TipoServico.choices]
 
@@ -353,6 +355,11 @@ class PropostaAdminSerializer(serializers.ModelSerializer):
     endereco_de_entrega = serializers.PrimaryKeyRelatedField(
         required=False,
         queryset=Endereco.objects.all(),
+    )
+    responsavel = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(is_active=True),
+        required=False,
+        allow_null=True,
     )
     instrumentos = InstrumentosField(required=False, allow_null=True, write_only=True)
     total_com_desconto = serializers.SerializerMethodField()

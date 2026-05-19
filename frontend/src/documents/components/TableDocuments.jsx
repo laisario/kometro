@@ -114,7 +114,7 @@ function TableDocuments(props) {
                               {status[row?.status]}
                             </Label>
                           </TableCell>
-                          <TableCell>{!!row?.criador?.username && row?.criador?.username}</TableCell>
+                          <TableCell>{row?.criador?.username || "Usuário desativado"}</TableCell>
                           <TableCell> {!!row?.dataValidade && fDate(row?.dataValidade)}</TableCell>
                           <TableCell>
                             {!!row?.analiseCritica && (

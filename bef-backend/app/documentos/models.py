@@ -50,7 +50,7 @@ class Documento(models.Model):
     ultima_notificacao = models.DateTimeField(null=True, blank=True)
     criador = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name="criador_documento",
         null=True,
         blank=True,
@@ -94,7 +94,11 @@ class Revisao(models.Model):
         related_name="revisoes",
     )
     revisor = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="revisoes"
+        User,
+        on_delete=models.SET_NULL,
+        related_name="revisoes",
+        null=True,
+        blank=True,
     )
     data_revisao = models.DateField(auto_now_add=True)
     alteracao = models.TextField(null=True, blank=True)
@@ -124,7 +128,11 @@ class Revisao(models.Model):
 
 class Aprovacao(models.Model):
     aprovador = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="aprovacoes"
+        User,
+        on_delete=models.SET_NULL,
+        related_name="aprovacoes",
+        null=True,
+        blank=True,
     )
     data_aprovacao = models.DateField(auto_now_add=True, null=True)
     revisao = models.ForeignKey(

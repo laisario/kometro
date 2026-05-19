@@ -184,7 +184,7 @@ class ClientesSerializer(serializers.ModelSerializer):
 class ClienteSerializer(serializers.ModelSerializer):
     endereco = ReadEnderecoSerializer()
     empresa = EmpresaSerializer()
-    usuarios = UserSerializer(many=True)
+    usuarios = serializers.SerializerMethodField()
 
     class Meta:
         model = Cliente
@@ -199,6 +199,9 @@ class ClienteSerializer(serializers.ModelSerializer):
             "propostas_aguardando_aprovacao",
             "criterio_frequencia_padrao"
         )
+
+    def get_usuarios(self, obj):
+        return UserSerializer(obj.usuarios.filter(is_active=True), many=True).data
 
     def update(self, instance, validated_data):
         empresa_data = validated_data.get("empresa")

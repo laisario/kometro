@@ -88,7 +88,7 @@ export default function InviteList({ clienteId, showTitle = true, clientView = f
                     secondary={
                       <>
                         <Typography variant="body2" color="text.secondary">
-                          Criado por: {invite?.criadoPor?.firstName || invite?.criadoPor?.username}
+                          Criado por: {invite?.criadoPor?.firstName || invite?.criadoPor?.username || "Usuário desativado"}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           Expira em: {new Date(invite?.expiraEm).toLocaleString("pt-BR")}

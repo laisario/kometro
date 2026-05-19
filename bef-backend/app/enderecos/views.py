@@ -38,6 +38,6 @@ class RegisterLocationView(generics.CreateAPIView):
 
 
 class RegisterAuthView(generics.CreateAPIView):
-    queryset = get_user_model().objects.all()
+    queryset = get_user_model().objects.filter(is_active=True)
     permission_classes = (AllowAny,)
     serializer_class = RegisterAuthSerializer

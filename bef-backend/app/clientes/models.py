@@ -86,7 +86,13 @@ class Convite(models.Model):
     token_jti = models.CharField(max_length=255) 
     token = models.TextField(blank=True, default="")
     grupo = models.ForeignKey("auth.Group", on_delete=models.CASCADE)
-    criado_por = models.ForeignKey(User, on_delete=models.CASCADE, related_name='invites')
+    criado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        related_name='invites',
+        null=True,
+        blank=True,
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     usado = models.BooleanField(default=False)
     # Nullable: staff-created invitations have no client association
