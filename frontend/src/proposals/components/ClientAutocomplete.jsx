@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import useClients from '../../clients/hooks/useClients';
 
-const ClientAutocomplete = ({ user, value, onChange, error, helperText, ...other }) => {
+const ClientAutocomplete = ({ user, value, onChange, error, helperText, required, ...other }) => {
   const {
     clients,
     isLoadingClients,
@@ -79,6 +79,7 @@ const ClientAutocomplete = ({ user, value, onChange, error, helperText, ...other
           placeholder="Pesquisar cliente"
           helperText={helperText}
           error={error}
+          required={required}
           onChange={(e) => setSearch(e.target.value)}
           InputProps={{
             ...params.InputProps,

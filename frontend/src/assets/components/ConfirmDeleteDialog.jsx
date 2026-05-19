@@ -13,8 +13,17 @@ export default function ConfirmDeleteDialog({
   onClose,
   onConfirm,
   type = 'instrument',
+  title: customTitle,
+  message: customMessage,
 }) {
   const getMessage = () => {
+    if (customTitle || customMessage) {
+      return {
+        title: customTitle || 'Tem certeza dessa ação?',
+        message: customMessage || 'Essa ação não poderá ser desfeita.',
+      };
+    }
+
     switch (type) {
       case 'sector':
         return {

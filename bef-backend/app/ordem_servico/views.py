@@ -1,3 +1,6 @@
+import logging
+
+from celery import current_app
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -13,7 +16,10 @@ from .serializers import (
     OrdemServicoDetailSerializer,
     OrdemServicoUpdateSerializer,
     OrdemServicoStatusUpdateSerializer,
+    OrdemServicoTechnicalVisitCreateSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class OrdemServicoViewSet(viewsets.ModelViewSet):
@@ -29,13 +35,19 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
     queryset = OrdemServico.objects.all()
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['numero', 'proposta__numero', 'proposta__cliente__empresa__razao_social']
+    search_fields = [
+        'numero',
+        'proposta__numero',
+        'proposta__cliente__empresa__razao_social',
+        'cliente__empresa__razao_social',
+    ]
     ordering_fields = ['data_criacao', 'data_expiracao', 'numero']
     ordering = ['-data_criacao']
     
     def get_queryset(self):
         queryset = OrdemServico.objects.select_related(
             'proposta__cliente__empresa', 
+            'cliente__empresa',
             'responsavel'
         ).prefetch_related('instrumentos')
         
@@ -50,6 +62,8 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
             return OrdemServicoDetailSerializer
         if self.action in ['update', 'partial_update']:
             return OrdemServicoUpdateSerializer
+        if self.action == 'create':
+            return OrdemServicoTechnicalVisitCreateSerializer
         return OrdemServicoSerializer
     
     def list(self, request, *args, **kwargs):
@@ -114,18 +128,22 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         return super().partial_update(request, *args, **kwargs)
     
     def create(self, request, *args, **kwargs):
-        """Disable manual creation - OS is created automatically on proposal approval"""
-        return Response(
-            {"detail": "Ordens de serviço são criadas automaticamente ao aprovar uma proposta."},
-            status=status.HTTP_405_METHOD_NOT_ALLOWED
-        )
+        """Create a Technical Visit OS manually."""
+        if not request.user.groups.filter(name__in=['gerente', 'registrador']).exists():
+            return Response(
+                {"detail": "Apenas gestores e executores podem criar visita técnica."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().create(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
-        """Disable deletion - OS should not be deleted manually"""
-        return Response(
-            {"detail": "Ordens de serviço não podem ser excluídas."},
-            status=status.HTTP_405_METHOD_NOT_ALLOWED
-        )
+        """Delete OS - only gerente can delete."""
+        if not request.user.groups.filter(name='gerente').exists():
+            return Response(
+                {"detail": "Apenas gerentes podem excluir ordens de serviço."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
     
     @action(detail=True, methods=['PATCH'], url_path='atualizar-status', permission_classes=[IsAuthenticated])
     def atualizar_status(self, request, pk=None):
@@ -150,6 +168,78 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
                 "status": os.status,
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['POST'], url_path='gerar-proposta', permission_classes=[IsAuthenticated])
+    def gerar_proposta(self, request, pk=None):
+        """Queue proposal generation from a completed Technical Visit OS."""
+        if not request.user.groups.filter(name__in=['gerente', 'registrador']).exists():
+            return Response(
+                {"detail": "Apenas gestores e executores podem gerar proposta a partir de visita técnica."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        os = self.get_object()
+        if os.tipo_os != TipoOS.VISITA_TECNICA.value:
+            return Response(
+                {"detail": "Esta ação está disponível apenas para OS de visita técnica."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if os.status != StatusOS.REALIZADO:
+            return Response(
+                {"detail": "A proposta só pode ser gerada quando a visita técnica estiver realizada."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        if not os.resolved_cliente:
+            return Response(
+                {"detail": "A visita técnica precisa ter um cliente."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        instrumento_ids = request.data.get('instrumento_ids') or []
+        if not isinstance(instrumento_ids, list) or not instrumento_ids:
+            return Response(
+                {"detail": "Selecione pelo menos um instrumento para gerar a proposta."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            instrumento_ids = [int(instrumento_id) for instrumento_id in instrumento_ids]
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "instrumento_ids deve conter apenas números."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        from .tasks import criar_proposta_visita_tecnica
+
+        task_name = criar_proposta_visita_tecnica.name
+        if task_name not in current_app.tasks:
+            logger.error("Celery task %s is not registered in the web process.", task_name)
+            return Response(
+                {"detail": "A tarefa de geração de proposta não está registrada no Celery."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            task = criar_proposta_visita_tecnica.delay(
+                os.id,
+                instrumento_ids,
+                request.data.get('informacoes_adicionais'),
+            )
+        except Exception as exc:
+            logger.exception("Failed to queue Technical Visit proposal generation task: %s", exc)
+            return Response(
+                {"detail": "Não foi possível iniciar a geração da proposta em segundo plano."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(
+            {
+                "message": "Geração de proposta iniciada em segundo plano.",
+                "task_id": task.id,
+            },
+            status=status.HTTP_202_ACCEPTED,
         )
 
     
@@ -541,6 +631,13 @@ class OrdemServicoViewSet(viewsets.ModelViewSet):
         
         os.status = StatusOS.REALIZADO
         os.save(update_fields=['status'])
+
+        if not os.proposta:
+            return Response({
+                "message": "Ordem de serviço finalizada com sucesso.",
+                "todas_os_finalizadas": False,
+                "pode_liberar_faturamento": False
+            })
         
         # Check if all OS for this proposal are finished
         proposta = os.proposta

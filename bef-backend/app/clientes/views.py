@@ -39,6 +39,7 @@ from django.utils import timezone
 import os
 from .tasks import update_clients, update_dashboard_stats
 from .permissions import NivelPermission
+from .logging_utils import get_authorization_metadata, get_user_log_data, mask_sensitive_data
 from rest_framework.decorators import action
 from .mixins import ClienteScopedQuerysetMixin
 from django.db.models import Exists, OuterRef
@@ -104,18 +105,70 @@ class ClienteViewSet(viewsets.ModelViewSet):
         return super().get_permissions()
 
     def create(self, request, *args, **kwargs):
-        if not request.user.is_staff:
-            return Response(
-                {"detail": "Only staff users can create clients."},
-                status=status.HTTP_403_FORBIDDEN
-            )
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        cliente = serializer.save()
-        return Response(
-            ClienteSerializer(cliente).data,
-            status=status.HTTP_201_CREATED
+        user_log_data = get_user_log_data(request.user)
+        auth_log_data = get_authorization_metadata(request)
+
+        logger.info(
+            "[CLIENT_CREATE_START] method=%s path=%s user_id=%s email=%s username=%s "
+            "is_staff=%s is_authenticated=%s has_authorization_header=%s "
+            "authorization_prefix=%s token_type=%s",
+            request.method,
+            request.path,
+            user_log_data["user_id"],
+            user_log_data["email"],
+            user_log_data["username"],
+            user_log_data["is_staff"],
+            user_log_data["is_authenticated"],
+            auth_log_data["has_authorization_header"],
+            auth_log_data["authorization_prefix"],
+            auth_log_data["token_type"],
         )
+        logger.info("[CLIENT_CREATE_PAYLOAD] user_id=%s data=%s", user_log_data["user_id"], mask_sensitive_data(request.data))
+
+        try:
+            if not request.user.is_staff:
+                logger.warning(
+                    "[CLIENT_CREATE_PERMISSION_DENIED] user_id=%s email=%s username=%s "
+                    "is_staff=%s is_authenticated=%s path=%s",
+                    user_log_data["user_id"],
+                    user_log_data["email"],
+                    user_log_data["username"],
+                    user_log_data["is_staff"],
+                    user_log_data["is_authenticated"],
+                    request.path,
+                )
+                return Response(
+                    {"detail": "Only staff users can create clients."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            serializer = self.get_serializer(data=request.data)
+            if not serializer.is_valid():
+                logger.warning(
+                    "[CLIENT_CREATE_VALIDATION_ERROR] user_id=%s errors=%s payload=%s",
+                    user_log_data["user_id"],
+                    serializer.errors,
+                    mask_sensitive_data(request.data),
+                )
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+            cliente = serializer.save()
+            logger.info(
+                "[CLIENT_CREATE_SUCCESS] user_id=%s cliente_id=%s",
+                user_log_data["user_id"],
+                cliente.id,
+            )
+            return Response(
+                ClienteSerializer(cliente).data,
+                status=status.HTTP_201_CREATED
+            )
+        except Exception as exc:
+            logger.exception(
+                "[CLIENT_CREATE_EXCEPTION] user_id=%s error=%s",
+                user_log_data["user_id"],
+                exc,
+            )
+            raise
         
     @action(detail=True, methods=["patch"], permission_classes=[NivelPermission])
     def atualizar_criterio_frequencia_padrao(self, request, pk=None):

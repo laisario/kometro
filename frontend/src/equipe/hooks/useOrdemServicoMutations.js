@@ -119,6 +119,37 @@ const useOrdemServicoMutations = () => {
     },
   });
 
+  const deleteOS = async (ids) => {
+    const osIds = Array.isArray(ids) ? ids : [ids];
+    return Promise.all(osIds.map((id) => axios.delete(`/ordens-servico/${id}/`)));
+  };
+
+  const {
+    mutate: mutateDeleteOS,
+    isLoading: isLoadingDeleteOS,
+  } = useMutation({
+    mutationFn: deleteOS,
+    onSuccess: (data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ['ordens-servico'] });
+      queryClient.invalidateQueries({ queryKey: ['ordem-servico'] });
+      const count = Array.isArray(ids) ? ids.length : 1;
+      enqueueSnackbar(
+        count > 1
+          ? `${count} ordens de serviço excluídas com sucesso!`
+          : 'Ordem de serviço excluída com sucesso!',
+        { variant: 'success' }
+      );
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 'Falha ao excluir ordem de serviço. Tente novamente!';
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
   // Preview certificate number (read-only, doesn't persist)
   const previewCertificado = async ({ osId, instrumentoId }) => {
     const response = await axios.get(
@@ -198,6 +229,38 @@ const useOrdemServicoMutations = () => {
     },
   });
 
+  const generateProposalFromTechnicalVisit = async ({ osId, instrumentoIds, informacoesAdicionais }) => {
+    const response = await axios.post(
+      `/ordens-servico/${osId}/gerar-proposta/`,
+      {
+        instrumento_ids: instrumentoIds,
+        informacoes_adicionais: informacoesAdicionais,
+      }
+    );
+    return response.data;
+  };
+
+  const {
+    mutate: mutateGenerateProposalFromTechnicalVisit,
+    isLoading: isLoadingGenerateProposalFromTechnicalVisit,
+  } = useMutation({
+    mutationFn: generateProposalFromTechnicalVisit,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['propostas'] });
+      enqueueSnackbar('Geração da proposta iniciada em segundo plano!', {
+        variant: 'success',
+      });
+    },
+    onError: (error) => {
+      const errors = error?.response?.data;
+      const errorMessage = errors?.detail || 'Falha ao iniciar geração da proposta. Tente novamente!';
+      enqueueSnackbar(errorMessage, {
+        variant: 'error',
+        autoHideDuration: 4000,
+      });
+    },
+  });
+
   return {
     mutateUpdateOS,
     mutateUpdateOSAsync,
@@ -208,6 +271,8 @@ const useOrdemServicoMutations = () => {
     isLoadingUpdateStatus,
     mutateCreateOS,
     isLoadingCreateOS,
+    mutateDeleteOS,
+    isLoadingDeleteOS,
     previewCertificado,
     mutateGerarCertificado,
     mutateGerarCertificadoAsync,
@@ -215,6 +280,8 @@ const useOrdemServicoMutations = () => {
     // Mutation for creating new OS and moving instruments
     mutateCreateNewOSAndMove,
     isLoadingCreateNewOSAndMove,
+    mutateGenerateProposalFromTechnicalVisit,
+    isLoadingGenerateProposalFromTechnicalVisit,
   };
 };
 

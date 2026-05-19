@@ -9,6 +9,7 @@ class TipoOS(models.TextChoices):
     BALANCAS = "BAL", _("OS Balanças")
     MANUTENCAO = "MAN", _("OS Manutenção")
     SERVICOS_EXTERNOS = "EXT", _("OS Serviços Externos")
+    VISITA_TECNICA = "TV", _("Visita Técnica")
 
 
 class StatusOS(models.TextChoices):
@@ -23,7 +24,17 @@ class OrdemServico(models.Model):
         "propostas.Proposta",
         on_delete=models.CASCADE,
         related_name="ordens_servico",
-        verbose_name="Proposta"
+        verbose_name="Proposta",
+        null=True,
+        blank=True,
+    )
+    cliente = models.ForeignKey(
+        "clientes.Cliente",
+        on_delete=models.CASCADE,
+        related_name="ordens_servico",
+        verbose_name="Cliente",
+        null=True,
+        blank=True,
     )
     responsavel = models.ForeignKey(
         User,
@@ -84,6 +95,11 @@ class OrdemServico(models.Model):
         blank=True,
         verbose_name="OS de recebimento dos instrumentos (Manutenção)"
     )  # Manutenção
+    descricao = models.TextField(
+        null=True,
+        blank=True,
+        verbose_name="Descrição"
+    )
     numero = models.CharField(
         max_length=25,
         unique=True,
@@ -103,13 +119,16 @@ class OrdemServico(models.Model):
         return f"{self.numero}"
 
     @property
-    def cliente(self):
-        return self.proposta.cliente
+    def resolved_cliente(self):
+        if self.proposta:
+            return self.proposta.cliente
+        return self.cliente
 
     @property
     def cliente_nome(self):
-        if self.proposta.cliente and self.proposta.cliente.empresa:
-            return self.proposta.cliente.empresa.razao_social
+        cliente = self.resolved_cliente
+        if cliente and cliente.empresa:
+            return cliente.empresa.razao_social
         return None
     
     def pode_transicionar_status(self, novo_status):

@@ -22,6 +22,7 @@ import useResponsive from '../../theme/hooks/useResponsive';
 import useOrdensServico from '../hooks/useOrdensServico';
 import useMyOrdensServico from '../hooks/useMyOrdensServico';
 import OrdemServicoDetailsDialog from '../components/OrdemServicoDetailsDialog';
+import OrdemServicoFormDialog from '../components/OrdemServicoFormDialog';
 import OSSummaryRow from '../components/OSSummaryRow';
 import OSTable from '../components/OSTable';
 import useOSDetailsDialog from '../hooks/useOSDetailsDialog';
@@ -29,7 +30,7 @@ import useOSDetailsDialog from '../hooks/useOSDetailsDialog';
 function EquipePage() {
   const navigate = useNavigate();
   const isMobile = useResponsive('down', 'sm');
-  const { isManager, user } = useAuth();
+  const { isManager, hasCreatePermission, user } = useAuth();
   const { users: staffUsers, isLoadingUsers, errorUsers } = useUsers(null, { isStaff: true });
   
   // Tab state management
@@ -37,11 +38,11 @@ function EquipePage() {
   const [activeTab, setActiveTab] = useState('todas'); // 'todas' | 'minhas'
   
   // Adjust default tab and prevent non-managers from accessing "Todas"
-  useEffect(() => {
-    if (user && !isManager && activeTab === 'todas') {
-      setActiveTab('minhas');
-    }
-  }, [user, isManager, activeTab]);
+  // useEffect(() => {
+  //   if (user && !isManager && activeTab === 'todas') {
+  //     setActiveTab('minhas');
+  //   }
+  // }, [user, isManager, activeTab]);
   
   // Conditional data fetching based on active tab
   const { 
@@ -71,7 +72,10 @@ function EquipePage() {
   // State management
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
   const { selectedOS, isOpen, openDialog, closeDialog } = useOSDetailsDialog();
-  
+
+  // Create OS dialog state
+  const [isCreateOSOpen, setIsCreateOSOpen] = useState(false);
+
   // Clear employee selection when switching to "Minhas" tab
   useEffect(() => {
     if (activeTab === 'minhas') {
@@ -146,6 +150,22 @@ function EquipePage() {
     setSelectedEmployeeId(null);
   };
 
+  const handleCreateOSOpen = () => {
+    setIsCreateOSOpen(true);
+  };
+
+  const handleCreateOSClose = () => {
+    setIsCreateOSOpen(false);
+  };
+
+  const handleOSCreated = () => {
+    if (activeTab === 'todas') {
+      refetchTodas();
+    } else {
+      refetchMinhas();
+    }
+  };
+
   if (!user || isLoadingUsers || isLoadingOrdensServico) {
     return (
       <Container>
@@ -217,6 +237,8 @@ function EquipePage() {
               isLoading={isLoadingOrdensServico}
               onRowClick={openDialog}
               onUpdate={handleUpdateOS}
+              selectable={isManager}
+              onDeleted={handleUpdateOS}
               title={
                 activeTab === 'minhas' 
                   ? 'Minhas Ordens de Serviço'
@@ -225,34 +247,45 @@ function EquipePage() {
                     : 'Ordens de serviço'
               }
               action={
-                activeTab === 'todas' ? (
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel id="responsavel-filter-label">Responsável</InputLabel>
-                    <Select
-                      labelId="responsavel-filter-label"
-                      value={selectedEmployeeId || ''}
-                      label="Responsável"
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        if (value === '') {
-                          handleEmployeeDeselect();
-                        } else {
-                          handleEmployeeSelect(Number(value));
-                        }
-                      }}
-                      aria-label="Filtrar ordens de serviço por responsável"
-                    >
-                      <MenuItem value="">
-                        <em>Todos os responsáveis</em>
-                      </MenuItem>
-                      {staffUsers?.map((employee) => (
-                        <MenuItem key={employee.id} value={employee.id}>
-                          {getEmployeeDisplayName(employee)}
+                <Box display="flex" gap={2} alignItems="center">
+                  {activeTab === 'todas' && isManager && (
+                    <FormControl size="small" sx={{ minWidth: 200 }}>
+                      <InputLabel id="responsavel-filter-label">Responsável</InputLabel>
+                      <Select
+                        labelId="responsavel-filter-label"
+                        value={selectedEmployeeId || ''}
+                        label="Responsável"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            handleEmployeeDeselect();
+                          } else {
+                            handleEmployeeSelect(Number(value));
+                          }
+                        }}
+                        aria-label="Filtrar ordens de serviço por responsável"
+                      >
+                        <MenuItem value="">
+                          <em>Todos os responsáveis</em>
                         </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                ) : null
+                        {staffUsers?.map((employee) => (
+                          <MenuItem key={employee.id} value={employee.id}>
+                            {getEmployeeDisplayName(employee)}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                  {hasCreatePermission && (
+                    <Button
+                      variant="contained"
+                      onClick={handleCreateOSOpen}
+                      size="small"
+                    >
+                      Criar visita técnica
+                    </Button>
+                  )}
+                </Box>
               }
               emptyMessage={
                 activeTab === 'minhas'
@@ -270,6 +303,13 @@ function EquipePage() {
             ordemServico={selectedOS}
           />
         )}
+
+        <OrdemServicoFormDialog
+          open={isCreateOSOpen}
+          onClose={handleCreateOSClose}
+          mode="create"
+          onSaved={handleOSCreated}
+        />
       </Container>
     </>
   );

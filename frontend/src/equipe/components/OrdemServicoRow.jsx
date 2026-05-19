@@ -4,6 +4,7 @@ import {
   TableCell,
   Typography,
   Chip,
+  Checkbox,
 } from '@mui/material';
 import { fDate } from '../../utils/formatTime';
 
@@ -25,12 +26,16 @@ const TIPO_OS_LABELS = {
   'BAL': 'Balanças',
   'MAN': 'Manutenção',
   'EXT': 'Serviços Externos',
+  'TV': 'Visita Técnica',
 };
 
 function OrdemServicoRow({ 
   os, 
   onViewDetails, 
   onUpdate,
+  selectable = false,
+  selected = false,
+  onSelect,
 }) {
   const handleRowClick = (e) => {
     // Don't trigger if clicking on action buttons or editors
@@ -73,6 +78,7 @@ function OrdemServicoRow({
     <TableRow
       hover
       onClick={handleRowClick}
+      selected={selected}
       sx={{ 
         cursor: 'pointer',
         '&:hover': {
@@ -80,6 +86,22 @@ function OrdemServicoRow({
         },
       }}
     >
+      {selectable && (
+        <TableCell padding="checkbox">
+          <Checkbox
+            color="primary"
+            checked={selected}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelect?.(os.id);
+            }}
+            inputProps={{
+              'aria-label': `Selecionar ordem de serviço ${os.numero || os.id}`,
+            }}
+          />
+        </TableCell>
+      )}
+
       {/* OS Number */}
       <TableCell>
         <Typography variant="subtitle2">

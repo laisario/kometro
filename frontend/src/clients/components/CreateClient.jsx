@@ -28,7 +28,6 @@ const frequencyOptions = [
 ];
 
 function getDefaultValues(clientData) {
-  console.log(clientData)
   if (clientData?.empresa) {
     return {
       razaoSocial: clientData.empresa.razaoSocial || '',
@@ -134,7 +133,6 @@ function CreateClient({ open, onClose, clientData }) {
   };
 
   const onSubmit = (data) => {
-    console.log(data, "ENDERECO")
     const payload = {
       empresa: {
         razaoSocial: data.razaoSocial,

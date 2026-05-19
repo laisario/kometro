@@ -11,6 +11,10 @@ from .models import Cliente, Empresa, Unidade, Convite
 from instrumentos.models import Instrumento, InstrumentoDoCliente, TipoInstrumento
 from propostas.models import Proposta
 from documentos.models import Documento, Revisao
+import logging
+from .logging_utils import mask_sensitive_data
+
+logger = logging.getLogger(__name__)
 
 class LoginSerializer(TokenObtainPairSerializer):
     @classmethod
@@ -496,35 +500,73 @@ class ClienteCreateSerializer(serializers.Serializer):
         empresa_data = validated_data.get("empresa")
         endereco_data = validated_data.get("endereco")
         criterio = validated_data.get("criterio_frequencia_padrao", "C")
-        print(empresa_data, endereco_data, "AAAAAAAA")
-
-        empresa, created = Empresa.objects.get_or_create(
-            cnpj=empresa_data.get("cnpj"),
-            defaults={
-                "razao_social": empresa_data.get("razao_social"),
-                "ie": empresa_data.get("ie"),
-                "nome_fantasia": empresa_data.get("nome_fantasia"),
-                "filial": empresa_data.get("filial"),
-                "isento": empresa_data.get("isento", False),
-            }
+        logger.info(
+            "[CLIENT_CREATE_SERIALIZER_START] validated_data=%s",
+            mask_sensitive_data(validated_data),
         )
 
-        uf, _ = UF.objects.get_or_create(sigla=endereco_data.get("uf"))
-        cidade, _ = Cidade.objects.get_or_create(uf=uf, nome=endereco_data.get("cidade"))
-        bairro, _ = Bairro.objects.get_or_create(cidade=cidade, nome=endereco_data.get("bairro"))
+        try:
+            empresa, empresa_created = Empresa.objects.get_or_create(
+                cnpj=empresa_data.get("cnpj"),
+                defaults={
+                    "razao_social": empresa_data.get("razao_social"),
+                    "ie": empresa_data.get("ie"),
+                    "nome_fantasia": empresa_data.get("nome_fantasia"),
+                    "filial": empresa_data.get("filial"),
+                    "isento": empresa_data.get("isento", False),
+                }
+            )
+            logger.info(
+                "[CLIENT_CREATE_EMPRESA_READY] empresa_id=%s empresa_created=%s cnpj=%s",
+                empresa.id,
+                empresa_created,
+                empresa_data.get("cnpj"),
+            )
 
-        endereco, created = Endereco.objects.get_or_create(
-            cep=endereco_data.get("cep"),
-            numero=endereco_data.get("numero"),
-            bairro=bairro,
-            logradouro=endereco_data.get("logradouro"),
-            defaults={"complemento": endereco_data.get("complemento", "")}
-        )
+            uf, uf_created = UF.objects.get_or_create(sigla=endereco_data.get("uf"))
+            cidade, cidade_created = Cidade.objects.get_or_create(uf=uf, nome=endereco_data.get("cidade"))
+            bairro, bairro_created = Bairro.objects.get_or_create(cidade=cidade, nome=endereco_data.get("bairro"))
+            logger.info(
+                "[CLIENT_CREATE_LOCATION_READY] uf_id=%s uf_created=%s cidade_id=%s "
+                "cidade_created=%s bairro_id=%s bairro_created=%s",
+                uf.id,
+                uf_created,
+                cidade.id,
+                cidade_created,
+                bairro.id,
+                bairro_created,
+            )
 
-        cliente = Cliente.objects.create(
-            empresa=empresa,
-            endereco=endereco,
-            criterio_frequencia_padrao=criterio
-        )
+            endereco, endereco_created = Endereco.objects.get_or_create(
+                cep=endereco_data.get("cep"),
+                numero=endereco_data.get("numero"),
+                bairro=bairro,
+                logradouro=endereco_data.get("logradouro"),
+                defaults={"complemento": endereco_data.get("complemento", "")}
+            )
+            logger.info(
+                "[CLIENT_CREATE_ENDERECO_READY] endereco_id=%s endereco_created=%s",
+                endereco.id,
+                endereco_created,
+            )
 
-        return cliente
+            cliente = Cliente.objects.create(
+                empresa=empresa,
+                endereco=endereco,
+                criterio_frequencia_padrao=criterio
+            )
+            logger.info(
+                "[CLIENT_CREATE_SERIALIZER_SUCCESS] cliente_id=%s empresa_id=%s endereco_id=%s",
+                cliente.id,
+                empresa.id,
+                endereco.id,
+            )
+
+            return cliente
+        except Exception as exc:
+            logger.exception(
+                "[CLIENT_CREATE_SERIALIZER_EXCEPTION] error=%s validated_data=%s",
+                exc,
+                mask_sensitive_data(validated_data),
+            )
+            raise

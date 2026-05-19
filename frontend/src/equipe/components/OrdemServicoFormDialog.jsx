@@ -9,7 +9,6 @@ import {
   TextField,
   Autocomplete,
   CircularProgress,
-  MenuItem,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -17,9 +16,12 @@ import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import { useForm } from 'react-hook-form';
+import { enqueueSnackbar } from 'notistack';
 import useOrdemServicoMutations from '../hooks/useOrdemServicoMutations';
 import useUsers from '../../auth/hooks/useUsers';
+import useAuth from '../../auth/hooks/useAuth';
 import useResponsive from '../../theme/hooks/useResponsive';
+import ClientAutocomplete from '../../proposals/components/ClientAutocomplete';
 
 // Helper to get layout key from tipoOs
 const getOsLayoutKey = (tipoOs) => {
@@ -29,6 +31,7 @@ const getOsLayoutKey = (tipoOs) => {
     'BAL': 'balancas',
     'MAN': 'manutencao',
     'EXT': 'externa',
+    'TV': 'visitaTecnica',
   };
   return tipoMap[tipoOs] || 'calibracao';
 };
@@ -67,6 +70,13 @@ const OS_FORM_FIELDS_BY_TYPE = {
       'dataLiberacaoCalibracao',
     ],
   },
+  visitaTecnica: {
+    fields: [
+      'responsavel',
+      'dataExpiracao',
+      'descricao',
+    ],
+  },
 };
 
 // Field labels
@@ -78,18 +88,12 @@ const FIELD_LABELS = {
   dataCalibracaoInstrumentos: 'Data de Calibração dos Instrumentos',
   dataLiberacaoCalibracao: 'Data de Liberação da Calibração',
   osRecebimentoDosInstruementos: 'OS de Recebimento dos Instrumentos',
+  descricao: 'Descrição',
 };
-
-// Tipo OS options for create mode
-const TIPO_OS_OPTIONS = [
-  { value: 'CAL', label: 'Calibração' },
-  { value: 'BAL', label: 'Balanças' },
-  { value: 'MAN', label: 'Manutenção' },
-  { value: 'EXT', label: 'Externa' },
-];
 
 function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoOs, onSaved }) {
   const isMobile = useResponsive('down', 'sm');
+  const { user } = useAuth();
   const { users, isLoadingUsers } = useUsers(null, { isStaff: true });
   const {
     mutateUpdateOSAsync,
@@ -101,12 +105,14 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
   const form = useForm({
     defaultValues: {
       tipoOs: defaultTipoOs || (mode === 'edit' && os?.tipoOs ? os.tipoOs : 'CAL'),
+      cliente: null,
       responsavel: null,
       dataExpiracao: null,
       dataRecebimentoInstrumentos: null,
       dataLiberacaoInstrumentos: null,
       dataCalibracaoInstrumentos: null,
       dataLiberacaoCalibracao: null,
+      descricao: '',
     },
   });
 
@@ -126,6 +132,7 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
       const user = os.responsavel && users?.find((u) => u.id === os.responsavel);
       form.reset({
         tipoOs: os.tipoOs || 'CAL',
+        cliente: null,
         responsavel: user || null,
         dataExpiracao: os.dataExpiracao ? dayjs(os.dataExpiracao) : null,
         dataRecebimentoInstrumentos: os.dataRecebimentoInstrumentos
@@ -141,10 +148,12 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
           ? dayjs(os.dataLiberacaoCalibracao)
           : null,
         osRecebimentoDosInstruementos: os.osRecebimentoDosInstruementos || '',
+        descricao: os.descricao || '',
       });
     } else if (mode === 'create' && open) {
       form.reset({
-        tipoOs: defaultTipoOs || 'CAL',
+        tipoOs: 'TV',
+        cliente: null,
         responsavel: null,
         dataExpiracao: null,
         dataRecebimentoInstrumentos: null,
@@ -152,11 +161,20 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
         dataCalibracaoInstrumentos: null,
         dataLiberacaoCalibracao: null,
         osRecebimentoDosInstruementos: '',
+        descricao: '',
       });
     }
   }, [mode, os, open, form, defaultTipoOs, users]);
 
   const handleSubmit = (data) => {
+    // Validate required fields for create mode
+    if (mode === 'create' && !data.cliente?.id) {
+      enqueueSnackbar('Por favor, selecione um cliente para criar a OS manualmente.', {
+        variant: 'warning',
+        autoHideDuration: 4000,
+      });
+      return;
+    }
     const payload = {};
 
     // Only include visible fields that have values
@@ -185,6 +203,9 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
     if (visibleFields.includes('osRecebimentoDosInstruementos') && data.osRecebimentoDosInstruementos) {
         payload.osRecebimentoDosInstruementos = data.osRecebimentoDosInstruementos;
     }
+    if (visibleFields.includes('descricao') && data.descricao) {
+      payload.descricao = data.descricao.trim();
+    }
 
     if (mode === 'edit' && os?.id) {
       mutateUpdateOSAsync({ id: os.id, data: payload })
@@ -196,9 +217,10 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
           // Error handling is done in the mutation hook
         });
     } else if (mode === 'create') {
-      // Include tipoOs for create mode
-      payload.tipoOs = data.tipoOs;
-      // Note: proposta and other required fields should be added here if needed
+      // Include cliente for manual OS creation (required when no proposta)
+      if (data.cliente?.id) {
+        payload.cliente = data.cliente.id;
+      }
       mutateCreateOS(payload, {
         onSuccess: () => {
           onSaved?.();
@@ -225,26 +247,32 @@ function OrdemServicoFormDialog({ open, onClose, mode = 'edit', os, defaultTipoO
         }}
       >
         <DialogTitle>
-          {mode === 'edit' ? 'Editar Ordem de Serviço' : 'Criar Ordem de Serviço'}
+          {mode === 'edit' ? 'Editar Ordem de Serviço' : 'Criar Visita Técnica'}
         </DialogTitle>
         <DialogContent>
           <Box display="flex" flexDirection="column" gap={2} mt={1}>
-            {/* Tipo OS - Only in create mode */}
+            {/* Cliente - Only in create mode */}
             {mode === 'create' && (
+              <ClientAutocomplete
+                user={user}
+                value={form.watch('cliente')}
+                onChange={(event, newValue) => {
+                  form.setValue('cliente', newValue);
+                }}
+                required
+                helperText="O cliente é obrigatório para criação manual de OS"
+              />
+            )}
+
+            {visibleFields.includes('descricao') && (
               <TextField
-                select
-                label="Tipo de OS"
-                value={tipoOs}
-                onChange={(e) => form.setValue('tipoOs', e.target.value)}
+                label={FIELD_LABELS.descricao}
+                placeholder="Descreva o objetivo da visita técnica"
                 fullWidth
-                variant="outlined"
-              >
-                {TIPO_OS_OPTIONS.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </TextField>
+                multiline
+                minRows={3}
+                {...form.register('descricao')}
+              />
             )}
 
             {/* Responsável */}

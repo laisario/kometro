@@ -46,7 +46,6 @@ function ClientDetailsPage() {
     error,
     setError, 
   } = useClientVM(id);
-  console.log(client, 'fffff')
 
   return (
     <>

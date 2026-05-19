@@ -32,6 +32,8 @@ import AddIcon from '@mui/icons-material/Add';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import AssignmentIcon from '@mui/icons-material/Assignment';
+import PrecisionManufacturingIcon from '@mui/icons-material/PrecisionManufacturing';
 import useOrdemServico from '../hooks/useOrdemServico';
 import useResponsive from '../../theme/hooks/useResponsive';
 import { fDate } from '../../utils/formatTime';
@@ -39,6 +41,7 @@ import { localLabels } from '../../utils/assets';
 import useOrdemServicoMutations from '../hooks/useOrdemServicoMutations';
 import OrdemServicoFormDialog from './OrdemServicoFormDialog';
 import CreateNewOSDialog from './CreateNewOSDialog';
+import VirtualizedInstrumentAutocomplete from '../../proposals/components/VirtualizedInstrumentAutocomplete';
 
 // Status labels mapping
 const STATUS_LABELS = {
@@ -67,6 +70,18 @@ const getStatusColor = (status) => {
   return 'default';
 };
 
+const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
+
+const isStatusARealizar = (status) => {
+  const normalizedStatus = normalizeStatus(status);
+  return normalizedStatus === 'ar' || normalizedStatus === 'a_realizar' || normalizedStatus === 'a realizar';
+};
+
+const isStatusRealizado = (status) => {
+  const normalizedStatus = normalizeStatus(status);
+  return normalizedStatus === 're' || normalizedStatus === 'realizado';
+};
+
 // Helper functions
 const safeGet = (obj, path, fallback = '—') => {
   if (!path || !obj) return fallback;
@@ -91,6 +106,7 @@ const getOsLayoutKey = (os) => {
     'BAL': 'balancas',
     'MAN': 'manutencao',
     'EXT': 'externa',
+    'TV': 'visitaTecnica',
   };
   
   return tipoMap[os.tipoOs] || 'calibracao';
@@ -436,6 +452,22 @@ const OS_LAYOUTS = {
       { label: 'Responsável', path: 'responsavelNome' },
     ],
   },
+  visitaTecnica: {
+    title: 'Ordem de Serviço de Visita Técnica',
+    subtitle: 'Visita ao cliente para identificar instrumentos que podem entrar em uma proposta.',
+    headerLeftFields: [
+      { label: 'Número OS', path: 'numero' },
+      { label: 'Cliente', path: 'clienteNome' },
+      { label: 'CNPJ', path: 'clienteCnpj' },
+      { label: 'Responsável', path: 'responsavelNome' },
+      { label: 'Expiração', path: 'dataExpiracao', formatter: formatDate },
+      { label: 'Descrição', path: 'descricao' },
+    ],
+    columns: [],
+    footerFields: [
+      { label: 'Data de criação', path: 'dataCriacao', formatter: formatDate },
+    ],
+  },
 };
 
 // Static header right block (same for all types)
@@ -464,6 +496,8 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     isLoadingGerarCertificado,
     mutateCreateNewOSAndMove,
     isLoadingCreateNewOSAndMove,
+    mutateGenerateProposalFromTechnicalVisit,
+    isLoadingGenerateProposalFromTechnicalVisit,
   } = useOrdemServicoMutations();
   const [generatingCertificadoId, setGeneratingCertificadoId] = useState(null);
   const [editingStates, setEditingStates] = useState({}); // { instrumentoId: { isEditing: bool, value: string } }
@@ -471,6 +505,10 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
   // Selection state
   const [selectedInstrumentIds, setSelectedInstrumentIds] = useState([]);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
+  const [proposalInstruments, setProposalInstruments] = useState([]);
+  const [proposalInfo, setProposalInfo] = useState('');
+  const [localStatus, setLocalStatus] = useState(null);
   
   // Clear editing states when dialog closes
   useEffect(() => {
@@ -479,8 +517,16 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
       setGeneratingCertificadoId(null);
       setSelectedInstrumentIds([]);
       setCreateDialogOpen(false);
+      setProposalDialogOpen(false);
+      setProposalInstruments([]);
+      setProposalInfo('');
+      setLocalStatus(null);
     }
   }, [open]);
+
+  useEffect(() => {
+    setLocalStatus(osDetails?.status || null);
+  }, [osDetails?.status]);
   
   const layoutKey = getOsLayoutKey(osDetails);
   const layout = OS_LAYOUTS[layoutKey] || OS_LAYOUTS.calibracao;
@@ -552,7 +598,8 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
       mutateUpdateStatus(
         { id: osDetails.id, status: newStatus },
         {
-          onSuccess: () => {
+          onSuccess: (data) => {
+            setLocalStatus(data?.status || newStatus);
             refetch();
             handleStatusMenuClose();
           },
@@ -720,12 +767,37 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
     );
   };
 
-  const currentStatus = osDetails?.status || 'AR';
+  const currentStatus = localStatus || osDetails?.status || 'AR';
   const statusLabel = STATUS_LABELS[currentStatus] || currentStatus;
   const statusColor = getStatusColor(currentStatus);
-  const isARealizar = currentStatus === 'AR' || currentStatus === 'a_realizar';
+  const isARealizar = isStatusARealizar(currentStatus);
+  const isRealizado = isStatusRealizado(currentStatus);
+  const isTechnicalVisit = osDetails?.tipoOs === 'TV' || osDetails?.tipo_os === 'TV';
   const editButtonLabel = isARealizar ? 'Preencher OS' : 'Editar';
-  console.log(items, 'AAAAAAAAAa')
+  const handleGenerateProposal = () => {
+    const instrumentoIds = proposalInstruments.map((instrument) => instrument.id).filter(Boolean);
+    mutateGenerateProposalFromTechnicalVisit(
+      {
+        osId: osDetails.id,
+        instrumentoIds,
+        informacoesAdicionais: proposalInfo,
+      },
+      {
+        onSuccess: () => {
+          setProposalDialogOpen(false);
+          setProposalInstruments([]);
+          setProposalInfo('');
+        },
+      }
+    );
+  };
+
+  const handleRegisterInstrument = () => {
+    if (osDetails?.cliente) {
+      window.location.hash = `#/admin/cliente/${osDetails.cliente}`;
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onClose={onClose} maxWidth="xl" fullScreen={isMobile}>
@@ -781,7 +853,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
           <Divider />
 
           {/* Bulk Actions Toolbar */}
-          {selectedInstrumentIds.length > 0 && (
+          {!isTechnicalVisit && selectedInstrumentIds.length > 0 && (
             <Box
               sx={{
                 display: 'flex',
@@ -823,6 +895,7 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
           )}
 
           {/* Table Section */}
+          {!isTechnicalVisit && (
           <Box>
             <TableContainer component={Paper} variant="outlined">
               <Table size="small">
@@ -887,8 +960,9 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
               </Table>
             </TableContainer>
           </Box>
+          )}
 
-          <Divider />
+          {!isTechnicalVisit && <Divider />}
 
           {/* Footer Section */}
           <Box display="flex" gap={4} flexWrap="wrap">
@@ -903,6 +977,51 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
               </Box>
             ))}
           </Box>
+
+          {isTechnicalVisit && (
+            <>
+              <Divider />
+              <Box>
+                <Box display="flex" gap={1} flexWrap="wrap">
+                  <Tooltip
+                    title={
+                      isRealizado
+                        ? 'Criar uma proposta para o cliente desta visita técnica'
+                        : 'Disponível quando a visita técnica estiver realizada'
+                    }
+                  >
+                    <span>
+                      <Button
+                        variant="contained"
+                        startIcon={<AssignmentIcon />}
+                        onClick={() => setProposalDialogOpen(true)}
+                        disabled={!isRealizado}
+                      >
+                        Criar proposta
+                      </Button>
+                    </span>
+                  </Tooltip>
+                  <Tooltip
+                    title={
+                      isRealizado
+                        ? 'Cadastrar um novo instrumento para o cliente desta visita técnica'
+                        : 'Disponível quando a visita técnica estiver realizada'
+                    }
+                  >
+                    <span>
+                      <Button
+                        startIcon={<PrecisionManufacturingIcon />}
+                        onClick={handleRegisterInstrument}
+                        disabled={!isRealizado}
+                      >
+                        Registrar novo instrumento
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+              </Box>
+            </>
+          )}
         </Box>
       </DialogContent>
       <DialogActions>
@@ -953,6 +1072,50 @@ function OrdemServicoDetailsDialog({ open, onClose, ordemServico }) {
         loading={isLoadingCreateNewOSAndMove}
         onConfirm={handleConfirmCreateNewOS}
       />
+
+      <Dialog
+        open={proposalDialogOpen}
+        onClose={() => setProposalDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+        fullScreen={isMobile}
+      >
+        <DialogTitle>Criar proposta da visita técnica</DialogTitle>
+        <DialogContent>
+          <Box display="flex" flexDirection="column" gap={2} mt={1}>
+            <Alert severity="info">
+              Cliente definido: {osDetails?.clienteNome || '—'}. Selecione os instrumentos que entrarão na proposta.
+            </Alert>
+            <VirtualizedInstrumentAutocomplete
+              clientId={osDetails?.cliente}
+              value={proposalInstruments}
+              onChange={(event, newValue) => setProposalInstruments(newValue || [])}
+              label="Instrumentos do cliente"
+              placeholder="Pesquisar instrumento"
+            />
+            <TextField
+              label="Informações adicionais"
+              value={proposalInfo}
+              onChange={(event) => setProposalInfo(event.target.value)}
+              fullWidth
+              multiline
+              minRows={3}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setProposalDialogOpen(false)} disabled={isLoadingGenerateProposalFromTechnicalVisit}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleGenerateProposal}
+            disabled={isLoadingGenerateProposalFromTechnicalVisit || proposalInstruments.length === 0}
+          >
+            {isLoadingGenerateProposalFromTechnicalVisit ? <CircularProgress size={20} /> : 'Gerar proposta'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }

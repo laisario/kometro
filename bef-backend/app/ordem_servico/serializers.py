@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import OrdemServico, InstrumentoOS, StatusOS, TipoOS
 from instrumentos.serializers import InstrumentoDoClienteListReadSerializer
+from clientes.models import Cliente
 
 
 class InstrumentoOSSerializer(serializers.ModelSerializer):
@@ -50,7 +51,8 @@ class InstrumentoOSSerializer(serializers.ModelSerializer):
 
 
 class OrdemServicoSerializer(serializers.ModelSerializer):
-    proposta_numero = serializers.CharField(source='proposta.numero', read_only=True)
+    proposta_numero = serializers.CharField(source='proposta.numero', read_only=True, allow_null=True)
+    cliente = serializers.PrimaryKeyRelatedField(read_only=True, source='resolved_cliente')
     cliente_nome = serializers.SerializerMethodField()
     responsavel_nome = serializers.SerializerMethodField()
     instrumentos_count = serializers.SerializerMethodField()
@@ -62,6 +64,7 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'numero', 
             'proposta', 
             'proposta_numero', 
+            'cliente',
             'cliente_nome',
             'cliente_cnpj',
             'responsavel', 
@@ -76,17 +79,20 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
             'data_calibracao_instrumentos',
             'data_liberacao_calibracao',
             'os_recebimento_dos_instruementos',
+            'descricao',
         ]
         read_only_fields = ['id', 'numero', 'proposta', 'data_criacao']
     
     def get_cliente_nome(self, obj):
-        if obj.proposta and obj.proposta.cliente and obj.proposta.cliente.empresa:
-            return obj.proposta.cliente.empresa.razao_social
+        cliente = obj.resolved_cliente
+        if cliente and cliente.empresa:
+            return cliente.empresa.razao_social
         return None
 
     def get_cliente_cnpj(self, obj):
-        if obj.proposta and obj.proposta.cliente and obj.proposta.cliente.empresa:
-            return obj.proposta.cliente.empresa.cnpj
+        cliente = obj.resolved_cliente
+        if cliente and cliente.empresa:
+            return cliente.empresa.cnpj
         return None
     
     def get_responsavel_nome(self, obj):
@@ -97,7 +103,6 @@ class OrdemServicoSerializer(serializers.ModelSerializer):
     
     def get_instrumentos_count(self, obj):
         return obj.instrumentos.count()
-
 
 
 class OrdemServicoDetailSerializer(OrdemServicoSerializer):
@@ -125,6 +130,7 @@ class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
             'data_calibracao_instrumentos',
             'data_liberacao_calibracao',
             'os_recebimento_dos_instruementos',
+            'descricao',
         ]
     
     def validate_status(self, value):
@@ -148,3 +154,43 @@ class OrdemServicoUpdateSerializer(serializers.ModelSerializer):
         instance.status = StatusOS.EM_ANDAMENTO
         instance.save(update_fields=['status'])
         return instance
+
+
+class OrdemServicoTechnicalVisitCreateSerializer(serializers.ModelSerializer):
+    cliente = serializers.PrimaryKeyRelatedField(queryset=Cliente.objects.all())
+
+    class Meta:
+        model = OrdemServico
+        fields = [
+            'cliente',
+            'responsavel',
+            'data_expiracao',
+            'descricao',
+        ]
+
+    def validate(self, attrs):
+        if not attrs.get('cliente'):
+            raise serializers.ValidationError({'cliente': ['Cliente é obrigatório.']})
+        return attrs
+
+    def create(self, validated_data):
+        cliente = validated_data['cliente']
+        tipo_os = TipoOS.VISITA_TECNICA.value
+        sequence = OrdemServico.objects.filter(
+            cliente=cliente,
+            tipo_os=tipo_os,
+        ).count() + 1
+        base = f"{cliente.id:04d}"
+        numero = f"{base}-OS-{tipo_os}-{sequence:03d}"
+
+        while OrdemServico.objects.filter(numero=numero).exists():
+            sequence += 1
+            numero = f"{base}-OS-{tipo_os}-{sequence:03d}"
+
+        return OrdemServico.objects.create(
+            **validated_data,
+            proposta=None,
+            tipo_os=tipo_os,
+            status=StatusOS.A_REALIZAR,
+            numero=numero,
+        )

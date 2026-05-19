@@ -141,13 +141,6 @@ function CreateInstrument(props) {
     }
     // Convert both to strings for comparison to handle type mismatches
     const found = options.find((opt) => String(opt?.id) === String(setorId));
-    console.log('[CreateInstrument] selectedOption lookup:', {
-      setorId,
-      setorIdType: typeof setorId,
-      optionsLength: options.length,
-      found,
-      sampleOptionIds: options.slice(0, 3).map(o => ({ id: o.id, type: typeof o.id })),
-    });
     return found || null;
   }, [setorId, options]);
 
@@ -221,11 +214,6 @@ function CreateInstrument(props) {
         // Ensure setorId is set when editing
         const sectorId = currentAsset.setor.id;
         setSetorId(sectorId);
-        console.log('[CreateInstrument] Setting setorId from asset:', {
-          sectorId,
-          sectorIdType: typeof sectorId,
-          setor: currentAsset.setor,
-        });
       } else {
         setSetorId(null);
       }
@@ -681,7 +669,6 @@ function CreateInstrument(props) {
                 value={selectedOption}
                 onChange={(event, newValue) => {
                   const newId = newValue?.id || null;
-                  console.log('[CreateInstrument] Autocomplete onChange:', { newValue, newId });
                   setSetorId(newId);
                 }}
                 getOptionLabel={(option) => option?.label ?? ''}

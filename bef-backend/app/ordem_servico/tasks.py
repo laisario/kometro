@@ -4,12 +4,18 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 from propostas.models import Proposta
+from propostas.models import PropostaInstrumento
+from propostas.services import recompute_total
 from ordem_servico.models import OrdemServico
 from ordem_servico.utils import agrupar_instrumentos_os, criar_os_do_grupo
-from instrumentos.models import TipoServico
+from instrumentos.models import InstrumentoDoCliente, Local, TipoServico
 
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(
+    bind=True,
+    max_retries=3,
+    name="ordem_servico.tasks.criar_ordens_servico_proposta",
+)
 def criar_ordens_servico_proposta(self, proposta_id):
     """
     Create OrdemServico records for approved proposal.
@@ -77,4 +83,59 @@ def criar_ordens_servico_proposta(self, proposta_id):
         
     except Exception as exc:
         logger.error(f"Error creating OS for proposta {proposta_id}: {exc}")
+        raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    name="ordem_servico.tasks.criar_proposta_visita_tecnica",
+)
+def criar_proposta_visita_tecnica(self, ordem_servico_id, instrumento_ids, informacoes_adicionais=None):
+    """
+    Create a Proposal from a completed Technical Visit OS.
+
+    The client comes from the Technical Visit OS and selected instruments must
+    belong to that same client. This task intentionally does not create
+    operational OS records; those are still created only after Proposal approval.
+    """
+    try:
+        ordem_servico = OrdemServico.objects.select_related('cliente').get(id=ordem_servico_id)
+        cliente = ordem_servico.resolved_cliente
+
+        if not cliente:
+            raise ValueError("Technical Visit OS must have a client.")
+
+        instrumentos = list(
+            InstrumentoDoCliente.objects.filter(
+                id__in=instrumento_ids,
+                cliente=cliente,
+            )
+        )
+        found_ids = {instrumento.id for instrumento in instrumentos}
+        missing_ids = set(instrumento_ids) - found_ids
+        if missing_ids:
+            raise ValueError(f"Invalid instrument IDs for client {cliente.id}: {sorted(missing_ids)}")
+
+        with transaction.atomic():
+            proposta = Proposta.objects.create(
+                cliente=cliente,
+                informacoes_adicionais=informacoes_adicionais or "",
+            )
+
+            if instrumentos:
+                proposta.instrumentos.set(instrumentos)
+                for instrumento in instrumentos:
+                    local = getattr(proposta, "local", None) or Local.PERMANENTE
+                    PropostaInstrumento.objects.create(
+                        proposta=proposta,
+                        instrumento=instrumento,
+                        service_kind='calibracao',
+                        local=local,
+                    )
+                recompute_total(proposta)
+
+        return {"status": "success", "proposta_id": proposta.id}
+    except Exception as exc:
+        logger.error(f"Error creating proposal from Technical Visit OS {ordem_servico_id}: {exc}")
         raise self.retry(exc=exc, countdown=60 * (2 ** self.request.retries))

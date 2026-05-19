@@ -50,7 +50,6 @@ const useSectorTree = () => {
         const response = await axios.get('/setores/hierarquia/', { params });
 
         const items = response?.data?.map((sect) => buildTreeItems(sect));
-        console.log(items, 'AAAAAAAAAAA')
 
         return items
 

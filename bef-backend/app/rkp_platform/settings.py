@@ -195,8 +195,9 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rkp_platform.authentication.LoggingJWTAuthentication",
     ],
+    "EXCEPTION_HANDLER": "rkp_platform.exceptions.logging_exception_handler",
     "DEFAULT_PAGINATION_CLASS": "rkp_platform.pagination.CustomPagination",
     "PAGE_SIZE": 5,
     "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
@@ -278,6 +279,9 @@ CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 CELERY_TIMEZONE = "America/Sao_Paulo"
 CELERY_TASK_TRACK_STARTED = True
 CELERY_TASK_TIME_LIMIT = 30 * 60
+CELERY_IMPORTS = (
+    "ordem_servico.tasks",
+)
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"

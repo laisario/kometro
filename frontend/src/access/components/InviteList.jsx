@@ -21,8 +21,6 @@ import { enqueueSnackbar } from "notistack";
 
 export default function InviteList({ clienteId, showTitle = true, clientView = false, sx }) {
   const { invites, isFetching } = useInvites(clienteId)
-  console.log(invites)
-
   const handleCopy = async (url) => {
     if (url) {
       await navigator.clipboard.writeText(url);
