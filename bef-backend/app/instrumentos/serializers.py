@@ -23,7 +23,7 @@ from .models import (
     CalibracaoStatus
 )
 from procedimentos.models import Procedimento
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from rest_framework.validators import UniqueTogetherValidator
 from .utils import (
     calcular_data_proxima_calibracao_calendario,
@@ -400,8 +400,8 @@ class ResultadoCalibracaoSerializer(serializers.ModelSerializer):
 
 
 class CalibracaoWriteSerializer(serializers.ModelSerializer):
-    maior_erro = serializers.CharField(write_only=True, required=False, allow_null=True)
-    incerteza = serializers.CharField(write_only=True, required=False, allow_null=True)
+    maior_erro = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
+    incerteza = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     criterio = serializers.IntegerField(write_only=True, required=False, allow_null=True)
     
     class Meta:
@@ -424,23 +424,49 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
             'criterio',
         )
 
+    def _decimal_from_input(self, value, field_name):
+        if value in (None, ""):
+            return Decimal("0")
+
+        try:
+            return Decimal(str(value).strip())
+        except (InvalidOperation, ValueError, AttributeError):
+            raise serializers.ValidationError({
+                field_name: "Informe um valor decimal válido."
+            })
+
+    def _get_criterio(self, criterio_id):
+        if not criterio_id:
+            return None
+
+        try:
+            return CriterioAceitacao.objects.get(id=criterio_id)
+        except CriterioAceitacao.DoesNotExist:
+            raise serializers.ValidationError({
+                "criterio": "Critério de aceitação não encontrado."
+            })
+
+    def _resultado_status(self, maior_erro, incerteza, criterio_aceitacao):
+        return (
+            CalibracaoStatus.APROVADO
+            if abs(maior_erro) + abs(incerteza) <= criterio_aceitacao
+            else CalibracaoStatus.REPROVADO
+        )
+
     def create(self, validated_data):
-        criterio_data = validated_data.pop('criterio', [])
-        maior_erro = validated_data.pop('maior_erro', []) or Decimal("0")
-        incerteza = validated_data.pop('incerteza', []) or Decimal("0")
+        criterio_data = validated_data.pop('criterio', None)
+        maior_erro_data = validated_data.pop('maior_erro', None)
+        incerteza_data = validated_data.pop('incerteza', None)
+        maior_erro = self._decimal_from_input(maior_erro_data, 'maior_erro')
+        incerteza = self._decimal_from_input(incerteza_data, 'incerteza')
+        criterio = self._get_criterio(criterio_data)
         calibracao = Calibracao.objects.create(**validated_data)
-        if criterio_data:
-            criterio = CriterioAceitacao.objects.get(id=criterio_data)
-            criterio_aceitacao = criterio.criterio_de_aceitacao
-        else: 
-            criterio = None
             
-        if maior_erro or incerteza and criterio is not None:
-            status = (
-                CalibracaoStatus.APROVADO
-                if criterio is not None
-                and abs(Decimal(maior_erro)) + abs(Decimal(incerteza)) <= criterio_aceitacao
-                else CalibracaoStatus.REPROVADO
+        if (maior_erro or incerteza) and criterio is not None:
+            status = self._resultado_status(
+                maior_erro,
+                incerteza,
+                criterio.criterio_de_aceitacao,
             )
 
             ResultadoCalibracao.objects.create(
@@ -455,24 +481,33 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
     
     def update(self, instance, validated_data):
         criterio_data = validated_data.pop('criterio', None)
-        maior_erro = validated_data.pop('maior_erro', None) or Decimal("0")
-        incerteza = validated_data.pop('incerteza', None) or Decimal("0")
+        maior_erro_data = validated_data.pop('maior_erro', serializers.empty)
+        incerteza_data = validated_data.pop('incerteza', serializers.empty)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        criterio = None
-        criterio_aceitacao = None
-        if criterio_data:
-            criterio = CriterioAceitacao.objects.get(id=criterio_data)
-            criterio_aceitacao = criterio.criterio_de_aceitacao
+        criterio = self._get_criterio(criterio_data)
+        maior_erro_recebido = maior_erro_data is not serializers.empty
+        incerteza_recebida = incerteza_data is not serializers.empty
+        resultado_atual = instance.resultados.first()
+        maior_erro = (
+            self._decimal_from_input(maior_erro_data, 'maior_erro')
+            if maior_erro_recebido
+            else (resultado_atual.maior_erro if resultado_atual and resultado_atual.maior_erro is not None else Decimal("0"))
+        )
+        incerteza = (
+            self._decimal_from_input(incerteza_data, 'incerteza')
+            if incerteza_recebida
+            else (resultado_atual.incerteza if resultado_atual and resultado_atual.incerteza is not None else Decimal("0"))
+        )
 
-        if (maior_erro or incerteza) and criterio is not None:
-            status = (
-                CalibracaoStatus.APROVADO
-                if abs(Decimal(maior_erro)) + abs(Decimal(incerteza)) <= criterio_aceitacao
-                else CalibracaoStatus.REPROVADO
+        if (maior_erro_recebido or incerteza_recebida) and criterio is not None:
+            status = self._resultado_status(
+                maior_erro,
+                incerteza,
+                criterio.criterio_de_aceitacao,
             )
 
             resultado, created = ResultadoCalibracao.objects.update_or_create(
@@ -904,7 +939,7 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         normativos_nomes = validated_data.pop('normativos', [])
         pontos_data = validated_data.pop('pontos_de_calibracao', None)
         criterios_data = validated_data.pop('criterios_aceitacao', None)
-        setor = validated_data.pop('setor', None)
+        setor = validated_data.pop('setor', serializers.empty)
         data_ultima_calibracao_original = instance.data_ultima_calibracao
         data_ultima_checagem_original = instance.data_ultima_checagem
         
@@ -918,14 +953,20 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
         
-        if setor and setor.id != instance.setor.id:
-            MovimentacaoSetorInstrumento.objects.create(
-                instrumento=instance,
-                antigo_setor=instance.setor.nome if instance.setor else '',
-                novo_setor=setor,
-                usuario_alteracao=user
-            )
-            instance.setor_id = setor
+        if setor is not serializers.empty:
+            setor_anterior = instance.setor
+            setor_anterior_id = setor_anterior.id if setor_anterior else None
+            novo_setor = setor
+            novo_setor_id = novo_setor.id if novo_setor else None
+
+            if novo_setor_id != setor_anterior_id:
+                MovimentacaoSetorInstrumento.objects.create(
+                    instrumento=instance,
+                    antigo_setor=setor_anterior.nome if setor_anterior else '',
+                    novo_setor=novo_setor.nome if novo_setor else '',
+                    usuario_alteracao=user
+                )
+                instance.setor = novo_setor
         
         frequencia_calibracao_mudou = self._atualizar_frequencia(
             instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
@@ -1192,7 +1233,7 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         normativos_nomes = validated_data.pop('normativos', [])
         pontos_data = validated_data.pop('pontos_de_calibracao', None)
         criterios_data = validated_data.pop('criterios_aceitacao', None)
-        setor = validated_data.pop('setor', None)
+        setor = validated_data.pop('setor', serializers.empty)
         data_ultima_calibracao_original = instance.data_ultima_calibracao
         data_ultima_checagem_original = instance.data_ultima_checagem
         
@@ -1206,18 +1247,23 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         old_posicao = instance.posicao
         new_posicao = validated_data.get('posicao', None)
         
-        if setor:
+        if setor is not serializers.empty:
             if isinstance(setor, str):
                 setor = self._get_or_create_setor_from_path(setor, instance.cliente)
-            
-            if setor and (not instance.setor or setor.id != instance.setor.id):
+
+            setor_anterior = instance.setor
+            setor_anterior_id = setor_anterior.id if setor_anterior else None
+            novo_setor = setor
+            novo_setor_id = novo_setor.id if novo_setor else None
+
+            if novo_setor_id != setor_anterior_id:
                 MovimentacaoSetorInstrumento.objects.create(
                     instrumento=instance,
-                    novo_setor=setor,
-                    antigo_setor=instance.setor.nome if instance.setor else '',
+                    novo_setor=novo_setor.nome if novo_setor else '',
+                    antigo_setor=setor_anterior.nome if setor_anterior else '',
                     usuario_alteracao=user,
                 )
-                instance.setor = setor
+                instance.setor = novo_setor
         
         frequencia_calibracao_mudou = self._atualizar_frequencia(
             instance, instance.frequencia_calibracao, freq_calibracao_data, 'frequencia_calibracao'
@@ -1369,4 +1415,3 @@ class InstrumentoBaseClienteSerializer(serializers.ModelSerializer):
             'ativo',
             'data_criacao'
         ]
-

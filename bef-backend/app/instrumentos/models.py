@@ -364,7 +364,7 @@ class ResultadoCalibracao(models.Model):
     )
     criterio = models.ForeignKey(
         "CriterioAceitacao", 
-        on_delete=models.CASCADE, 
+        on_delete=models.SET_NULL,
         related_name="resultados",
         null=True,
         blank=True,
