@@ -1,9 +1,14 @@
 import { useState } from "react";
-import { Grid, TextField, Button, IconButton, Table, TableHead, TableRow, TableCell, TableBody } from "@mui/material";
+import { Grid, TextField, Button, IconButton, Table, TableHead, TableRow, TableCell, TableBody, CircularProgress } from "@mui/material";
 import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon } from "@mui/icons-material";
 
 
-const CriteriosDeAceitacao = ({ form, fieldName = "criteriosAceitacao" }) => {
+const CriteriosDeAceitacao = ({
+  form,
+  fieldName = "criteriosAceitacao",
+  onRemoveItem,
+  deletingItems = {},
+}) => {
   const [novoCriterio, setNovoCriterio] = useState({
     tipo: "",
     criterioDeAceitacao: "",
@@ -37,13 +42,9 @@ const CriteriosDeAceitacao = ({ form, fieldName = "criteriosAceitacao" }) => {
     });
   };
 
-  const handleRemove = (index
-    
-  ) => {
+  const removeFromState = (index) => {
     const currentValues = form.getValues(fieldName) || [];
-    const newValues = currentValues.filter((_, i
-      
-    ) => i !== index);
+    const newValues = currentValues.filter((_, i) => i !== index);
     form.setValue(fieldName, newValues);
     if (editIndex === index) {
       setEditIndex(null);
@@ -55,6 +56,14 @@ const CriteriosDeAceitacao = ({ form, fieldName = "criteriosAceitacao" }) => {
         observacaoCriterioAceitacao: "",
       });
     }
+  };
+
+  const handleRemove = async (item, index) => {
+    if (onRemoveItem) {
+      await onRemoveItem(item, () => removeFromState(index));
+      return;
+    }
+    removeFromState(index);
   };
 
   const handleEdit = (index) => {
@@ -145,23 +154,26 @@ const CriteriosDeAceitacao = ({ form, fieldName = "criteriosAceitacao" }) => {
           </TableRow>
         </TableHead>
         <TableBody>
-          {values?.map((criterio, index) => (
-            <TableRow key={index}>
+          {values?.map((criterio, index) => {
+            const isDeleting = !!(criterio?.id && deletingItems[criterio.id]);
+
+            return (
+            <TableRow key={criterio?.id ?? index}>
               <TableCell>{criterio.tipo || "-"}</TableCell>
               <TableCell>{criterio.criterioDeAceitacao || "-"}</TableCell>
               <TableCell>{criterio.unidade || "-"}</TableCell>
               <TableCell>{criterio.referenciaDoCriterio || "-"}</TableCell>
               <TableCell>{criterio.observacaoCriterioAceitacao || "-"}</TableCell>
               <TableCell sx={{display: 'flex'}} align="right">
-                <IconButton color="primary" onClick={() => handleEdit(index)}>
+                <IconButton color="primary" disabled={isDeleting} onClick={() => handleEdit(index)}>
                   <EditIcon />
                 </IconButton>
-                <IconButton color="error" onClick={() => handleRemove(index)}>
-                  <DeleteIcon />
+                <IconButton color="error" disabled={isDeleting} onClick={() => handleRemove(criterio, index)}>
+                  {isDeleting ? <CircularProgress size={20} /> : <DeleteIcon />}
                 </IconButton>
               </TableCell>
             </TableRow>
-          ))}
+          )})}
           {!values?.length && (
             <TableRow>
               <TableCell colSpan={6} align="center">

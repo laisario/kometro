@@ -12,6 +12,7 @@ import Certificates from './Certificates';
 import useAssetMutations from '../hooks/useAssetMutations'
 
 function CalibrationCard({ calibration, theme, isMobile }) {
+  const resultado = calibration?.resultados?.[0];
   const [open, setOpen] = useState(false);
   const [analiseCliente, setAnaliseCliete] = useState({
     criticalAnalysis: "A",
@@ -86,14 +87,14 @@ function CalibrationCard({ calibration, theme, isMobile }) {
           && <Box sx={{ m: 0, display: 'flex', justifyContent: 'flex-end' }}>
             <Button sx={{ color: 'black', p: 0 }} onClick={readMore?.readMoreObservation?.readMore ? readLessObservation : readMoreObservation}>{readMore?.readMoreObservation?.readMore ? 'Ler menos' : 'Ler mais'}</Button>
           </Box>}
-        {calibration?.status
-          && <ContentRow title="Resultado" colorTitle='black' my={1} value={<Label color={statusColor[calibration?.status]}>{statusLabel[calibration?.status]}</Label>} />
+        {resultado?.status
+          && <ContentRow title="Resultado" colorTitle='black' my={1} value={<Label color={statusColor[resultado.status]}>{statusLabel[resultado.status]}</Label>} />
         }
-        {calibration?.maiorErro && (
-          <ContentRow title="Maior erro" value={calibration?.maiorErro} />
+        {resultado?.maiorErro && (
+          <ContentRow title="Maior erro" value={resultado.maiorErro} />
         )}
-        {calibration?.incerteza && (
-          <ContentRow title="Incerteza" value={calibration?.incerteza} />
+        {resultado?.incerteza && (
+          <ContentRow title="Incerteza" value={resultado.incerteza} />
         )}
         {(calibration?.analiseCritica)
           && <ContentRow title={calibration?.analiseCritica !== "P" ? "Sua análise crítica" : "Análise critica"} colorTitle='black' my={1} value={<Label color={analiseCriticaColor[calibration?.analiseCritica]}>{analiseCriticaLabel[calibration?.analiseCritica]}</Label>} />}

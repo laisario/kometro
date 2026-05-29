@@ -63,6 +63,7 @@ function Calibration(props) {
     readMoreCertificate: false,
   });
   const { hasCreatePermission, hasEditPermission, hasDeletePermission } = useAuth()
+  const resultado = calibration?.resultados?.[0];
 
   const setorNome =
     calibration?.setor?.nome ?? calibration?.instrumento?.setor?.nome
@@ -260,12 +261,14 @@ function Calibration(props) {
         }
         <CriticalAnalysisDialog
           data={{
-            maiorErro: calibration?.maiorErro,
-            incerteza: calibration?.incerteza,
-            status: calibration?.status,
-            criterioDeAceitacao: `${calibration?.instrumento?.criterioDeAceitacao} ${calibration?.instrumento?.unidade && calibration?.instrumento?.unidade}`,
-            observacaoCriterioAceitacao: calibration?.instrumento?.observacaoCriterioAceitacao,
-            referenciaDoCriterio: calibration?.instrumento?.referenciaDoCriterio
+            maiorErro: resultado?.maiorErro,
+            incerteza: resultado?.incerteza,
+            status: resultado?.status,
+            criterioDeAceitacao: resultado?.criterio
+              ? `${resultado.criterio.criterioDeAceitacao} ${resultado.criterio.unidade || ''}`.trim()
+              : null,
+            observacaoCriterioAceitacao: resultado?.criterio?.observacaoCriterioAceitacao,
+            referenciaDoCriterio: resultado?.criterio?.referenciaDoCriterio
           }}
           open={open}
           handleClose={handleCloseCriticalAnalysis}

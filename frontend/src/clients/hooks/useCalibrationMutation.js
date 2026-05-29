@@ -99,11 +99,18 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   })
 
 
+  const normalizeDecimal = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    return String(value).trim().replace(',', '.');
+  };
+
   const formatedData = (form) => {
     const { certificadoId, ...rest } = form || {};
     return {
       ...rest,
       data: form?.data && dayjs(form?.data)?.format('YYYY-MM-DD'),
+      maiorErro: normalizeDecimal(form?.maiorErro),
+      incerteza: normalizeDecimal(form?.incerteza),
     };
   };
 

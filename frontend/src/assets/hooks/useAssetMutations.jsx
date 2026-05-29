@@ -94,7 +94,11 @@ function useAssetMutations(handleClose, adminPreview) {
     procedimentoRelacionado: form?.procedimentoRelacionado,
     precoAlternativoCalibracao: form?.precoAlternativoCalibracao,
     diasUteis: form?.diasUteis,
-    pontosDeCalibracao: form?.pontosDeCalibracao?.length ? form?.pontosDeCalibracao?.map(ponto => ({ nome: ponto })) : [],
+    pontosDeCalibracao: form?.pontosDeCalibracao?.length
+      ? form.pontosDeCalibracao.map((ponto) => (
+        typeof ponto === 'string' ? { nome: ponto } : ponto
+      ))
+      : [],
     posicao: form?.posicao,
     frequencia: form?.frequencia,
     laboratorio: form?.laboratorio,

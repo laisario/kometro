@@ -31,6 +31,7 @@ from .utils import (
     calcular_data_proxima_checagem_calendario,
     calcular_data_proxima_checagem_servico
 )
+from .services import atualizar_relacionamentos_instrumento
 from .models import CriterioFrequencia
 import logging
 from django.db.models import Q
@@ -181,7 +182,7 @@ class CapacidadeMedicaoSerializer(serializers.ModelSerializer):
 class PontoDeCalibracaoSerializer(serializers.ModelSerializer):
     class Meta:
         model = PontoDeCalibracao
-        fields = ["nome"]
+        fields = ["id", "nome"]
 
 
 class AnexoSerializer(serializers.ModelSerializer):
@@ -374,6 +375,8 @@ class InstrumentoDoClienteAvailableSerializer(serializers.ModelSerializer):
 
 
 class CriterioAceitacaoSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
     class Meta:
         model = CriterioAceitacao
         fields = [
@@ -749,7 +752,7 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         required=False, allow_null=True, allow_blank=True
     )
     pontos_de_calibracao = serializers.ListField(
-        child=serializers.CharField(), required=False, write_only=True
+        child=serializers.JSONField(), required=False, write_only=True
     )
     frequencia_checagem = FrequenciaSerializer(required=False, allow_null=True)
     frequencia_calibracao = FrequenciaSerializer(required=False, allow_null=True)
@@ -813,24 +816,12 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
             usuario_alteracao=self.context.get('request').user,
         )
 
-        for criterio in criterios_data:
-            CriterioAceitacao.objects.create(instrumento=instrumento, **criterio)
-
-
-        for ponto in pontos_data:
-            PontoDeCalibracao.objects.create(
-                instrumento=instrumento,
-                nome=ponto,
-            )
-
-        for normativo_dict in normativos_nomes:
-            nome = normativo_dict.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(
-                    nome=nome,
-                    cliente=instrumento.cliente
-                )
-                instrumento.normativos.add(normativo)
+        atualizar_relacionamentos_instrumento(
+            instrumento,
+            normativos_nomes=normativos_nomes,
+            pontos_data=pontos_data,
+            criterios_data=criterios_data,
+        )
         return instrumento
 
     def _preservar_datas_ultimas(self, instance, validated_data, freq_calibracao_data, freq_checagem_data):
@@ -911,28 +902,6 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         else:
             setattr(instance, campo_proxima, None)
 
-    def _atualizar_relacionamentos(self, instance, normativos_nomes, pontos_data, criterios_data):
-        """Atualiza normativos, pontos de calibração e critérios de aceitação."""
-        normativos_objs = []
-        for nome in normativos_nomes:
-            if isinstance(nome, dict):
-                nome = nome.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
-                normativos_objs.append(normativo)
-        instance.normativos.set(normativos_objs)
-
-        if pontos_data is not None:
-            instance.pontos_de_calibracao.all().delete()
-            for ponto in pontos_data:
-                PontoDeCalibracao.objects.create(instrumento=instance, nome=ponto)
-
-        if criterios_data is not None:
-            instance.criterios_aceitacao.all().delete()
-            for criterio in criterios_data:
-                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
-
-
     def update(self, instance, validated_data):
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
@@ -1003,7 +972,12 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
         
         instance.save()
         
-        self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
+        atualizar_relacionamentos_instrumento(
+            instance,
+            normativos_nomes=normativos_nomes,
+            pontos_data=pontos_data,
+            criterios_data=criterios_data,
+        )
         
         return instance
 
@@ -1012,7 +986,7 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         required=False, allow_null=True, allow_blank=True
     )
     pontos_de_calibracao = serializers.ListField(
-        child=serializers.CharField(), required=False, write_only=True
+        child=serializers.JSONField(), required=False, write_only=True
     )
     frequencia_checagem = FrequenciaSerializer(required=False, allow_null=True)
     frequencia_calibracao = FrequenciaSerializer(required=False, allow_null=True)
@@ -1108,24 +1082,12 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             usuario_alteracao=self.context.get('request').user,
         )
 
-        for criterio in criterios_data:
-            CriterioAceitacao.objects.create(instrumento=instrumento, **criterio)
-
-
-        for ponto in pontos_data:
-            PontoDeCalibracao.objects.create(
-                instrumento=instrumento,
-                nome=ponto,
-            )
-
-        for normativo_dict in normativos_nomes:
-            nome = normativo_dict.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(
-                    nome=nome,
-                    cliente=instrumento.cliente
-                )
-                instrumento.normativos.add(normativo)
+        atualizar_relacionamentos_instrumento(
+            instrumento,
+            normativos_nomes=normativos_nomes,
+            pontos_data=pontos_data,
+            criterios_data=criterios_data,
+        )
         return instrumento
 
     def _preservar_datas_ultimas(self, instance, validated_data, freq_calibracao_data, freq_checagem_data):
@@ -1206,27 +1168,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         else:
             setattr(instance, campo_proxima, None)
 
-    def _atualizar_relacionamentos(self, instance, normativos_nomes, pontos_data, criterios_data):
-        """Atualiza normativos, pontos de calibração e critérios de aceitação."""
-        normativos_objs = []
-        for nome in normativos_nomes:
-            if isinstance(nome, dict):
-                nome = nome.get('nome')
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(nome=nome, cliente=instance.cliente)
-                normativos_objs.append(normativo)
-        instance.normativos.set(normativos_objs)
-        
-        if pontos_data is not None:
-            instance.pontos_de_calibracao.all().delete()
-            for ponto in pontos_data:
-                PontoDeCalibracao.objects.create(instrumento=instance, nome=ponto)
-        
-        if criterios_data is not None:
-            instance.criterios_aceitacao.all().delete()
-            for criterio in criterios_data:
-                CriterioAceitacao.objects.create(instrumento=instance, **criterio)
-
     def update(self, instance, validated_data):
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
@@ -1300,7 +1241,12 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         
         instance.save()
         
-        self._atualizar_relacionamentos(instance, normativos_nomes, pontos_data, criterios_data)
+        atualizar_relacionamentos_instrumento(
+            instance,
+            normativos_nomes=normativos_nomes,
+            pontos_data=pontos_data,
+            criterios_data=criterios_data,
+        )
         
         return instance
 

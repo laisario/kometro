@@ -164,6 +164,72 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         )
         resp["Content-Disposition"] = f'attachment; filename="relatorio_movimentacoes_{pk}.csv"'
         return resp
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"normativos/(?P<normativo_id>[^/.]+)",
+    )
+    def remover_normativo(self, request, pk=None, normativo_id=None):
+        instrumento = self.get_object()
+        normativo = Normativo.objects.filter(id=normativo_id).first()
+
+        if not normativo:
+            return response.Response(
+                {"detail": "Normativo não encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not instrumento.normativos.filter(id=normativo.id).exists():
+            return response.Response(
+                {"detail": "Normativo não está associado a este instrumento."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        instrumento.normativos.remove(normativo)
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"pontos-calibracao/(?P<ponto_id>[^/.]+)",
+    )
+    def remover_ponto_calibracao(self, request, pk=None, ponto_id=None):
+        instrumento = self.get_object()
+        ponto = PontoDeCalibracao.objects.filter(
+            id=ponto_id,
+            instrumento=instrumento,
+        ).first()
+
+        if not ponto:
+            return response.Response(
+                {"detail": "Ponto de calibração não encontrado para este instrumento."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        ponto.delete()
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(
+        detail=True,
+        methods=["delete"],
+        url_path=r"criterios-aceitacao/(?P<criterio_id>[^/.]+)",
+    )
+    def remover_criterio_aceitacao(self, request, pk=None, criterio_id=None):
+        instrumento = self.get_object()
+        criterio = CriterioAceitacao.objects.filter(
+            id=criterio_id,
+            instrumento=instrumento,
+        ).first()
+
+        if not criterio:
+            return response.Response(
+                {"detail": "Critério de aceitação não encontrado para este instrumento."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        criterio.delete()
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
        
     @action(detail=True, methods=["patch"])
     def mudar_posicao(self, request, pk=None):

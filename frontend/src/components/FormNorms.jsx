@@ -18,9 +18,10 @@ const FormNorms = ({open, onClose, setNorms}) => {
       <DialogActions sx={{ justifyContent: 'space-between' }}>
         <Button onClick={onClose}>Cancelar</Button>
         <Button onClick={() => {
-          const prev = [];
-          const newId = prev.length > 0 ? Math.max(...prev.map(n => n?.id || 0)) + 1 : Date.now();
-          setNorms((prev) => [...(Array.isArray(prev) ? prev : []), { nome: input, id: newId }]);
+          const nome = input.trim();
+          if (!nome) return;
+          setNorms((prev) => [...(Array.isArray(prev) ? prev : []), { nome }]);
+          setInput('');
           onClose();
         }} variant="contained">Criar norma</Button>
       </DialogActions>

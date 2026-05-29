@@ -1,4 +1,4 @@
-import { Accordion, AccordionDetails, AccordionSummary, Autocomplete, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputAdornment, InputLabel, List, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Accordion, AccordionDetails, AccordionSummary, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputAdornment, InputLabel, List, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import useResponsive from '../../theme/hooks/useResponsive';
 import { useForm, useWatch } from 'react-hook-form';
@@ -19,6 +19,7 @@ import FormNorms from '../../components/FormNorms';
 import CriteriosDeAceitacao from '../../components/CriteriosDeAceitacao';
 import { useQuery } from 'react-query';
 import { axios } from '../../api';
+import { enqueueSnackbar } from 'notistack';
 
 const PriceSection = ({ form, error, setError }) => {
   return (
@@ -131,6 +132,11 @@ function CreateInstrument(props) {
   const [showFormNewNorm, setShowFormNewNorm] = useState(false);
   const [inputNorm, setInputNorm] = useState('');
   const [setorId, setSetorId] = useState(currentAsset?.setor?.id ? currentAsset?.setor?.id : null);
+  const [deletingItems, setDeletingItems] = useState({
+    normativos: {},
+    pontos: {},
+    criterios: {},
+  });
   const { normas: normasData } = useNorms(cliente);
   const normas = Array.isArray(normasData) ? normasData : [];
 
@@ -159,7 +165,7 @@ function CreateInstrument(props) {
         quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
         periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
       },
-      pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao?.map((p) => p?.nome) : [],
+      pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao : [],
       dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
       dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
       criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
@@ -189,7 +195,7 @@ function CreateInstrument(props) {
           quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
           periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
         },
-        pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao?.map((p) => p?.nome) : [],
+        pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao : [],
         dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
         dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
         criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
@@ -206,9 +212,7 @@ function CreateInstrument(props) {
         setInstrumentoSelecionado(null);
       }
 
-      if (currentAsset?.normativos?.length) {
-        setNorms(currentAsset.normativos);
-      }
+      setNorms(currentAsset?.normativos?.length ? currentAsset.normativos : []);
 
       if (currentAsset?.setor?.id) {
         // Ensure setorId is set when editing
@@ -219,6 +223,85 @@ function CreateInstrument(props) {
       }
     }
   }, [currentAsset, open]);
+
+  const setDeletingItem = (type, id, value) => {
+    setDeletingItems((prev) => ({
+      ...prev,
+      [type]: {
+        ...prev[type],
+        [id]: value,
+      },
+    }));
+  };
+
+  const deleteInstrumentNormativo = (instrumentoId, normativoId) =>
+    axios.delete(`/instrumentos/${instrumentoId}/normativos/${normativoId}/`);
+
+  const deleteInstrumentPontoCalibracao = (instrumentoId, pontoId) =>
+    axios.delete(`/instrumentos/${instrumentoId}/pontos-calibracao/${pontoId}/`);
+
+  const deleteInstrumentCriterioAceitacao = (instrumentoId, criterioId) =>
+    axios.delete(`/instrumentos/${instrumentoId}/criterios-aceitacao/${criterioId}/`);
+
+  const handleRemoveNormativo = async (item, removeFromState) => {
+    if (!item?.id || !currentAsset?.id) {
+      removeFromState();
+      return;
+    }
+
+    if (deletingItems.normativos[item.id]) return;
+
+    setDeletingItem('normativos', item.id, true);
+    try {
+      await deleteInstrumentNormativo(currentAsset.id, item.id);
+      removeFromState();
+      enqueueSnackbar('Normativo removido do instrumento.', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar('Erro ao remover normativo. Tente novamente.', { variant: 'error' });
+    } finally {
+      setDeletingItem('normativos', item.id, false);
+    }
+  };
+
+  const handleRemovePontoCalibracao = async (item, removeFromState) => {
+    if (!item?.id || !currentAsset?.id) {
+      removeFromState();
+      return;
+    }
+
+    if (deletingItems.pontos[item.id]) return;
+
+    setDeletingItem('pontos', item.id, true);
+    try {
+      await deleteInstrumentPontoCalibracao(currentAsset.id, item.id);
+      removeFromState();
+      enqueueSnackbar('Ponto de calibração removido.', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar('Erro ao remover ponto de calibração. Tente novamente.', { variant: 'error' });
+    } finally {
+      setDeletingItem('pontos', item.id, false);
+    }
+  };
+
+  const handleRemoveCriterioAceitacao = async (item, removeFromState) => {
+    if (!item?.id || !currentAsset?.id) {
+      removeFromState();
+      return;
+    }
+
+    if (deletingItems.criterios[item.id]) return;
+
+    setDeletingItem('criterios', item.id, true);
+    try {
+      await deleteInstrumentCriterioAceitacao(currentAsset.id, item.id);
+      removeFromState();
+      enqueueSnackbar('Critério de aceitação removido.', { variant: 'success' });
+    } catch (error) {
+      enqueueSnackbar('Erro ao remover critério de aceitação. Tente novamente.', { variant: 'error' });
+    } finally {
+      setDeletingItem('criterios', item.id, false);
+    }
+  };
 
   const onSubmit = (data) => {
     const payload = {
@@ -408,7 +491,12 @@ function CreateInstrument(props) {
 
           <AccordionDetails>
             <Grid container spacing={2}>
-              <CriteriosDeAceitacao form={form} fieldName='criteriosAceitacao' />
+              <CriteriosDeAceitacao
+                form={form}
+                fieldName='criteriosAceitacao'
+                onRemoveItem={handleRemoveCriterioAceitacao}
+                deletingItems={deletingItems.criterios}
+              />
             </Grid>
           </AccordionDetails>
         </Accordion>
@@ -575,7 +663,14 @@ function CreateInstrument(props) {
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
-            <AddArrayField label="Pontos de Calibração" fieldName="pontosDeCalibracao" form={form} field="nome" />
+            <AddArrayField
+              label="Pontos de Calibração"
+              fieldName="pontosDeCalibracao"
+              form={form}
+              field="nome"
+              onRemoveItem={handleRemovePontoCalibracao}
+              deletingItems={deletingItems.pontos}
+            />
           </AccordionDetails>
         </Accordion>
         <Accordion>
@@ -643,13 +738,25 @@ function CreateInstrument(props) {
             />
             <Box mt={2} display="flex" gap={1} flexWrap="wrap">
               {Array.isArray(norms) && norms.length > 0 && norms.map((norma, i) => (
-                <Chip
-                  key={norma?.id ?? i}
-                  label={norma?.nome || ''}
-                  onDelete={() =>
-                    setNorms((prev) => (Array.isArray(prev) ? prev.filter((n) => n?.id !== norma?.id) : []))
-                  }
-                />
+                (() => {
+                  const isDeleting = !!(norma?.id && deletingItems.normativos[norma.id]);
+                  const removeFromState = () => {
+                    setNorms((prev) => (
+                      Array.isArray(prev)
+                        ? prev.filter((n, index) => index !== i)
+                        : []
+                    ));
+                  };
+
+                  return (
+                    <Chip
+                      key={norma?.id ?? `${norma?.nome}-${i}`}
+                      label={norma?.nome || ''}
+                      onDelete={isDeleting ? () => {} : () => handleRemoveNormativo(norma, removeFromState)}
+                      deleteIcon={isDeleting ? <CircularProgress size={16} /> : undefined}
+                    />
+                  );
+                })()
               ))}
             </Box>
             <FormNorms open={showFormNewNorm} setNorms={setNorms} onClose={() => setShowFormNewNorm(false)} />

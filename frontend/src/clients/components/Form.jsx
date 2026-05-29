@@ -167,8 +167,8 @@ function Form(props) {
                 id="maiorErro"
                 label="Maior erro"
                 fullWidth
+                inputProps={{ inputMode: 'decimal' }}
                 {...form?.register("maiorErro", {
-                  valueAsNumber: true,
                   onChange: (e) => {if (error?.maior_erro) setError({})},
                 })}
                 error={!!error?.maior_erro}
@@ -179,6 +179,7 @@ function Form(props) {
                 id="incerteza"
                 label="Incerteza"
                 fullWidth
+                inputProps={{ inputMode: 'decimal' }}
                 {...form?.register("incerteza", {
                   onChange: (e) => {if (error?.incerteza) setError({})},
                 })}
