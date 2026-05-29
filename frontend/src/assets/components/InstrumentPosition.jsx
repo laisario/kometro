@@ -6,7 +6,7 @@ import {
   ListItemIcon
 } from '@mui/material';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useAuth from '../../auth/hooks/useAuth';
 import LockIcon from '@mui/icons-material/Lock';
 
@@ -15,6 +15,11 @@ function InstrumentPosition({instrumento, positionMap, mutateChangePosition}) {
   const [anchorEl, setAnchorEl] = useState(null);
   const triggerRef = useRef(null);
   const { hasEditPermission } = useAuth();
+
+  useEffect(() => {
+    setPosicao(instrumento?.posicao || null);
+    setAnchorEl(null);
+  }, [instrumento?.id, instrumento?.posicao]);
 
   const handleToggleMenu = (event) => {
     if (anchorEl) {
@@ -29,11 +34,19 @@ function InstrumentPosition({instrumento, positionMap, mutateChangePosition}) {
   };
 
   const handleChangePosicao = async (novaPosicao) => {
+    const posicaoAnterior = posicao;
     setPosicao(novaPosicao);
 
     mutateChangePosition({
       id: instrumento?.id,
       novaPosicao,
+    }, {
+      onError: () => {
+        setPosicao(posicaoAnterior || instrumento?.posicao || null);
+      },
+      onSuccess: (response) => {
+        setPosicao(response?.data?.nova_posicao || novaPosicao);
+      },
     });
 
     handleCloseMenu();

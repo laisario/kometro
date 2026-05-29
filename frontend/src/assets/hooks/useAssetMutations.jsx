@@ -244,9 +244,17 @@ function useAssetMutations(handleClose, adminPreview) {
     mutate: mutateChangePosition, 
   } = useMutation({
     mutationFn: async(data) => await axios.patch(`/instrumentos/${data?.id}/mudar_posicao/`, data),
-    onSuccess: () => {
+    onSuccess: (response, variables) => {
+      const novaPosicao = response?.data?.nova_posicao || variables?.novaPosicao;
+      const updateInstrumentPosition = (old) => (
+        old ? { ...old, posicao: novaPosicao } : old
+      );
+
+      queryClient.setQueryData(['instrumentos', variables?.id], updateInstrumentPosition);
+      queryClient.setQueryData(['instrumentos', String(variables?.id)], updateInstrumentPosition);
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
+      queryClient.invalidateQueries({ queryKey: ['setores'] })
       enqueueSnackbar('Mudança posição realizada com sucesso!', {
         variant: 'success'
       });
