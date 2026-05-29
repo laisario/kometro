@@ -36,6 +36,7 @@ from .models import (
     MovimentacaoInstrumento,
     MovimentacaoSetorInstrumento,
 )
+from .services import get_or_create_setor_from_path
 from tablib import Dataset
 
 
@@ -530,9 +531,9 @@ class InstrumentoResource(ModelResource):
                 str(nome_setor).strip() if nome_setor is not None else ""
             )
             if nome_setor_stripped:
-                setor_data, created = Setor.objects.get_or_create(
-                    nome=nome_setor_stripped,
-                    cliente=Cliente.objects.filter(id=self.cliente).first()
+                setor_data = get_or_create_setor_from_path(
+                    nome_setor_stripped,
+                    Cliente.objects.filter(id=self.cliente).first(),
                 )
                 row["setor"] = setor_data
             else:

@@ -4,6 +4,8 @@ import { Dialog, DialogContent, DialogActions, Button, TextField } from "@mui/ma
 
 const FormNorms = ({open, onClose, setNorms}) => {
   const [input, setInput] = useState('')
+  const normalizeName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
   return (
     <Dialog open={open} onClose={onClose}>
       <DialogContent>
@@ -20,7 +22,11 @@ const FormNorms = ({open, onClose, setNorms}) => {
         <Button onClick={() => {
           const nome = input.trim();
           if (!nome) return;
-          setNorms((prev) => [...(Array.isArray(prev) ? prev : []), { nome }]);
+          setNorms((prev) => {
+            const current = Array.isArray(prev) ? prev : [];
+            const exists = current.some((norma) => normalizeName(norma?.nome) === normalizeName(nome));
+            return exists ? current : [...current, { nome }];
+          });
           setInput('');
           onClose();
         }} variant="contained">Criar norma</Button>

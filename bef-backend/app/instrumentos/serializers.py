@@ -31,7 +31,10 @@ from .utils import (
     calcular_data_proxima_checagem_calendario,
     calcular_data_proxima_checagem_servico
 )
-from .services import atualizar_relacionamentos_instrumento
+from .services import (
+    atualizar_relacionamentos_instrumento,
+    get_or_create_setor_from_path,
+)
 from .models import CriterioFrequencia
 import logging
 from django.db.models import Q
@@ -1032,31 +1035,6 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             )
         ]
 
-    def _get_or_create_setor_from_path(self, caminho, cliente):
-        """
-        Parse a setor hierarchy path and create/get sectors as needed.
-        Returns the final (deepest) sector in the hierarchy.
-        """
-        if not caminho:
-            return None
-        
-        sector_names = caminho.strip().split('/')
-        setor_pai = None
-        
-        for nome in sector_names:
-            nome = nome.strip()
-            if not nome:  # Skip empty names
-                continue
-                
-            setor, created = Setor.objects.get_or_create(
-                nome=nome,
-                setor_pai=setor_pai,
-                cliente=cliente,
-            )
-            setor_pai = setor
-        
-        return setor_pai
-
     def create(self, validated_data):
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)
         freq_calibracao_data = validated_data.pop('frequencia_calibracao', None)
@@ -1072,7 +1050,10 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
             validated_data['frequencia_calibracao'] = Frequencia.objects.create(**freq_calibracao_data)
 
         if setor_path:
-            validated_data['setor'] = self._get_or_create_setor_from_path(setor_path, validated_data['cliente'])
+            validated_data['setor'] = get_or_create_setor_from_path(
+                setor_path,
+                validated_data['cliente'],
+            )
 
         instrumento = InstrumentoDoCliente.objects.create(**validated_data)
 
@@ -1190,7 +1171,7 @@ class InstrumentoDoClienteWriteAdminSerializer(serializers.ModelSerializer):
         
         if setor is not serializers.empty:
             if isinstance(setor, str):
-                setor = self._get_or_create_setor_from_path(setor, instance.cliente)
+                setor = get_or_create_setor_from_path(setor, instance.cliente)
 
             setor_anterior = instance.setor
             setor_anterior_id = setor_anterior.id if setor_anterior else None
@@ -1321,6 +1302,29 @@ class SetorSerializer(serializers.ModelSerializer):
             "id", "nome", "cliente",
             "setor_pai_id",
         ]
+
+    def validate(self, attrs):
+        nome = attrs.get("nome", getattr(self.instance, "nome", None))
+        cliente = attrs.get("cliente", getattr(self.instance, "cliente", None))
+        setor_pai = attrs.get("setor_pai", getattr(self.instance, "setor_pai", None))
+
+        if not nome or not cliente:
+            return attrs
+
+        duplicados = Setor.objects.filter(
+            nome=nome,
+            cliente=cliente,
+            setor_pai=setor_pai,
+        )
+        if self.instance:
+            duplicados = duplicados.exclude(id=self.instance.id)
+
+        if duplicados.exists():
+            raise serializers.ValidationError({
+                "nome": "Já existe um setor com este nome para este cliente."
+            })
+
+        return attrs
 
 class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
     instrumento = InstrumentoReadSerializer()

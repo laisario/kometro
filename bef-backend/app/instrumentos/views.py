@@ -15,6 +15,10 @@ from .models import (
     CriterioAceitacao,
     TipoInstrumento,
 )
+from .services import (
+    deduplicar_normativos,
+    get_or_create_normativo_cliente,
+)
 from .serializers import (
     InstrumentoDoClienteWriteSerializer,
     InstrumentoReadSerializer,
@@ -960,8 +964,39 @@ class NormativoViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         cliente_id = self.request.query_params.get('cliente')
         if cliente_id:
-            return Normativo.objects.filter(cliente=cliente_id).order_by('nome')
-        return Normativo.objects.all().order_by('nome')
+            return Normativo.objects.filter(cliente=cliente_id).order_by('id')
+        return Normativo.objects.all().order_by('id')
+
+    def list(self, request, *args, **kwargs):
+        normativos = deduplicar_normativos(self.filter_queryset(self.get_queryset()))
+        serializer = self.get_serializer(normativos, many=True)
+        return response.Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        nome = request.data.get("nome")
+        cliente_id = request.data.get("cliente") or request.query_params.get("cliente")
+        if not cliente_id:
+            return response.Response(
+                {"cliente": "Cliente é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        cliente = Cliente.objects.filter(id=cliente_id).first()
+        if not cliente:
+            return response.Response(
+                {"cliente": "Cliente não encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        normativo = get_or_create_normativo_cliente(nome, cliente)
+        if not normativo:
+            return response.Response(
+                {"nome": "Nome do normativo é obrigatório."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = self.get_serializer(normativo)
+        return response.Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class TipoInstrumentoViewSet(viewsets.ReadOnlyModelViewSet):

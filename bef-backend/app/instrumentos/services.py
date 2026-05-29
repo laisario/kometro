@@ -1,4 +1,82 @@
-from .models import CriterioAceitacao, Normativo, PontoDeCalibracao
+from .models import CriterioAceitacao, Normativo, PontoDeCalibracao, Setor
+
+
+def normalizar_nome_normativo(nome):
+    if nome is None:
+        return ""
+    return " ".join(str(nome).strip().split())
+
+
+def chave_normativo(nome):
+    return normalizar_nome_normativo(nome).casefold()
+
+
+def get_or_create_normativo_cliente(nome, cliente):
+    nome_normalizado = normalizar_nome_normativo(nome)
+    if not nome_normalizado:
+        return None
+
+    chave = chave_normativo(nome_normalizado)
+    for normativo in Normativo.objects.filter(cliente=cliente).order_by("id"):
+        if chave_normativo(normativo.nome) == chave:
+            return normativo
+
+    return Normativo.objects.create(nome=nome_normalizado, cliente=cliente)
+
+
+def deduplicar_normativos(normativos):
+    normativos_unicos = []
+    chaves_vistas = set()
+
+    for normativo in normativos:
+        chave = (normativo.cliente_id, chave_normativo(normativo.nome))
+        if chave in chaves_vistas:
+            continue
+        chaves_vistas.add(chave)
+        normativos_unicos.append(normativo)
+
+    return normativos_unicos
+
+
+def get_or_create_setor_from_path(caminho, cliente):
+    """
+    Resolve um caminho hierarquico de setor sem quebrar com duplicados antigos.
+
+    Quando ja existem setores duplicados para o mesmo cliente/pai/nome, usa o
+    menor id. Isso evita erro 500 por MultipleObjectsReturned e nao cria outro
+    duplicado.
+    """
+    if not caminho:
+        return None
+
+    sector_names = caminho.strip().split("/")
+    setor_pai = None
+
+    for nome in sector_names:
+        nome = nome.strip()
+        if not nome:
+            continue
+
+        setor = (
+            Setor.objects.filter(
+                nome=nome,
+                setor_pai=setor_pai,
+                cliente=cliente,
+            )
+            .order_by("id")
+            .first()
+        )
+
+        if not setor:
+            setor = Setor.objects.create(
+                nome=nome,
+                setor_pai=setor_pai,
+                cliente=cliente,
+            )
+
+        setor_pai = setor
+
+    return setor_pai
 
 
 def _nome_ponto(ponto):
@@ -35,14 +113,13 @@ def atualizar_relacionamentos_instrumento(
     """
     if normativos_nomes is not None:
         normativos_objs = []
+        normativos_ids_vistos = set()
         for nome in normativos_nomes:
             if isinstance(nome, dict):
                 nome = nome.get("nome")
-            if nome:
-                normativo, _ = Normativo.objects.get_or_create(
-                    nome=nome,
-                    cliente=instance.cliente,
-                )
+            normativo = get_or_create_normativo_cliente(nome, instance.cliente)
+            if normativo and normativo.id not in normativos_ids_vistos:
+                normativos_ids_vistos.add(normativo.id)
                 normativos_objs.append(normativo)
         instance.normativos.set(normativos_objs)
 

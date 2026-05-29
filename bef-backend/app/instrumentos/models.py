@@ -667,10 +667,16 @@ class Setor(models.Model):
         instruments_to_delete = instruments_to_delete or []
         
         if action is None:
-            setor_padrao, _ = Setor.objects.get_or_create(
-                nome="Padrão",
-                cliente=self.cliente
+            setor_padrao = (
+                Setor.objects.filter(nome="Padrão", cliente=self.cliente)
+                .order_by("id")
+                .first()
             )
+            if not setor_padrao:
+                setor_padrao = Setor.objects.create(
+                    nome="Padrão",
+                    cliente=self.cliente,
+                )
             self.instrumentos.all().update(setor=setor_padrao)
             for subsetor in self.subsetores.all():
                 subsetor.instrumentos.all().update(setor=setor_padrao)

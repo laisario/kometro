@@ -21,6 +21,20 @@ import { useQuery } from 'react-query';
 import { axios } from '../../api';
 import { enqueueSnackbar } from 'notistack';
 
+const normalizeNormName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+const dedupeNormsByName = (items = []) => {
+  if (!Array.isArray(items)) return [];
+
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = normalizeNormName(item?.nome);
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
 const PriceSection = ({ form, error, setError }) => {
   return (
     <Accordion>
@@ -127,7 +141,9 @@ function CreateInstrument(props) {
     precoCalibracaoNoLaboratorio: currentAsset?.instrumento?.precoCalibracaoNoLaboratorio ? currentAsset?.instrumento?.precoCalibracaoNoLaboratorio : null,
     precoCalibracaoNoCliente: currentAsset?.instrumento?.precoCalibracaoCliente ? currentAsset?.instrumento?.precoCalibracaoCliente : null,
   } : null);
-  const [norms, setNorms] = useState(currentAsset?.normativos?.length ? currentAsset?.normativos : []);
+  const [norms, setNorms] = useState(
+    currentAsset?.normativos?.length ? dedupeNormsByName(currentAsset.normativos) : []
+  );
   const [showFormNewAsset, setShowFormNewAsset] = useState(false);
   const [showFormNewNorm, setShowFormNewNorm] = useState(false);
   const [inputNorm, setInputNorm] = useState('');
@@ -138,7 +154,7 @@ function CreateInstrument(props) {
     criterios: {},
   });
   const { normas: normasData } = useNorms(cliente);
-  const normas = Array.isArray(normasData) ? normasData : [];
+  const normas = useMemo(() => dedupeNormsByName(normasData), [normasData]);
 
   // Find the selected option by matching IDs (handle both string and number types)
   const selectedOption = useMemo(() => {
@@ -212,7 +228,7 @@ function CreateInstrument(props) {
         setInstrumentoSelecionado(null);
       }
 
-      setNorms(currentAsset?.normativos?.length ? currentAsset.normativos : []);
+      setNorms(currentAsset?.normativos?.length ? dedupeNormsByName(currentAsset.normativos) : []);
 
       if (currentAsset?.setor?.id) {
         // Ensure setorId is set when editing
@@ -729,7 +745,7 @@ function CreateInstrument(props) {
                   setShowFormNewNorm(true);
                   return;
                 }
-                setNorms(newValue);
+                setNorms(dedupeNormsByName(newValue));
               }}
               inputValue={inputNorm}
               onInputChange={(event, newInputValue) => {

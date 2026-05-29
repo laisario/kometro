@@ -21,7 +21,9 @@ from instrumentos.models import (
 from instrumentos.serializers import (
     InstrumentoDoClienteWriteAdminSerializer,
     InstrumentoDoClienteWriteSerializer,
+    SetorSerializer,
 )
+from clientes.signals import NORMAS_PADRAO, criar_normas_padrao
 
 
 def _make_cliente():
@@ -88,6 +90,114 @@ class InstrumentoDoClienteSetorPatchTest(TestCase):
                 instrumento=self.instrumento
             ).exists()
         )
+
+
+class InstrumentoDoClienteSetorDuplicadoTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.cliente = _make_cliente()
+        self.user = User.objects.create_user(
+            username="admin-setor",
+            password="pass",
+            is_staff=True,
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        self.instrumento_base = _make_instrumento_base()
+        self.instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="TAG-SETOR-DUP",
+            setor=None,
+        )
+
+    def test_admin_patch_usa_setor_existente_quando_ha_apenas_um_correspondente(self):
+        setor = Setor.objects.create(nome="Laboratorio", cliente=self.cliente)
+
+        response = self.api.patch(
+            f"/instrumentos/{self.instrumento.id}/",
+            {"setor": "Laboratorio"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 204, response.data)
+        self.instrumento.refresh_from_db()
+        self.assertEqual(self.instrumento.setor_id, setor.id)
+        self.assertEqual(
+            Setor.objects.filter(nome="Laboratorio", cliente=self.cliente).count(),
+            1,
+        )
+
+    def test_admin_patch_com_setor_duplicado_usa_primeiro_id_e_nao_cria_terceiro(self):
+        setor_mais_antigo = Setor.objects.create(nome="Laboratorio", cliente=self.cliente)
+        Setor.objects.create(nome="Laboratorio", cliente=self.cliente)
+
+        response = self.api.patch(
+            f"/instrumentos/{self.instrumento.id}/",
+            {"setor": "Laboratorio"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 204, response.data)
+        self.instrumento.refresh_from_db()
+        self.assertEqual(self.instrumento.setor_id, setor_mais_antigo.id)
+        self.assertEqual(
+            Setor.objects.filter(nome="Laboratorio", cliente=self.cliente).count(),
+            2,
+        )
+
+    def test_admin_patch_cria_setor_novo_quando_nao_existe(self):
+        response = self.api.patch(
+            f"/instrumentos/{self.instrumento.id}/",
+            {"setor": "Producao/Linha 1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 204, response.data)
+        setor_raiz = Setor.objects.get(nome="Producao", cliente=self.cliente)
+        setor_filho = Setor.objects.get(
+            nome="Linha 1",
+            cliente=self.cliente,
+            setor_pai=setor_raiz,
+        )
+        self.instrumento.refresh_from_db()
+        self.assertEqual(self.instrumento.setor_id, setor_filho.id)
+
+    def test_setor_serializer_nao_permite_criar_duplicado_no_mesmo_pai(self):
+        setor_pai = Setor.objects.create(nome="Predio A", cliente=self.cliente)
+        Setor.objects.create(
+            nome="Laboratorio",
+            cliente=self.cliente,
+            setor_pai=setor_pai,
+        )
+
+        serializer = SetorSerializer(data={
+            "nome": "Laboratorio",
+            "cliente": self.cliente.id,
+            "setor_pai_id": setor_pai.id,
+        })
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("nome", serializer.errors)
+
+    def test_setor_serializer_permite_mesmo_nome_em_pais_diferentes(self):
+        setor_pai = Setor.objects.create(nome="Predio A", cliente=self.cliente)
+        outro_pai = Setor.objects.create(nome="Predio B", cliente=self.cliente)
+        Setor.objects.create(
+            nome="Laboratorio",
+            cliente=self.cliente,
+            setor_pai=setor_pai,
+        )
+
+        serializer = SetorSerializer(data={
+            "nome": "Laboratorio",
+            "cliente": self.cliente.id,
+            "setor_pai_id": outro_pai.id,
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
 
 
 class CalibracaoResultadoHistoricoTest(TestCase):
@@ -458,3 +568,136 @@ class InstrumentoRemocaoRelacionamentosEndpointTest(TestCase):
         self.assertIsNone(resultado.criterio_id)
         self.assertEqual(resultado.maior_erro, Decimal("0.003"))
         self.assertEqual(resultado.incerteza, Decimal("0.002"))
+
+
+class NormativoDuplicidadeTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.cliente = _make_cliente()
+        self.user = User.objects.create_user(username="usuario-normas", password="pass")
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        self.instrumento_base = _make_instrumento_base()
+        self.instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="TAG-NORMAS",
+        )
+
+    def test_normas_padrao_nao_duplicam_quando_signal_roda_mais_de_uma_vez(self):
+        criar_normas_padrao(sender=Cliente, instance=self.cliente, created=True)
+        criar_normas_padrao(sender=Cliente, instance=self.cliente, created=True)
+
+        for nome in NORMAS_PADRAO:
+            self.assertEqual(
+                Normativo.objects.filter(cliente=self.cliente, nome__iexact=nome).count(),
+                1,
+            )
+
+    def test_cliente_com_multiplos_usuarios_nao_recebe_normas_padrao_duplicadas(self):
+        outro_usuario = User.objects.create_user(username="outro-usuario", password="pass")
+        outro_usuario.clientes.add(self.cliente)
+        criar_normas_padrao(sender=Cliente, instance=self.cliente, created=False)
+
+        for nome in NORMAS_PADRAO:
+            self.assertEqual(
+                Normativo.objects.filter(cliente=self.cliente, nome__iexact=nome).count(),
+                1,
+            )
+
+    def test_post_normativo_manual_com_mesmo_nome_reutiliza_existente(self):
+        existente = Normativo.objects.filter(
+            cliente=self.cliente,
+            nome__iexact="ISO 9001",
+        ).order_by("id").first()
+        existente.nome = "ISO  9001"
+        existente.save(update_fields=["nome"])
+
+        response = self.api.post(
+            "/normativos/",
+            {"cliente": self.cliente.id, "nome": "  iso 9001  "},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["id"], existente.id)
+        self.assertEqual(
+            [
+                normativo for normativo in Normativo.objects.filter(cliente=self.cliente)
+                if " ".join(normativo.nome.split()).casefold() == "iso 9001"
+            ],
+            [existente],
+        )
+
+    def test_listagem_deduplica_normativos_com_espacos_extras(self):
+        canonico = Normativo.objects.filter(
+            cliente=self.cliente,
+            nome__iexact="ISO 9001",
+        ).order_by("id").first()
+        Normativo.objects.create(cliente=self.cliente, nome="ISO  9001")
+
+        response = self.api.get("/normativos/", {"cliente": self.cliente.id})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        iso_9001 = [
+            normativo for normativo in response.data
+            if " ".join(normativo["nome"].split()).casefold() == "iso 9001"
+        ]
+        self.assertEqual(len(iso_9001), 1)
+        self.assertEqual(iso_9001[0]["id"], canonico.id)
+
+    def test_listagem_admin_retorna_normativos_unicos_por_cliente(self):
+        self.user.is_staff = True
+        self.user.save(update_fields=["is_staff"])
+        canonico = Normativo.objects.filter(
+            cliente=self.cliente,
+            nome__iexact="ISO 9001",
+        ).order_by("id").first()
+        Normativo.objects.create(cliente=self.cliente, nome="iso 9001")
+
+        response = self.api.get("/normativos/", {"cliente": self.cliente.id})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        iso_9001 = [
+            normativo for normativo in response.data
+            if normativo["nome"].casefold() == "iso 9001"
+        ]
+        self.assertEqual(len(iso_9001), 1)
+        self.assertEqual(iso_9001[0]["id"], canonico.id)
+
+    def test_listagem_usuario_comum_retorna_normativos_unicos(self):
+        canonico = Normativo.objects.filter(
+            cliente=self.cliente,
+            nome__iexact="ISO 9001",
+        ).order_by("id").first()
+        Normativo.objects.create(cliente=self.cliente, nome="ISO 9001")
+
+        response = self.api.get("/normativos/", {"cliente": self.cliente.id})
+
+        self.assertEqual(response.status_code, 200, response.data)
+        iso_9001 = [
+            normativo for normativo in response.data
+            if normativo["nome"].casefold() == "iso 9001"
+        ]
+        self.assertEqual(len(iso_9001), 1)
+        self.assertEqual(iso_9001[0]["id"], canonico.id)
+
+    def test_edicao_instrumento_associa_normativo_canonico_com_duplicados_historicos(self):
+        canonico = Normativo.objects.filter(
+            cliente=self.cliente,
+            nome__iexact="ISO 9001",
+        ).order_by("id").first()
+        duplicado = Normativo.objects.create(cliente=self.cliente, nome="iso 9001")
+
+        response = self.api.patch(
+            f"/instrumentos/{self.instrumento.id}/",
+            {"normativos": [{"id": duplicado.id, "nome": duplicado.nome}]},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 204, response.data)
+        self.assertTrue(self.instrumento.normativos.filter(id=canonico.id).exists())
+        self.assertFalse(self.instrumento.normativos.filter(id=duplicado.id).exists())
+        self.assertTrue(Normativo.objects.filter(id=duplicado.id).exists())
