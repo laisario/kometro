@@ -11,7 +11,7 @@ import {
   CircularProgress,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import useAsset from '../hooks/useAsset';
 import useAssetMutations from '../hooks/useAssetMutations';
 import useDefaultAssets from '../hooks/useDefaultAssets';
@@ -21,6 +21,8 @@ import InstrumentDetails from '../components/InstrumentDetails';
 function InstrumentoDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const selectedCalibrationId = searchParams.get('calibracaoId');
   const { asset: instrumento, isLoadingAsset } = useAsset(id);
   
   const [openFormCreateInstrument, setOpenFormCreateInstrument] = useState({
@@ -128,7 +130,7 @@ function InstrumentoDetailPage() {
           {instrumento && (
             <Card>
               <CardContent>
-                <RecordList asset={instrumento} />
+                <RecordList asset={instrumento} selectedCalibrationId={selectedCalibrationId} />
               </CardContent>
             </Card>
           )}

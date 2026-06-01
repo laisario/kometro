@@ -1,7 +1,18 @@
+from decimal import Decimal
+
 from django.test import TestCase
 from django.contrib.auth.models import Group, User
 from rest_framework.test import APIClient
 from .models import Cliente, Empresa, Convite
+from instrumentos.models import (
+    Calibracao,
+    CalibracaoStatus,
+    CriterioAceitacao,
+    Instrumento,
+    InstrumentoDoCliente,
+    ResultadoCalibracao,
+    TipoInstrumento,
+)
 
 
 def _make_empresa(suffix="1", cnpj=None):
@@ -18,6 +29,162 @@ def _make_cliente(suffix="1"):
 def _make_group(name):
     group, _ = Group.objects.get_or_create(name=name)
     return group
+
+
+def _make_instrumento_base(suffix=""):
+    tipo = TipoInstrumento.objects.create(descricao=f"Termometro {suffix}".strip())
+    return Instrumento.objects.create(tipo_de_instrumento=tipo)
+
+
+class DashboardCalibracoesReprovadasTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.cliente = _make_cliente("DashA")
+        self.outro_cliente = _make_cliente("DashB")
+        self.user = User.objects.create_user(username="dash@cliente.com", password="pass")
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        self.instrumento_base = _make_instrumento_base("Dash")
+        self.instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="TAG-DASH-001",
+        )
+        self.criterio = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+
+    def _criar_calibracao(self, instrumento=None, data="2026-05-28", ordem="OS-DASH"):
+        return Calibracao.objects.create(
+            instrumento=instrumento or self.instrumento,
+            local="P",
+            data=data,
+            ordem_de_servico=ordem,
+            checagem=False,
+        )
+
+    def _criar_resultado(self, calibracao, status=CalibracaoStatus.REPROVADO, criterio=None):
+        return ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=criterio or self.criterio,
+            maior_erro=Decimal("0.020"),
+            incerteza=Decimal("0.001"),
+            status=status,
+        )
+
+    def test_nao_lista_calibracao_com_todos_resultados_aprovados(self):
+        calibracao = self._criar_calibracao(ordem="OS-APROVADA")
+        self._criar_resultado(calibracao, status=CalibracaoStatus.APROVADO)
+
+        response = self.api.get("/dashboard/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["calibracoes_reprovadas"], [])
+
+    def test_lista_calibracao_com_um_resultado_reprovado(self):
+        calibracao = self._criar_calibracao(ordem="OS-REPROVADA")
+        self._criar_resultado(calibracao, status=CalibracaoStatus.REPROVADO)
+
+        response = self.api.get("/dashboard/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        item = response.data["calibracoes_reprovadas"][0]
+        self.assertEqual(item["id"], calibracao.id)
+        self.assertEqual(item["resultados_reprovados_count"], 1)
+        self.assertEqual(len(item["resultados_reprovados"]), 1)
+
+    def test_calibracao_com_multiplos_resultados_reprovados_aparece_uma_vez(self):
+        criterio_2 = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao 2",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+        calibracao = self._criar_calibracao(ordem="OS-MULTI-REPROVADA")
+        self._criar_resultado(calibracao, status=CalibracaoStatus.REPROVADO)
+        self._criar_resultado(calibracao, status=CalibracaoStatus.REPROVADO, criterio=criterio_2)
+
+        response = self.api.get("/dashboard/")
+
+        ids = [item["id"] for item in response.data["calibracoes_reprovadas"]]
+        self.assertEqual(ids.count(calibracao.id), 1)
+        self.assertEqual(response.data["calibracoes_reprovadas"][0]["resultados_reprovados_count"], 2)
+
+    def test_limita_em_5_e_ordena_mais_recentes_primeiro(self):
+        calibracoes = []
+        for index in range(6):
+            calibracao = self._criar_calibracao(
+                data=f"2026-05-{20 + index:02d}",
+                ordem=f"OS-{index}",
+            )
+            self._criar_resultado(calibracao, status=CalibracaoStatus.REPROVADO)
+            calibracoes.append(calibracao)
+
+        response = self.api.get("/dashboard/")
+
+        ids = [item["id"] for item in response.data["calibracoes_reprovadas"]]
+        self.assertEqual(len(ids), 5)
+        self.assertEqual(ids, [calibracao.id for calibracao in reversed(calibracoes[1:])])
+
+    def test_nao_vaza_calibracao_de_outro_cliente(self):
+        outro_instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.outro_cliente,
+            instrumento=self.instrumento_base,
+            tag="TAG-OUTRO-CLIENTE",
+        )
+        outro_criterio = CriterioAceitacao.objects.create(
+            instrumento=outro_instrumento,
+            tipo="Outro",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+        calibracao_outro_cliente = self._criar_calibracao(
+            instrumento=outro_instrumento,
+            ordem="OS-OUTRO",
+        )
+        self._criar_resultado(
+            calibracao_outro_cliente,
+            status=CalibracaoStatus.REPROVADO,
+            criterio=outro_criterio,
+        )
+
+        response = self.api.get("/dashboard/")
+
+        ids = [item["id"] for item in response.data["calibracoes_reprovadas"]]
+        self.assertNotIn(calibracao_outro_cliente.id, ids)
+
+    def test_lista_resultado_reprovado_sem_criterio(self):
+        calibracao = self._criar_calibracao(ordem="OS-SEM-CRITERIO")
+        ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=None,
+            maior_erro=Decimal("0.020"),
+            incerteza=Decimal("0.001"),
+            status=CalibracaoStatus.REPROVADO,
+        )
+
+        response = self.api.get("/dashboard/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        resultado = response.data["calibracoes_reprovadas"][0]["resultados_reprovados"][0]
+        self.assertIsNone(resultado["criterio_tipo"])
+        self.assertIsNone(resultado["criterio_de_aceitacao"])
+        self.assertIsNone(resultado["unidade"])
+
+    def test_admin_nao_recebe_widget_calibracoes_reprovadas(self):
+        admin = User.objects.create_user(username="admin@kometro.com", password="pass", is_staff=True)
+        admin.admin = True
+        admin.save()
+        self.api.force_authenticate(user=admin)
+
+        response = self.api.get("/dashboard/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertNotIn("calibracoes_reprovadas", response.data)
 
 
 class CriarConviteStaffTest(TestCase):

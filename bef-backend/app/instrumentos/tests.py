@@ -7,6 +7,7 @@ from rest_framework.test import APIClient
 
 from clientes.models import Cliente, Empresa
 from instrumentos.models import (
+    Calibracao,
     CriterioAceitacao,
     CalibracaoStatus,
     Instrumento,
@@ -250,6 +251,324 @@ class CalibracaoResultadoHistoricoTest(TestCase):
         self.assertEqual(resultado.maior_erro, Decimal("0.003"))
         self.assertEqual(resultado.incerteza, Decimal("0.002"))
         self.assertEqual(resultado.status, CalibracaoStatus.APROVADO)
+
+    def test_cria_calibracao_com_multiplos_resultados(self):
+        criterio_2 = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao 2",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-MULTI",
+                "resultados": [
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "criterio": criterio_2.id,
+                        "maior_erro": "0.004",
+                        "incerteza": "0.001",
+                    },
+                ],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        resultados = ResultadoCalibracao.objects.filter(
+            calibracao_id=response.data["id"]
+        ).order_by("id")
+        self.assertEqual(resultados.count(), 2)
+        self.assertEqual(resultados[0].criterio_id, self.criterio.id)
+        self.assertEqual(resultados[0].maior_erro, Decimal("0.003"))
+        self.assertEqual(resultados[0].incerteza, Decimal("0.002"))
+        self.assertEqual(resultados[1].criterio_id, criterio_2.id)
+        self.assertEqual(resultados[1].maior_erro, Decimal("0.004"))
+        self.assertEqual(resultados[1].incerteza, Decimal("0.001"))
+
+    def test_calibracao_rejeita_criterio_de_outro_instrumento(self):
+        outro_instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="TAG-CAL-OUTRO",
+        )
+        criterio_outro = CriterioAceitacao.objects.create(
+            instrumento=outro_instrumento,
+            tipo="Outro",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-INVALIDA",
+                "resultados": [
+                    {
+                        "criterio": criterio_outro.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    }
+                ],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ResultadoCalibracao.objects.count(), 0)
+
+    def test_calibracao_rejeita_criterio_duplicado_na_mesma_calibracao(self):
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-DUP",
+                "resultados": [
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.004",
+                        "incerteza": "0.001",
+                    },
+                ],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(ResultadoCalibracao.objects.count(), 0)
+
+    def test_calibracao_faz_rollback_se_um_resultado_for_invalido(self):
+        criterio_2 = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao 2",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-ROLLBACK",
+                "resultados": [
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "criterio": criterio_2.id,
+                        "maior_erro": "valor invalido",
+                        "incerteza": "0.001",
+                    },
+                ],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(Calibracao.objects.filter(ordem_de_servico="OS-ROLLBACK").exists())
+        self.assertEqual(ResultadoCalibracao.objects.count(), 0)
+
+    def test_patch_multiplos_resultados_sem_alterar_nao_apaga_nenhum(self):
+        criterio_2 = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao 2",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+        calibracao = Calibracao.objects.create(
+            instrumento=self.instrumento,
+            local="P",
+            data="2026-05-28",
+            ordem_de_servico="OS-PATCH-KEEP",
+            checagem=False,
+        )
+        resultado_1 = ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=self.criterio,
+            maior_erro=Decimal("0.003"),
+            incerteza=Decimal("0.002"),
+            status=CalibracaoStatus.APROVADO,
+        )
+        resultado_2 = ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=criterio_2,
+            maior_erro=Decimal("0.004"),
+            incerteza=Decimal("0.001"),
+            status=CalibracaoStatus.APROVADO,
+        )
+
+        response = self.api.patch(
+            f"/calibracoes/{calibracao.id}/",
+            {
+                "instrumento": self.instrumento.id,
+                "resultados": [
+                    {
+                        "id": resultado_1.id,
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "id": resultado_2.id,
+                        "criterio": criterio_2.id,
+                        "maior_erro": "0.004",
+                        "incerteza": "0.001",
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertCountEqual(
+            list(calibracao.resultados.values_list("id", flat=True)),
+            [resultado_1.id, resultado_2.id],
+        )
+
+    def test_patch_adiciona_resultado_sem_apagar_resultados_antigos(self):
+        criterio_2 = CriterioAceitacao.objects.create(
+            instrumento=self.instrumento,
+            tipo="Calibracao 2",
+            criterio_de_aceitacao=Decimal("0.010"),
+            unidade="mm",
+        )
+        calibracao = Calibracao.objects.create(
+            instrumento=self.instrumento,
+            local="P",
+            data="2026-05-28",
+            ordem_de_servico="OS-PATCH-ADD",
+            checagem=False,
+        )
+        resultado_1 = ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=self.criterio,
+            maior_erro=Decimal("0.003"),
+            incerteza=Decimal("0.002"),
+            status=CalibracaoStatus.APROVADO,
+        )
+
+        response = self.api.patch(
+            f"/calibracoes/{calibracao.id}/",
+            {
+                "instrumento": self.instrumento.id,
+                "resultados": [
+                    {
+                        "id": resultado_1.id,
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "criterio": criterio_2.id,
+                        "maior_erro": "0.004",
+                        "incerteza": "0.001",
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(ResultadoCalibracao.objects.filter(id=resultado_1.id).exists())
+        self.assertEqual(calibracao.resultados.count(), 2)
+        self.assertTrue(calibracao.resultados.filter(criterio=criterio_2).exists())
+
+    def test_patch_atualiza_resultado_existente_pelo_id(self):
+        calibracao = Calibracao.objects.create(
+            instrumento=self.instrumento,
+            local="P",
+            data="2026-05-28",
+            ordem_de_servico="OS-PATCH-UPDATE",
+            checagem=False,
+        )
+        resultado = ResultadoCalibracao.objects.create(
+            calibracao=calibracao,
+            criterio=self.criterio,
+            maior_erro=Decimal("0.003"),
+            incerteza=Decimal("0.002"),
+            status=CalibracaoStatus.APROVADO,
+        )
+
+        response = self.api.patch(
+            f"/calibracoes/{calibracao.id}/",
+            {
+                "instrumento": self.instrumento.id,
+                "resultados": [
+                    {
+                        "id": resultado.id,
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.006",
+                        "incerteza": "0.003",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        resultado.refresh_from_db()
+        self.assertEqual(resultado.maior_erro, Decimal("0.006"))
+        self.assertEqual(resultado.incerteza, Decimal("0.003"))
+        self.assertEqual(calibracao.resultados.count(), 1)
+
+    def test_patch_multiplos_resultados_rejeita_criterio_duplicado(self):
+        calibracao = Calibracao.objects.create(
+            instrumento=self.instrumento,
+            local="P",
+            data="2026-05-28",
+            ordem_de_servico="OS-PATCH-DUP",
+            checagem=False,
+        )
+
+        response = self.api.patch(
+            f"/calibracoes/{calibracao.id}/",
+            {
+                "instrumento": self.instrumento.id,
+                "resultados": [
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.003",
+                        "incerteza": "0.002",
+                    },
+                    {
+                        "criterio": self.criterio.id,
+                        "maior_erro": "0.004",
+                        "incerteza": "0.001",
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(calibracao.resultados.count(), 0)
 
     def test_resultado_historico_sobrevive_ao_patch_de_criterios_vazio(self):
         response = self._post_calibracao()

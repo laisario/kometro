@@ -8,7 +8,7 @@ import datetime
 from enderecos.models import UF, Bairro, Cidade, Endereco
 from enderecos.serializers import ReadEnderecoSerializer
 from .models import Cliente, Empresa, Unidade, Convite
-from instrumentos.models import Instrumento, InstrumentoDoCliente, TipoInstrumento
+from instrumentos.models import Calibracao, Instrumento, InstrumentoDoCliente, ResultadoCalibracao, TipoInstrumento
 from propostas.models import Proposta
 from documentos.models import Documento, Revisao
 import logging
@@ -380,6 +380,79 @@ class DashboardRevisaoSerializer(serializers.ModelSerializer):
             "documento",
             "tipo",
         )
+
+
+class DashboardResultadoCalibracaoReprovadoSerializer(serializers.ModelSerializer):
+    criterio_tipo = serializers.SerializerMethodField()
+    criterio_de_aceitacao = serializers.SerializerMethodField()
+    unidade = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ResultadoCalibracao
+        fields = (
+            "id",
+            "status",
+            "maior_erro",
+            "incerteza",
+            "criterio_tipo",
+            "criterio_de_aceitacao",
+            "unidade",
+        )
+
+    def get_criterio_tipo(self, obj):
+        return obj.criterio.tipo if obj.criterio else None
+
+    def get_criterio_de_aceitacao(self, obj):
+        if not obj.criterio:
+            return None
+        criterio = obj.criterio.criterio_de_aceitacao
+        return str(criterio) if criterio is not None else None
+
+    def get_unidade(self, obj):
+        return obj.criterio.unidade if obj.criterio else None
+
+
+class DashboardCalibracaoReprovadaSerializer(serializers.ModelSerializer):
+    instrumento_id = serializers.IntegerField(source="instrumento.id")
+    instrumento_tag = serializers.CharField(source="instrumento.tag", allow_null=True)
+    instrumento_numero_de_serie = serializers.CharField(source="instrumento.numero_de_serie", allow_null=True)
+    instrumento_descricao = serializers.CharField(
+        source="instrumento.instrumento.tipo_de_instrumento.descricao",
+        allow_null=True,
+    )
+    setor_id = serializers.IntegerField(source="instrumento.setor_id", allow_null=True)
+    resultados_reprovados_count = serializers.SerializerMethodField()
+    resultados_reprovados = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Calibracao
+        fields = (
+            "id",
+            "data",
+            "ordem_de_servico",
+            "instrumento_id",
+            "instrumento_tag",
+            "instrumento_numero_de_serie",
+            "instrumento_descricao",
+            "setor_id",
+            "resultados_reprovados_count",
+            "resultados_reprovados",
+        )
+
+    def _resultados_reprovados(self, obj):
+        prefetched = getattr(obj, "resultados_reprovados_prefetch", None)
+        if prefetched is not None:
+            return prefetched
+        return obj.resultados.filter(status="R").select_related("criterio")
+
+    def get_resultados_reprovados_count(self, obj):
+        return len(self._resultados_reprovados(obj))
+
+    def get_resultados_reprovados(self, obj):
+        return DashboardResultadoCalibracaoReprovadoSerializer(
+            self._resultados_reprovados(obj),
+            many=True,
+        ).data
 
 
 class ResetPasswordRequestSerializer(serializers.Serializer):

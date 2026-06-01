@@ -4,7 +4,8 @@ import {
   AppOrderTimeline, 
   AppWidgetSummary, 
   AppListItems,
-  AppRecentOS
+  AppRecentOS,
+  AppRejectedCalibrations,
 } from '../components';
 import { fDate } from '../../utils/formatTime';
 import { useDashboardVM } from '../viewModels/useDashboardVM';
@@ -17,6 +18,7 @@ export default function DashboardPage() {
     instruments,
     user,
     documents,
+    rejectedCalibrations,
     recentOS,
     isLoadingRecentOS,
     shouldShowOSWidget,
@@ -71,7 +73,7 @@ export default function DashboardPage() {
                   total={data?.documentosVencidos || 0}
                   color="info"
                   icon={'mdi:file-document-alert-outline'}
-                />
+                  />
               </Link>
             </Grid>
 
@@ -83,7 +85,7 @@ export default function DashboardPage() {
                     total={data?.propostasEmElaboracao || 0}
                     color="warning"
                     icon={'ant-design:file-sync-outlined'}
-                  />
+                    />
                 </Link>
               </Grid>
             ) : (
@@ -99,6 +101,23 @@ export default function DashboardPage() {
               </Grid>
             )}
 
+            {!user?.admin && <Grid item xs={12} md={7} lg={8}>
+              <AppListItems
+                title="Instrumentos recentes"
+                list={instruments}
+                admin={user?.admin}
+                instrumentsCount={data?.instrumentosCadastrados || 0}
+              />
+            </Grid>}
+
+            {!user?.admin && (
+              <Grid item xs={12} md={5} lg={4}>
+                <AppRejectedCalibrations
+                  title="Calibrações reprovadas"
+                  list={rejectedCalibrations}
+                />
+              </Grid>
+            )}
 
             <Grid item xs={12} md={7} lg={8}>
               <AppListItems
@@ -123,14 +142,6 @@ export default function DashboardPage() {
               />
             </Grid>
 
-            {!user?.admin && <Grid item xs={12} md={7} lg={8}>
-              <AppListItems
-                title="Instrumentos recentes"
-                list={instruments}
-                admin={user?.admin}
-                instrumentsCount={data?.instrumentosCadastrados || 0}
-              />
-            </Grid>}
 
             {/* Show widget only for staff users */}
             {shouldShowOSWidget && (

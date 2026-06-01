@@ -43,7 +43,7 @@ const informacoes = '1'
 const calibracoes = '2'
 const checagem = '3'
 
-function RecordList({asset, adminPreview = false}) {
+function RecordList({asset, adminPreview = false, selectedCalibrationId}) {
   const isMobile = useResponsive('down', 'md');
   const [value, setValue] = useState(adminPreview ? '1' : '2');
   const {
@@ -157,6 +157,7 @@ function RecordList({asset, adminPreview = false}) {
             checagem={recordList?.find(record => record?.label?.toLowerCase() === "checagem").value === record?.value }
             debouncedSearch={debouncedSearch}
             assetId={asset?.id}
+            selectedCalibrationId={record?.value === calibracoes ? selectedCalibrationId : null}
           />
         </TabPanel>
       ))}

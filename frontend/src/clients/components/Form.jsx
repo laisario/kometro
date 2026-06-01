@@ -1,4 +1,4 @@
-import { Link, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormLabel, Paper, TextField, Typography, Accordion, AccordionSummary, AccordionDetails, Grid, InputAdornment, MenuItem } from '@mui/material';
+import { Link, Box, Button, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormLabel, Paper, TextField, Typography, Accordion, AccordionSummary, AccordionDetails, Grid, InputAdornment, MenuItem, IconButton } from '@mui/material';
 import React, { useEffect, useRef } from 'react'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import 'dayjs/locale/pt-br';
@@ -12,6 +12,8 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useFieldArray, useForm, useWatch } from 'react-hook-form';
 import { truncateString } from '../../utils/formatString';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 
 function Form(props) {
@@ -34,12 +36,29 @@ function Form(props) {
     control: form.control,
     name: "anexos",
   });
+  const {
+    fields: resultados,
+    append: appendResultado,
+    remove: removeResultado,
+  } = useFieldArray({
+    control: form.control,
+    name: "resultados",
+    keyName: "fieldId",
+  });
   const ref = useRef(null)
 
   const {
     arquivo,
-    numero
+    numero,
+    resultados: resultadosValues = [],
   } = useWatch({ control: form.control })
+  const formErrors = form?.formState?.errors || {};
+
+  useEffect(() => {
+    if (open && criterios?.length && !resultados?.length) {
+      appendResultado({ criterio: '', maiorErro: '', incerteza: '' });
+    }
+  }, [open, criterios?.length, resultados?.length, appendResultado]);
 
   const handleChangeAnexo = (event) => {
     if (!event.target.files.length) return
@@ -134,59 +153,118 @@ function Form(props) {
           </AccordionSummary>
           <AccordionDetails>
           {criterios?.length ? (
-            <Row>
-             <TextField
-                id="criterio"
-                label="Critério de aceitação"
-                fullWidth
-                select
-                {...form?.register("criterio", {
-                  onChange: (e) => {if (error?.criterio) setError({})},
-                })}
-                defaultValue={calibration?.resultados?.[0]?.criterio?.id || ""}
-                error={!!error?.criterio}
-                helperText={!!error?.criterio && error?.criterio}
-                SelectProps={{
-                  renderValue: (selectedId) => {
-                    const selected = criterios.find(c => c.id === selectedId);
-                    return selected ? selected.tipo : "";
-                  }
-                }}
-              > 
-                {criterios?.map((criterio) => (
-                  <MenuItem key={criterio?.id} value={criterio?.id}>
-                    <div>
-                      <strong>{criterio?.tipo}</strong>: {criterio.criterioDeAceitacao} {criterio.unidade} <br/>
-                      <small>{criterio?.referenciaDoCriterio} - {criterio?.observacaoCriterioAceitacao}</small>
-                    </div>
-                  </MenuItem>
-                ))}
-              </TextField>
-              <TextField
-                autoFocus
-                id="maiorErro"
-                label="Maior erro"
-                fullWidth
-                inputProps={{ inputMode: 'decimal' }}
-                {...form?.register("maiorErro", {
-                  onChange: (e) => {if (error?.maior_erro) setError({})},
-                })}
-                error={!!error?.maior_erro}
-                helperText={!!error?.maior_erro && error?.maior_erro}
-              />
-              {!checagem && <TextField
-                autoFocus
-                id="incerteza"
-                label="Incerteza"
-                fullWidth
-                inputProps={{ inputMode: 'decimal' }}
-                {...form?.register("incerteza", {
-                  onChange: (e) => {if (error?.incerteza) setError({})},
-                })}
-                error={!!error?.incerteza}
-                helperText={!!error?.incerteza && error?.incerteza}
-              />}
-            </Row>
+            <Box display="flex" flexDirection="column" gap={2}>
+              {resultados?.map((field, index) => {
+                const selectedCriteria = (resultadosValues || [])
+                  .map((resultado, selectedIndex) => (
+                    selectedIndex === index ? null : String(resultado?.criterio || '')
+                  ))
+                  .filter(Boolean);
+                const rowError = error?.resultados?.[index] || {};
+                const rowFormError = formErrors?.resultados?.[index] || {};
+                const selectedCriterionId = String(resultadosValues?.[index]?.criterio || '');
+
+                return (
+                  <Grid container spacing={2} alignItems="flex-start" key={field.fieldId}>
+                    <Grid item xs={12} md={5}>
+                      <TextField
+                        id={`resultado-${index}-criterio`}
+                        label="Critério de aceitação"
+                        fullWidth
+                        select
+                        {...form?.register(`resultados.${index}.criterio`, {
+                          required: 'Informe o critério de aceitação.',
+                          onChange: () => { if (error?.resultados || error?.criterio) setError({}) },
+                        })}
+                        value={selectedCriterionId}
+                        onChange={(event) => {
+                          form?.setValue(
+                            `resultados.${index}.criterio`,
+                            String(event.target.value || ''),
+                            { shouldDirty: true, shouldValidate: true }
+                          );
+                          if (error?.resultados || error?.criterio) setError({});
+                        }}
+                        error={!!rowError?.criterio || !!rowFormError?.criterio}
+                        helperText={rowError?.criterio || rowFormError?.criterio?.message}
+                        SelectProps={{
+                          renderValue: (selectedId) => {
+                            const selected = criterios.find(c => String(c.id) === String(selectedId));
+                            return selected
+                              ? `${selected.tipo}: ${selected.criterioDeAceitacao} ${selected.unidade || ''}`.trim()
+                              : "Critério não encontrado";
+                          }
+                        }}
+                      >
+                        {criterios?.map((criterio) => {
+                          const disabled = selectedCriteria.includes(String(criterio?.id));
+                          return (
+                            <MenuItem key={criterio?.id} value={String(criterio?.id)} disabled={disabled}>
+                              <div>
+                                <strong>{criterio?.tipo}</strong>: {criterio.criterioDeAceitacao} {criterio.unidade} <br/>
+                                <small>{criterio?.referenciaDoCriterio} - {criterio?.observacaoCriterioAceitacao}</small>
+                              </div>
+                            </MenuItem>
+                          );
+                        })}
+                      </TextField>
+                    </Grid>
+                    <Grid item xs={12} md={checagem ? 5 : 3}>
+                      <TextField
+                        id={`resultado-${index}-maiorErro`}
+                        label="Maior erro"
+                        fullWidth
+                        inputProps={{ inputMode: 'decimal' }}
+                        {...form?.register(`resultados.${index}.maiorErro`, {
+                          required: 'Informe o maior erro.',
+                          onChange: () => { if (error?.resultados || error?.maior_erro) setError({}) },
+                        })}
+                        error={!!rowError?.maiorErro || !!rowFormError?.maiorErro}
+                        helperText={rowError?.maiorErro || rowFormError?.maiorErro?.message}
+                      />
+                    </Grid>
+                    {!checagem && (
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          id={`resultado-${index}-incerteza`}
+                          label="Incerteza"
+                          fullWidth
+                          inputProps={{ inputMode: 'decimal' }}
+                          {...form?.register(`resultados.${index}.incerteza`, {
+                            required: 'Informe a incerteza.',
+                            onChange: () => { if (error?.resultados || error?.incerteza) setError({}) },
+                          })}
+                          error={!!rowError?.incerteza || !!rowFormError?.incerteza}
+                          helperText={rowError?.incerteza || rowFormError?.incerteza?.message}
+                        />
+                      </Grid>
+                    )}
+                    <Grid item xs={12} md={1}>
+                      <IconButton
+                        aria-label="Remover resultado"
+                        onClick={() => removeResultado(index)}
+                        disabled={resultados.length <= 1 || !!resultadosValues?.[index]?.id}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Grid>
+                  </Grid>
+                );
+              })}
+              {typeof error?.resultados === 'string' && (
+                <Typography color="error" variant="body2">{error.resultados}</Typography>
+              )}
+              <Box>
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={() => appendResultado({ criterio: '', maiorErro: '', incerteza: '' })}
+                  disabled={resultados?.length >= criterios?.length}
+                >
+                  Adicionar resultado
+                </Button>
+              </Box>
+            </Box>
           ) : <Typography color='info'  variant="body2">Este instrumento ainda não possui nenhum critério registrado. Por favor, edite o instrumento e adicione ao menos um critério.</Typography> }
           </AccordionDetails>
         </Accordion>

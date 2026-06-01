@@ -64,6 +64,7 @@ function Calibration(props) {
   });
   const { hasCreatePermission, hasEditPermission, hasDeletePermission } = useAuth()
   const resultado = calibration?.resultados?.[0];
+  const resultados = calibration?.resultados || [];
 
   const setorNome =
     calibration?.setor?.nome ?? calibration?.instrumento?.setor?.nome
@@ -182,12 +183,33 @@ function Calibration(props) {
             <ContentRow title="Observação" value={calibration.observacaoFornecedor} />
           )}
 
-          {!!calibration?.resultados?.length && (
-            <>
-              <ContentRow colorTitle='black' colorValue='black' title={calibration?.resultados[0].criterio?.tipo}  value={<Label color={calibration?.resultados[0].status === 'A' ? 'success' : 'warning'} >{calibration?.resultados[0].status === 'A' ? 'Aprovado' : 'Reprovado'}</Label>} />
-              <ContentRow title="Maior erro" value={calibration?.resultados[0].maiorErro ? calibration?.resultados[0].maiorErro : "Não faz parte do cálculo"} />
-              {!checagem && <ContentRow title="Incerteza" value={calibration?.resultados[0].incerteza ? calibration?.resultados[0].incerteza : "Não faz parte do cálculo"} />}
-            </>
+          {!!resultados?.length && (
+            <Box mt={1}>
+              {resultados.map((resultado, index) => (
+                <Box key={resultado?.id || index} sx={{ mb: 1 }}>
+                  <ContentRow
+                    colorTitle='black'
+                    colorValue='black'
+                    title={resultado?.criterio?.tipo || `Resultado ${index + 1}`}
+                    value={resultado?.status
+                      ? <Label color={resultado.status === 'A' ? 'success' : 'warning'}>{resultado.status === 'A' ? 'Aprovado' : 'Reprovado'}</Label>
+                      : 'Sem status'
+                    }
+                  />
+                  {resultado?.criterio?.criterioDeAceitacao && (
+                    <ContentRow title="Critério de aceitação" value={`${resultado.criterio.criterioDeAceitacao} ${resultado.criterio.unidade || ''}`.trim()} />
+                  )}
+                  {resultado?.criterio?.referenciaDoCriterio && (
+                    <ContentRow title="Referência do critério" value={resultado.criterio.referenciaDoCriterio} />
+                  )}
+                  {resultado?.criterio?.observacaoCriterioAceitacao && (
+                    <ContentRow title="Observação do critério" value={resultado.criterio.observacaoCriterioAceitacao} />
+                  )}
+                  <ContentRow title="Maior erro" value={resultado?.maiorErro ? resultado.maiorErro : "Não faz parte do cálculo"} />
+                  {!checagem && <ContentRow title="Incerteza" value={resultado?.incerteza ? resultado.incerteza : "Não faz parte do cálculo"} />}
+                </Box>
+              ))}
+            </Box>
           )}
           {(calibration?.analiseCritica)
             && <ContentRow title={calibration?.analiseCritica !== "P" ? "Sua análise crítica" : "Análise critica"} colorTitle='black' my={1} value={<Label color={analiseCriticaColor[calibration?.analiseCritica]}>{analiseCriticaLabel[calibration?.analiseCritica]}</Label>} />}

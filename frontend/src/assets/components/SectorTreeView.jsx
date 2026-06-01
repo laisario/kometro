@@ -43,6 +43,7 @@ function SectorTreeView({
   mutateDeleteClient,
   setores,
   mutateChangePosition,
+  selectedCalibrationId,
 }) {
   const { isLoadingTree, hasLoadedTree, hasSectors } = useSectorTreeContext();
   
@@ -168,7 +169,7 @@ function SectorTreeView({
             >
               <Card>
                 <CardContent sx={{ padding: 2 }}>
-                  <RecordList asset={asset} />
+                  <RecordList asset={asset} selectedCalibrationId={selectedCalibrationId} />
                 </CardContent>
               </Card>
             </Box>

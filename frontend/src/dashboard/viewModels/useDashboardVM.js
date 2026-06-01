@@ -37,12 +37,14 @@ export const useDashboardVM = () => {
   }))
 
   const documents = data?.revisoesASeremAprovadas
+  const rejectedCalibrations = data?.calibracoesReprovadas || []
 
   return {
     user,
     data,
     instruments,
     documents,
+    rejectedCalibrations,
     recentOS,
     isLoadingRecentOS,
     shouldShowOSWidget,

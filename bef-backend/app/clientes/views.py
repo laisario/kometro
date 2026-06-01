@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django_filters.rest_framework import DjangoFilterBackend
-from instrumentos.models import InstrumentoDoCliente
+from instrumentos.models import Calibracao, CalibracaoStatus, InstrumentoDoCliente, ResultadoCalibracao
 from propostas.models import Proposta
 from documentos.models import Documento, Revisao, Aprovacao
 from .models import Cliente, Convite, PasswordReset
@@ -19,6 +19,7 @@ from .serializers import (
     ConviteSerializer,
     GroupSerializer,
     DashboardInstrumentoDoClienteSerializer,
+    DashboardCalibracaoReprovadaSerializer,
     DasboardPropostaSerializer,
     DashboardRevisaoSerializer,
     ResetPasswordRequestSerializer,
@@ -43,6 +44,7 @@ from .logging_utils import get_authorization_metadata, get_user_log_data, mask_s
 from rest_framework.decorators import action
 from .mixins import ClienteScopedQuerysetMixin
 from django.db.models import Exists, OuterRef
+from django.db.models import Prefetch
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 
@@ -310,17 +312,49 @@ class DashboardViewSet(viewsets.ViewSet):
                 status=status.HTTP_200_OK,
             )
 
+        cliente = user.clientes.first()
+        calibracoes_reprovadas = (
+            Calibracao.objects
+            .filter(
+                instrumento__cliente=cliente,
+                checagem=False,
+                resultados__status=CalibracaoStatus.REPROVADO,
+            )
+            .select_related(
+                "instrumento",
+                "instrumento__instrumento",
+                "instrumento__instrumento__tipo_de_instrumento",
+                "instrumento__setor",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "resultados",
+                    queryset=ResultadoCalibracao.objects
+                    .filter(status=CalibracaoStatus.REPROVADO)
+                    .select_related("criterio")
+                    .order_by("id"),
+                    to_attr="resultados_reprovados_prefetch",
+                )
+            )
+            .distinct()
+            .order_by("-data", "-id")[:5]
+        )
+
         return Response(
             {
-                "instrumentos_vencidos": user.clientes.first().instrumentos_vencidos,
-                "instrumentos_em_dia": user.clientes.first().instrumentos_em_dia,
-                "instrumentos_cadastrados": user.clientes.first().instrumentos_cadastrados,
-                "propostas_aguardando_aprovacao": user.clientes.first().propostas_aguardando_aprovacao,
+                "instrumentos_vencidos": cliente.instrumentos_vencidos,
+                "instrumentos_em_dia": cliente.instrumentos_em_dia,
+                "instrumentos_cadastrados": cliente.instrumentos_cadastrados,
+                "propostas_aguardando_aprovacao": cliente.propostas_aguardando_aprovacao,
                 "instrumentos_recentes": DashboardInstrumentoDoClienteSerializer(
-                    user.clientes.first().instrumentos.select_related('instrumento', 'instrumento__tipo_de_instrumento').order_by("-pk")[:5], many=True
+                    cliente.instrumentos.select_related('instrumento', 'instrumento__tipo_de_instrumento').order_by("-pk")[:5], many=True
                 ).data,
                 "ultimas_propostas": DasboardPropostaSerializer(
-                    user.clientes.first().propostas.select_related('cliente').order_by("-pk")[:5], many=True
+                    cliente.propostas.select_related('cliente').order_by("-pk")[:5], many=True
+                ).data,
+                "calibracoes_reprovadas": DashboardCalibracaoReprovadaSerializer(
+                    calibracoes_reprovadas,
+                    many=True,
                 ).data,
                 "revisoes_a_serem_aprovadas": DashboardRevisaoSerializer(
                     Revisao.objects
@@ -337,7 +371,7 @@ class DashboardViewSet(viewsets.ViewSet):
                     many=True,
                 ).data,
                 "documentos_vencidos": Documento.objects.filter(
-                    vencido=True, cliente=user.clientes.first()
+                    vencido=True, cliente=cliente
                 ).count(),
             },
             status=status.HTTP_200_OK,

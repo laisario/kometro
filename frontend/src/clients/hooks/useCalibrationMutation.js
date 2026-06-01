@@ -17,6 +17,33 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
 
+  const upsertCalibrationInList = (current, calibration) => {
+    if (!Array.isArray(current) || !calibration?.id) return current;
+
+    const exists = current.some((item) => String(item?.id) === String(calibration.id));
+    if (exists) {
+      return current.map((item) => (
+        String(item?.id) === String(calibration.id) ? { ...item, ...calibration } : item
+      ));
+    }
+
+    return [calibration, ...current];
+  };
+
+  const updateCreatedCalibrationCache = (calibration) => {
+    if (!calibration?.id || !instrumento) return;
+
+    const instrumentIds = Array.from(
+      new Set([instrumento, String(instrumento), Number(instrumento)].filter((value) => !Number.isNaN(value)))
+    );
+    instrumentIds.forEach((instrumentId) => {
+      queryClient.setQueryData(
+        ['calibracoes', '', instrumentId, null, checagem],
+        (current) => upsertCalibrationInList(current, calibration)
+      );
+    });
+  };
+
   useEffect(() => { setSelectedCalibration({}) }, [instrumento])
 
   
@@ -31,14 +58,22 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   }, [search, handleSearchOS]);
   
   const firstCertificado = selectedCalibration?.certificados?.[0];
+  const buildResultadosDefaults = (calibration) => (
+    calibration?.resultados?.length
+      ? calibration.resultados.map((resultado) => ({
+        id: resultado?.id,
+        criterio: resultado?.criterio?.id ? String(resultado.criterio.id) : '',
+        maiorErro: resultado?.maiorErro ?? '',
+        incerteza: resultado?.incerteza ?? '',
+      }))
+      : [{ criterio: '', maiorErro: '', incerteza: '' }]
+  );
   const defaultValues = useMemo(() => ({
     local: selectedCalibration?.local ? selectedCalibration?.local : 'P',
     data: selectedCalibration?.data ? selectedCalibration?.data : null,
     ordemDeServico: selectedCalibration?.ordemDeServico ? selectedCalibration?.ordemDeServico : '',
     observacoes: selectedCalibration?.observacoes ? selectedCalibration?.observacoes : '',
-    criterio: selectedCalibration?.resultados?.length && selectedCalibration?.resultados[0]?.criterio?.id ? selectedCalibration?.resultados[0]?.criterio?.id  : null,
-    maiorErro: selectedCalibration?.resultados?.length && selectedCalibration?.resultados[0]?.maiorErro ? selectedCalibration?.resultados[0]?.maiorErro : null,
-    incerteza: selectedCalibration?.resultados?.length && selectedCalibration?.resultados[0]?.incerteza ? selectedCalibration?.resultados[0]?.incerteza : null,
+    resultados: buildResultadosDefaults(selectedCalibration),
     preco: selectedCalibration?.preco ? selectedCalibration.preco : null,
     laboratorio: selectedCalibration?.laboratorio ? selectedCalibration.laboratorio : '',
     observacaoFornecedor: selectedCalibration?.observacaoFornecedor ? selectedCalibration.observacaoFornecedor : '',
@@ -54,9 +89,7 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     data: null,
     ordemDeServico: '',
     observacoes: '',
-    maiorErro: null,
-    incerteza: null,
-    criterio: null,
+    resultados: [{ criterio: '', maiorErro: '', incerteza: '' }],
     arquivo: null,
     numero: '',
     anexos: [],
@@ -83,8 +116,9 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   } = useMutation({
     mutationFn: deleteRecord,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['calibracoes'] })
-      queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      queryClient.invalidateQueries(['calibracoes'])
+      queryClient.invalidateQueries(['instrumentos'])
+      queryClient.invalidateQueries(['dashboard'])
       queryClient.invalidateQueries({ queryKey: ['setores'] })
       setSelectedCalibration({});
       enqueueSnackbar(`${checagem ? 'Checagem' : 'Calibração'} deletada com sucesso!`, {
@@ -106,11 +140,21 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
 
   const formatedData = (form) => {
     const { certificadoId, ...rest } = form || {};
+    const resultados = (form?.resultados || [])
+      .map((resultado) => ({
+        id: resultado?.id || null,
+        criterio: resultado?.criterio || null,
+        maiorErro: normalizeDecimal(resultado?.maiorErro),
+        incerteza: normalizeDecimal(resultado?.incerteza),
+      }))
+      .filter((resultado) => (
+        resultado.criterio || resultado.maiorErro !== null || resultado.incerteza !== null
+      ));
+
     return {
       ...rest,
       data: form?.data && dayjs(form?.data)?.format('YYYY-MM-DD'),
-      maiorErro: normalizeDecimal(form?.maiorErro),
-      incerteza: normalizeDecimal(form?.incerteza),
+      resultados,
     };
   };
 
@@ -119,6 +163,15 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     const response = await axios.post(`/calibracoes/`, { ...data, instrumento, checagem,});
     return response.data;
   }
+
+  const fetchCalibrationById = async (calibrationId) => {
+    if (!calibrationId) return null;
+
+    const response = await axios.get(`/calibracoes/${calibrationId}/`, {
+      params: { page_size: 9999, checagem },
+    });
+    return response?.data;
+  };
 
   const {
     mutate: mutateCreation,
@@ -145,13 +198,34 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
           console.error('Erro ao adicionar certificado:', e);
         }
       }
+
+      let calibrationToCache = createdCalibration;
+      try {
+        calibrationToCache = await fetchCalibrationById(createdCalibration?.id) || createdCalibration;
+      } catch (e) {
+        console.error('Erro ao atualizar cache da calibração criada:', e);
+      }
   
-      queryClient.invalidateQueries({ queryKey: ['calibracoes'] })
-      queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
+      updateCreatedCalibrationCache(calibrationToCache);
+      queryClient.invalidateQueries(['calibracoes'])
+      queryClient.invalidateQueries(['instrumentos'])
+      queryClient.invalidateQueries(['dashboard'])
       enqueueSnackbar(`${checagem ? 'Checagem' : 'Calibração'} criada com sucesso!`, {
         variant: 'success'
       });
-      formCreate.reset();
+      formCreate.reset({
+        local: 'P',
+        data: null,
+        ordemDeServico: '',
+        observacoes: '',
+        resultados: [{ criterio: '', maiorErro: '', incerteza: '' }],
+        arquivo: null,
+        numero: '',
+        anexos: [],
+        preco: null,
+        laboratorio: '',
+        observacaoFornecedor: '',
+      });
       setOpenForm(false);
     },
     onError: (error) => {

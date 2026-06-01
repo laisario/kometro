@@ -3,7 +3,7 @@ import { axios } from '../../api';
 
 
 const useCalibration = (id, debouncedSearch, instrumento, checagem) => {
-  const { data, isLoading: isLoadingCalibrations  } = useQuery(
+  const { data, isLoading: isLoadingCalibrations, isFetching: isFetchingCalibrations } = useQuery(
     ['calibracoes', debouncedSearch, instrumento, id, checagem], async () => {
       if (id) {
         const response = await axios.get(`/calibracoes/${id}/`, { params: { page_size: 9999 } });
@@ -20,7 +20,8 @@ const useCalibration = (id, debouncedSearch, instrumento, checagem) => {
 
   return {
     data,
-    isLoadingCalibrations
+    isLoadingCalibrations,
+    isFetchingCalibrations,
   }
 };
 

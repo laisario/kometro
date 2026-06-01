@@ -110,6 +110,11 @@ function EmptyYet({
         </Typography>
       </>
     ),
+    calibracao: (
+      <Typography variant="h6" color={theme.palette.info.main}>
+        Nenhuma calibração reprovada encontrada.
+      </Typography>
+    ),
   };
 
   return (

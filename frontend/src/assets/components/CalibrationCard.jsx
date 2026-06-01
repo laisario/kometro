@@ -13,6 +13,7 @@ import useAssetMutations from '../hooks/useAssetMutations'
 
 function CalibrationCard({ calibration, theme, isMobile }) {
   const resultado = calibration?.resultados?.[0];
+  const resultados = calibration?.resultados || [];
   const [open, setOpen] = useState(false);
   const [analiseCliente, setAnaliseCliete] = useState({
     criticalAnalysis: "A",
@@ -87,14 +88,30 @@ function CalibrationCard({ calibration, theme, isMobile }) {
           && <Box sx={{ m: 0, display: 'flex', justifyContent: 'flex-end' }}>
             <Button sx={{ color: 'black', p: 0 }} onClick={readMore?.readMoreObservation?.readMore ? readLessObservation : readMoreObservation}>{readMore?.readMoreObservation?.readMore ? 'Ler menos' : 'Ler mais'}</Button>
           </Box>}
-        {resultado?.status
-          && <ContentRow title="Resultado" colorTitle='black' my={1} value={<Label color={statusColor[resultado.status]}>{statusLabel[resultado.status]}</Label>} />
-        }
-        {resultado?.maiorErro && (
-          <ContentRow title="Maior erro" value={resultado.maiorErro} />
-        )}
-        {resultado?.incerteza && (
-          <ContentRow title="Incerteza" value={resultado.incerteza} />
+        {!!resultados?.length && (
+          <Box mt={1}>
+            {resultados.map((resultado, index) => (
+              <Box key={resultado?.id || index} sx={{ mb: 1 }}>
+                {resultado?.status && (
+                  <ContentRow
+                    title={resultado?.criterio?.tipo || `Resultado ${index + 1}`}
+                    colorTitle='black'
+                    my={1}
+                    value={<Label color={statusColor[resultado.status]}>{statusLabel[resultado.status]}</Label>}
+                  />
+                )}
+                {resultado?.criterio?.criterioDeAceitacao && (
+                  <ContentRow title="Critério de aceitação" value={`${resultado.criterio.criterioDeAceitacao} ${resultado.criterio.unidade || ''}`.trim()} />
+                )}
+                {resultado?.maiorErro && (
+                  <ContentRow title="Maior erro" value={resultado.maiorErro} />
+                )}
+                {resultado?.incerteza && (
+                  <ContentRow title="Incerteza" value={resultado.incerteza} />
+                )}
+              </Box>
+            ))}
+          </Box>
         )}
         {(calibration?.analiseCritica)
           && <ContentRow title={calibration?.analiseCritica !== "P" ? "Sua análise crítica" : "Análise critica"} colorTitle='black' my={1} value={<Label color={analiseCriticaColor[calibration?.analiseCritica]}>{analiseCriticaLabel[calibration?.analiseCritica]}</Label>} />}

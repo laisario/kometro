@@ -9,7 +9,7 @@ import {
   Typography
 } from '@mui/material';
 import { FixedSizeList } from 'react-window';
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { fDate } from '../../utils/formatTime';
 
 
@@ -19,8 +19,21 @@ function Calibrations(props) {
     setSelectedCalibration, 
     selectedCalibration,
     isLoadingCalibrations,
-    checagem
+    checagem,
   } = props;
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedCalibration?.id || !calibrations?.length || !listRef.current) return;
+
+    const selectedIndex = calibrations.findIndex(
+      (calibration) => String(calibration?.id) === String(selectedCalibration.id)
+    );
+
+    if (selectedIndex >= 0) {
+      listRef.current.scrollToItem(selectedIndex, 'center');
+    }
+  }, [calibrations, selectedCalibration?.id]);
   
   function renderRow(props) {
     const { index, style } = props;
@@ -49,6 +62,7 @@ function Calibrations(props) {
         ? <Typography color='grey' fontWeight={400} textAlign='center'>{checagem ? "Nenhuma checagem cadastrada" : "Nenhuma calibração cadastrada"}</Typography> 
         : (
           <FixedSizeList
+            ref={listRef}
             height={300}
             width="100%"
             itemSize={55}

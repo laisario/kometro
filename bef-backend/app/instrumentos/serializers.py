@@ -24,6 +24,7 @@ from .models import (
 )
 from procedimentos.models import Procedimento
 from decimal import Decimal, InvalidOperation
+from django.db import transaction
 from rest_framework.validators import UniqueTogetherValidator
 from .utils import (
     calcular_data_proxima_calibracao_calendario,
@@ -409,6 +410,12 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
     maior_erro = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     incerteza = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     criterio = serializers.IntegerField(write_only=True, required=False, allow_null=True)
+    resultados = serializers.ListField(
+        child=serializers.DictField(),
+        write_only=True,
+        required=False,
+        allow_empty=False,
+    )
     
     class Meta:
         model = Calibracao
@@ -428,6 +435,7 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
             'maior_erro',
             'incerteza',
             'criterio',
+            'resultados',
         )
 
     def _decimal_from_input(self, value, field_name):
@@ -441,16 +449,21 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
                 field_name: "Informe um valor decimal válido."
             })
 
-    def _get_criterio(self, criterio_id):
+    def _get_criterio(self, criterio_id, instrumento=None, index=None):
         if not criterio_id:
             return None
 
-        try:
-            return CriterioAceitacao.objects.get(id=criterio_id)
-        except CriterioAceitacao.DoesNotExist:
+        criterio = CriterioAceitacao.objects.filter(id=criterio_id).first()
+        field = "criterio" if index is None else f"resultados[{index}].criterio"
+        if not criterio:
+            raise serializers.ValidationError({field: "Critério de aceitação não encontrado."})
+
+        if instrumento and criterio.instrumento_id != instrumento.id:
             raise serializers.ValidationError({
-                "criterio": "Critério de aceitação não encontrado."
+                field: "Critério de aceitação não pertence ao instrumento da calibração."
             })
+
+        return criterio
 
     def _resultado_status(self, maior_erro, incerteza, criterio_aceitacao):
         return (
@@ -459,42 +472,159 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
             else CalibracaoStatus.REPROVADO
         )
 
-    def create(self, validated_data):
-        criterio_data = validated_data.pop('criterio', None)
-        maior_erro_data = validated_data.pop('maior_erro', None)
-        incerteza_data = validated_data.pop('incerteza', None)
-        maior_erro = self._decimal_from_input(maior_erro_data, 'maior_erro')
-        incerteza = self._decimal_from_input(incerteza_data, 'incerteza')
-        criterio = self._get_criterio(criterio_data)
-        calibracao = Calibracao.objects.create(**validated_data)
-            
-        if (maior_erro or incerteza) and criterio is not None:
+    def _normalizar_resultados(
+        self,
+        resultados_data,
+        criterio_data,
+        maior_erro_data,
+        incerteza_data,
+        instrumento,
+        calibracao=None,
+    ):
+        legacy_payload = resultados_data is None
+        if resultados_data is None:
+            if not criterio_data and maior_erro_data in (None, "") and incerteza_data in (None, ""):
+                return []
+            resultados_data = [{
+                "criterio": criterio_data,
+                "maior_erro": maior_erro_data,
+                "incerteza": incerteza_data,
+            }]
+
+        resultados = []
+        criterios_vistos = set()
+
+        for index, resultado_data in enumerate(resultados_data):
+            resultado_id = resultado_data.get("id")
+            criterio_id = resultado_data.get("criterio")
+            maior_erro_data = resultado_data.get("maior_erro")
+            incerteza_data = resultado_data.get("incerteza")
+            criterio_field = "criterio" if legacy_payload else f"resultados[{index}].criterio"
+            maior_erro_field = "maior_erro" if legacy_payload else f"resultados[{index}].maior_erro"
+            incerteza_field = "incerteza" if legacy_payload else f"resultados[{index}].incerteza"
+
+            if not criterio_id:
+                raise serializers.ValidationError({criterio_field: "Informe o critério de aceitação."})
+            if maior_erro_data in (None, ""):
+                raise serializers.ValidationError({maior_erro_field: "Informe o maior erro."})
+            if incerteza_data in (None, ""):
+                incerteza_data = "0"
+
+            criterio = self._get_criterio(
+                criterio_id,
+                instrumento=instrumento,
+                index=None if legacy_payload else index,
+            )
+            if criterio.id in criterios_vistos:
+                raise serializers.ValidationError({
+                    "resultados": "Não é permitido repetir o mesmo critério na calibração."
+                })
+            criterios_vistos.add(criterio.id)
+
+            if resultado_id and calibracao:
+                resultado_existe = calibracao.resultados.filter(id=resultado_id).exists()
+                if not resultado_existe:
+                    raise serializers.ValidationError({
+                        f"resultados[{index}].id": "Resultado de calibração não pertence a esta calibração."
+                    })
+
+            maior_erro = self._decimal_from_input(
+                maior_erro_data,
+                maior_erro_field,
+            )
+            incerteza = self._decimal_from_input(
+                incerteza_data,
+                incerteza_field,
+            )
             status = self._resultado_status(
                 maior_erro,
                 incerteza,
                 criterio.criterio_de_aceitacao,
             )
+            resultados.append({
+                "id": resultado_id,
+                "criterio": criterio,
+                "maior_erro": maior_erro,
+                "incerteza": incerteza,
+                "status": status,
+            })
+
+        return resultados
+
+    def _criar_resultados(self, calibracao, resultados):
+        for resultado in resultados:
+            resultado = dict(resultado)
+            resultado.pop("id", None)
+            ResultadoCalibracao.objects.create(
+                calibracao=calibracao,
+                **resultado,
+            )
+
+    def _atualizar_resultados_incrementalmente(self, calibracao, resultados):
+        for resultado_data in resultados:
+            resultado_data = dict(resultado_data)
+            resultado_id = resultado_data.pop("id", None)
+
+            if resultado_id:
+                resultado = calibracao.resultados.get(id=resultado_id)
+            else:
+                resultado = calibracao.resultados.filter(
+                    criterio=resultado_data["criterio"]
+                ).first()
+
+            if resultado:
+                for attr, value in resultado_data.items():
+                    setattr(resultado, attr, value)
+                resultado.save()
+                continue
 
             ResultadoCalibracao.objects.create(
                 calibracao=calibracao,
-                criterio=criterio,
-                maior_erro=maior_erro,
-                incerteza=incerteza,
-                status=status
+                **resultado_data,
             )
 
+    @transaction.atomic
+    def create(self, validated_data):
+        criterio_data = validated_data.pop('criterio', None)
+        maior_erro_data = validated_data.pop('maior_erro', None)
+        incerteza_data = validated_data.pop('incerteza', None)
+        resultados_data = validated_data.pop('resultados', None)
+        instrumento = validated_data.get("instrumento")
+        resultados = self._normalizar_resultados(
+            resultados_data,
+            criterio_data,
+            maior_erro_data,
+            incerteza_data,
+            instrumento,
+        )
+        calibracao = Calibracao.objects.create(**validated_data)
+        self._criar_resultados(calibracao, resultados)
         return calibracao
     
+    @transaction.atomic
     def update(self, instance, validated_data):
         criterio_data = validated_data.pop('criterio', None)
         maior_erro_data = validated_data.pop('maior_erro', serializers.empty)
         incerteza_data = validated_data.pop('incerteza', serializers.empty)
+        resultados_data = validated_data.pop('resultados', serializers.empty)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        criterio = self._get_criterio(criterio_data)
+        if resultados_data is not serializers.empty:
+            resultados = self._normalizar_resultados(
+                resultados_data,
+                None,
+                None,
+                None,
+                instance.instrumento,
+                calibracao=instance,
+            )
+            self._atualizar_resultados_incrementalmente(instance, resultados)
+            return instance
+
+        criterio = self._get_criterio(criterio_data, instrumento=instance.instrumento)
         maior_erro_recebido = maior_erro_data is not serializers.empty
         incerteza_recebida = incerteza_data is not serializers.empty
         resultado_atual = instance.resultados.first()
@@ -516,15 +646,24 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
                 criterio.criterio_de_aceitacao,
             )
 
-            resultado, created = ResultadoCalibracao.objects.update_or_create(
-                calibracao=instance,
-                defaults={
-                    "criterio": criterio,
-                    "maior_erro": maior_erro,
-                    "incerteza": incerteza,
-                    "status": status,
-                },
-            )
+            resultado = instance.resultados.filter(criterio=criterio).first()
+            if not resultado:
+                resultado = instance.resultados.first()
+
+            if resultado:
+                resultado.criterio = criterio
+                resultado.maior_erro = maior_erro
+                resultado.incerteza = incerteza
+                resultado.status = status
+                resultado.save()
+            else:
+                ResultadoCalibracao.objects.create(
+                    calibracao=instance,
+                    criterio=criterio,
+                    maior_erro=maior_erro,
+                    incerteza=incerteza,
+                    status=status,
+                )
         return instance
 
 

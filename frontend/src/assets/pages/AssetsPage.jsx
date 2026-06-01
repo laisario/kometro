@@ -19,6 +19,7 @@ function AssetsPage() {
   const { id, idSetor } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentTab, setCurrentTab] = useState(searchParams.get('tab') || 'tree');
+  const selectedCalibrationId = searchParams.get('calibracaoId');
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -251,6 +252,7 @@ function AssetsPage() {
                   isLoadingUpdateClient={isLoadingUpdateClient}
                   mutateDeleteClient={mutateDeleteClient}
                   mutateChangePosition={mutateChangePosition}
+                  selectedCalibrationId={selectedCalibrationId}
                 />
                 </Box>
             )}
