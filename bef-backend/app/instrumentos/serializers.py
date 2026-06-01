@@ -1430,6 +1430,7 @@ class InstrumentoDoClienteReadAdminSerializer(serializers.ModelSerializer):
         )
 
 class SetorSerializer(serializers.ModelSerializer):
+    nome = serializers.CharField(allow_blank=True)
     setor_pai_id = serializers.PrimaryKeyRelatedField(
         queryset=Setor.objects.all(), source='setor_pai',
         write_only=True, required=False, allow_null=True
@@ -1449,6 +1450,12 @@ class SetorSerializer(serializers.ModelSerializer):
 
         if not nome or not cliente:
             return attrs
+
+        nome = str(nome).strip()
+        if not nome:
+            return attrs
+        if "nome" in attrs:
+            attrs["nome"] = nome
 
         duplicados = Setor.objects.filter(
             nome=nome,

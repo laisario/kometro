@@ -117,7 +117,7 @@ const useAssetsVm = (id, idSetor) => {
 
   const handleCreate = (selectedItem) => {
     const params = {
-      nome: "Novo setor",
+      nome: "",
       cliente: user?.cliente,
     }
     if (selectedItem) {

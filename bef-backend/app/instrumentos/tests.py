@@ -200,6 +200,51 @@ class InstrumentoDoClienteSetorDuplicadoTest(TestCase):
 
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_setor_serializer_permite_multiplos_setores_temporarios_com_nome_vazio(self):
+        Setor.objects.create(nome="", cliente=self.cliente)
+
+        serializer = SetorSerializer(data={
+            "nome": "",
+            "cliente": self.cliente.id,
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        setor = serializer.save()
+        self.assertEqual(setor.nome, "")
+
+    def test_setor_serializer_permite_multiplos_setores_temporarios_com_nome_em_branco(self):
+        Setor.objects.create(nome="   ", cliente=self.cliente)
+
+        serializer = SetorSerializer(data={
+            "nome": "   ",
+            "cliente": self.cliente.id,
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
+    def test_setor_serializer_bloqueia_editar_setor_temporario_para_nome_real_duplicado(self):
+        Setor.objects.create(nome="Laboratorio", cliente=self.cliente)
+        setor_temporario = Setor.objects.create(nome="", cliente=self.cliente)
+
+        serializer = SetorSerializer(
+            setor_temporario,
+            data={"nome": "Laboratorio", "cliente": self.cliente.id},
+            partial=True,
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("nome", serializer.errors)
+
+    def test_setor_serializer_remove_espacos_de_nome_real_ao_salvar(self):
+        serializer = SetorSerializer(data={
+            "nome": "  Laboratorio  ",
+            "cliente": self.cliente.id,
+        })
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        setor = serializer.save()
+        self.assertEqual(setor.nome, "Laboratorio")
+
 
 class CalibracaoResultadoHistoricoTest(TestCase):
     def setUp(self):
