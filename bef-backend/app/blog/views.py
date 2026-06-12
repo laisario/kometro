@@ -9,7 +9,11 @@ class PostViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPagination
     
     def get_queryset(self):
-        queryset = Post.objects.filter(visivel=True).order_by("-publicado_em")
+        queryset = (
+            Post.objects.filter(visivel=True)
+            .prefetch_related("imagens_adicionais", "videos_url", "arquivos")
+            .order_by("-publicado_em")
+        )
         categoria_id = self.request.query_params.get("categoria")
         
         if categoria_id and categoria_id != "todas":
@@ -21,7 +25,11 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["get"], pagination_class=None)
     def featured(self, request):
         categoria_id = request.query_params.get("categoria")
-        queryset = Post.objects.filter(visivel=True, destaque=True).order_by("-publicado_em")
+        queryset = (
+            Post.objects.filter(visivel=True, destaque=True)
+            .prefetch_related("imagens_adicionais", "videos_url", "arquivos")
+            .order_by("-publicado_em")
+        )
 
         if categoria_id and categoria_id != "todas":
             queryset = queryset.filter(categoria_id=categoria_id)

@@ -5,6 +5,7 @@ import 'swiper/css/effect-cards';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 import CarouselVideo from "@layouts/components/CarouselVideo";
+import PostFiles from "@layouts/components/PostFiles";
 import xss from "xss";
 import Image from "next/image";
 
@@ -27,6 +28,8 @@ export default function KnowledgePost({ post }) {
             dangerouslySetInnerHTML={{ __html: xss(post?.texto) }}
           />
         )}
+
+        <PostFiles files={post?.arquivos} />
 
         {!!post?.imagens_adicionais?.length && (
           <div className="w-full flex justify-center">
