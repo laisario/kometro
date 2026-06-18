@@ -10,5 +10,5 @@ info:
   contacts: 
     - "Telefone: 24 98809 5115"
     - "Email: [contato@kometro.com.br](mailto:contato@kometro.com.br)"
-    - "Endereço: Rod. Benjamim Constanti, 4703, Lote 06 – km 05 – Pinheiral – RJ – CEP 27197-000"
+    - "Endereço: Rod. Benjamim Constanti, 4703, Lote 06 – km 05 – Pinheiral – RJ – CEP 27199-400"
 ---
