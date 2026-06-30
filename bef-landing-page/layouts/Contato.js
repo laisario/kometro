@@ -6,28 +6,48 @@ const Contato = ({ data }) => {
   const { frontmatter } = data;
   const { title, info, email } = frontmatter;
   const { contact_form_action } = config.params;
-  const [emailSent, setEmailSent] = useState(false)
+  const [emailSent, setEmailSent] = useState(false);
+
+  const parseMailResponse = (responseText) => {
+    const trimmedResponse = responseText.trim();
+
+    try {
+      return JSON.parse(trimmedResponse);
+    } catch (_error) {
+      const jsonMatch = trimmedResponse.match(/\{[\s\S]*\}$/);
+
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    }
+
+    return null;
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
-    const formData = new FormData(e.target)
-  
+    e.preventDefault();
+    const form = e.target;
+    const formData = new FormData(form);
+
     try {
       const res = await fetch(contact_form_action, {
         method: "POST",
         body: formData,
-      })
-  
-      const data = await res.json()
-      if (data.success) {
-        setEmailSent(true)
+      });
+
+      const responseText = await res.text();
+      const responseData = parseMailResponse(responseText);
+
+      if (res.ok && responseData?.success) {
+        setEmailSent(true);
+        form.reset();
       } else {
-        alert(data.error || "Erro ao enviar a mensagem")
+        alert(responseData?.error || email?.error || "Erro ao enviar a mensagem");
       }
-    } catch (err) {
-      alert("Erro ao enviar a mensagem")
+    } catch (_err) {
+      alert(email?.error || "Erro ao enviar a mensagem");
     }
-  }
+  };
 
   return (
     <section className="section">
@@ -70,7 +90,9 @@ const Contato = ({ data }) => {
               />
           
               {emailSent ? (
-                <p className="text-white bg-lime-500 p-3 rounded">Mensagem enviada ✔️</p>
+                <p className="text-white bg-lime-500 p-3 rounded">
+                  {email?.success || "Mensagem enviada"}
+                </p>
               ) : (
                 <button type="submit" className="btn btn-primary">Enviar mensagem</button>
               )}
