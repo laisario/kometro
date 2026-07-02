@@ -341,6 +341,99 @@ class CalibracaoResultadoHistoricoTest(TestCase):
         self.assertEqual(resultados[1].maior_erro, Decimal("0.004"))
         self.assertEqual(resultados[1].incerteza, Decimal("0.001"))
 
+    def test_cria_calibracao_com_resultados_vazios(self):
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-SEM-RESULTADOS",
+                "resultados": [],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(
+            Calibracao.objects.filter(id=response.data["id"]).exists()
+        )
+        self.assertEqual(
+            ResultadoCalibracao.objects.filter(
+                calibracao_id=response.data["id"]
+            ).count(),
+            0,
+        )
+
+    def test_cria_calibracao_sem_enviar_resultados(self):
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-SEM-CAMPO-RESULTADOS",
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertTrue(
+            Calibracao.objects.filter(id=response.data["id"]).exists()
+        )
+        self.assertEqual(
+            ResultadoCalibracao.objects.filter(
+                calibracao_id=response.data["id"]
+            ).count(),
+            0,
+        )
+
+    def test_cria_checagem_com_resultados_vazios(self):
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-CHECAGEM-VAZIA",
+                "resultados": [],
+                "checagem": True,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        calibracao = Calibracao.objects.get(id=response.data["id"])
+        self.assertTrue(calibracao.checagem)
+        self.assertEqual(calibracao.resultados.count(), 0)
+
+    def test_resultado_incompleto_continua_falhando_com_mensagem_clara(self):
+        response = self.api.post(
+            "/calibracoes/",
+            {
+                "instrumento": self.instrumento.id,
+                "local": "P",
+                "data": "2026-05-28",
+                "ordem_de_servico": "OS-RESULTADO-INCOMPLETO",
+                "resultados": [
+                    {
+                        "criterio": self.criterio.id,
+                        "incerteza": "0.002",
+                    }
+                ],
+                "checagem": False,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(
+            response.data["resultados[0].maior_erro"][0],
+            "Informe o maior erro.",
+        )
+
     def test_calibracao_rejeita_criterio_de_outro_instrumento(self):
         outro_instrumento = InstrumentoDoCliente.objects.create(
             cliente=self.cliente,

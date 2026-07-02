@@ -414,7 +414,6 @@ class CalibracaoWriteSerializer(serializers.ModelSerializer):
         child=serializers.DictField(),
         write_only=True,
         required=False,
-        allow_empty=False,
     )
     
     class Meta:
