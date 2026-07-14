@@ -13,6 +13,7 @@ class MediaStorage(S3Boto3Storage):
     querystring_auth = False
 
     def __init__(self, *args, **kwargs):
+        kwargs.setdefault("location", getattr(settings, "AWS_MEDIA_LOCATION", self.location))
         super().__init__(*args, **kwargs)
         self.default_acl = getattr(settings, "AWS_DEFAULT_ACL", self.default_acl)
         self.querystring_auth = getattr(

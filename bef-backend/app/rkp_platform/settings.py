@@ -288,6 +288,7 @@ if USE_MINIO:
     AWS_S3_REGION_NAME = "us-east-1"
     AWS_S3_OBJECT_PARAMETERS = {}
     AWS_LOCATION = "static"
+    AWS_MEDIA_LOCATION = os.getenv("AWS_MEDIA_LOCATION", "media")
     AWS_DEFAULT_ACL = "public-read"
     AWS_S3_ADDRESSING_STYLE = "path"
     AWS_QUERYSTRING_AUTH = False
@@ -312,6 +313,7 @@ else:
         "CacheControl": "max-age=86400",
     }
     AWS_LOCATION = "static"
+    AWS_MEDIA_LOCATION = os.getenv("AWS_MEDIA_LOCATION", "kometro/media")
     AWS_DEFAULT_ACL = "public-read"
     AWS_QUERYSTRING_AUTH = os.getenv("AWS_QUERYSTRING_AUTH", "false").lower() == "true"
 
@@ -326,7 +328,12 @@ else:
             ),
         )
     )
-    MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/kometro/media/")
+    MEDIA_URL = _join_url_path(
+        os.getenv(
+            "MEDIA_URL",
+            _join_url_path(f"https://{AWS_S3_CUSTOM_DOMAIN}", AWS_MEDIA_LOCATION),
+        )
+    )
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 
 # celery

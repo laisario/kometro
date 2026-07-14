@@ -63,6 +63,45 @@ class MediaStorageUrlTests(SimpleTestCase):
         self.assertIsInstance(field.storage, BlogPublicMediaStorage)
 
     @override_settings(
+        MEDIA_URL="https://kometro.nyc3.digitaloceanspaces.com/kometro/media/",
+        AWS_MEDIA_LOCATION="kometro/media",
+        AWS_QUERYSTRING_AUTH=False,
+    )
+    def test_media_storage_uses_same_prefix_for_location_and_url(self):
+        storage = MediaStorage()
+
+        self.assertEqual(storage.location, "kometro/media")
+        self.assertEqual(
+            storage._normalize_name("blog/posts/aaaaaaa.jpg"),
+            "kometro/media/blog/posts/aaaaaaa.jpg",
+        )
+        self.assertEqual(
+            storage.url("blog/posts/aaaaaaa.jpg"),
+            "https://kometro.nyc3.digitaloceanspaces.com/kometro/media/blog/posts/aaaaaaa.jpg",
+        )
+
+    @override_settings(
+        MEDIA_URL="https://kometro.nyc3.digitaloceanspaces.com/kometro/media/",
+        AWS_MEDIA_LOCATION="kometro/media",
+        AWS_QUERYSTRING_AUTH=True,
+        AWS_DEFAULT_ACL="private",
+    )
+    def test_blog_public_storage_uses_media_prefix_and_unsigned_public_url(self):
+        storage = BlogPublicMediaStorage()
+
+        self.assertEqual(storage.location, "kometro/media")
+        self.assertEqual(
+            storage._normalize_name("blog/posts/arquivos/file.pdf"),
+            "kometro/media/blog/posts/arquivos/file.pdf",
+        )
+        self.assertEqual(
+            storage.url("blog/posts/arquivos/file.pdf"),
+            "https://kometro.nyc3.digitaloceanspaces.com/kometro/media/blog/posts/arquivos/file.pdf",
+        )
+        self.assertEqual(storage.default_acl, "public-read")
+        self.assertFalse(storage.querystring_auth)
+
+    @override_settings(
         STATIC_URL="https://kometro.nyc3.digitaloceanspaces.com/static/",
         AWS_S3_CUSTOM_DOMAIN="kometro.nyc3.cdn.digitaloceanspaces.com/landing-page",
     )
