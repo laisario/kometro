@@ -258,17 +258,26 @@ if USE_MINIO:
 else:
     AWS_ACCESS_KEY_ID = os.getenv("DIGITAL_OCEAN_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = os.getenv("DIGITAL_OCEAN_SECRET_ACCESS_KEY")
-    AWS_STORAGE_BUCKET_NAME = "kometro"
-    AWS_S3_REGION_NAME = "nyc3"
-    AWS_S3_ENDPOINT_URL = "https://kometro.nyc3.digitaloceanspaces.com"
+    AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "kometro")
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "nyc3")
+    AWS_S3_ENDPOINT_URL = os.getenv(
+        "AWS_S3_ENDPOINT_URL",
+        f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com",
+    )
+    AWS_S3_CUSTOM_DOMAIN = os.getenv(
+        "AWS_S3_CUSTOM_DOMAIN",
+        f"{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.digitaloceanspaces.com",
+    )
     AWS_S3_OBJECT_PARAMETERS = {
         "CacheControl": "max-age=86400",
     }
     AWS_LOCATION = "static"
     AWS_DEFAULT_ACL = "public-read"
+    AWS_QUERYSTRING_AUTH = os.getenv("AWS_QUERYSTRING_AUTH", "false").lower() == "true"
 
     STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-    STATIC_URL = "%s/%s/" % (AWS_S3_ENDPOINT_URL, AWS_LOCATION)
+    STATIC_URL = os.getenv("STATIC_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/")
+    MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/media/")
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 
 # celery
