@@ -275,8 +275,8 @@ else:
     AWS_DEFAULT_ACL = "public-read"
     AWS_QUERYSTRING_AUTH = os.getenv("AWS_QUERYSTRING_AUTH", "false").lower() == "true"
 
-    STATICFILES_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-    STATIC_URL = os.getenv("STATIC_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/{AWS_LOCATION}/")
+    STATICFILES_STORAGE = "rkp_platform.storage_backends.StaticStorage"
+    STATIC_URL = os.getenv("STATIC_URL", f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_LOCATION}/")
     MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/media/")
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 

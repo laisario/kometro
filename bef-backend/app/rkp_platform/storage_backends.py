@@ -46,6 +46,38 @@ class MediaStorage(S3Boto3Storage):
         )
 
 
+class StaticStorage(S3Boto3Storage):
+    location = "static"
+    default_acl = "public-read"
+    querystring_auth = False
+
+    def url(self, name, parameters=None, expire=None, http_method=None):
+        if not name:
+            return ""
+
+        static_url = getattr(settings, "STATIC_URL", "")
+        if static_url.startswith(("http://", "https://")):
+            clean_name = filepath_to_uri(str(name).lstrip("/"))
+            return urljoin(static_url.rstrip("/") + "/", clean_name)
+
+        return super().url(
+            name,
+            parameters=parameters,
+            expire=expire,
+            http_method=http_method,
+        )
+
+
+class BlogPublicMediaStorage(MediaStorage):
+    default_acl = "public-read"
+    querystring_auth = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.default_acl = "public-read"
+        self.querystring_auth = False
+
+
 class MinIOMediaStorage(S3Boto3Storage):
     location = "media"
     file_overwrite = False

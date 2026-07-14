@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.db import models
 from djrichtextfield.models import RichTextField
+from rkp_platform.storage_backends import BlogPublicMediaStorage
 
 
 BLOG_POST_FILE_ALLOWED_TYPES = {
@@ -74,7 +75,10 @@ class ArquivoPost(models.Model):
     post = models.ForeignKey(
         Post, on_delete=models.CASCADE, related_name="arquivos"
     )
-    arquivo = models.FileField(upload_to="blog/posts/arquivos/")
+    arquivo = models.FileField(
+        storage=BlogPublicMediaStorage(),
+        upload_to="blog/posts/arquivos/",
+    )
     nome_original = models.CharField(max_length=255, blank=True)
     titulo = models.CharField(max_length=255, blank=True)
     tipo = models.CharField(max_length=100, blank=True, null=True)
