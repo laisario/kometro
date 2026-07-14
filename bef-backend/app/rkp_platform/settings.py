@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
 
 from dotenv import load_dotenv
 
@@ -25,6 +26,45 @@ load_dotenv(DOTENV_PATH)
 from import_export.formats.base_formats import XLSX
 
 IMPORT_EXPORT_FORMATS = [XLSX]
+
+
+def _join_url_path(base_url, *parts):
+    parsed = urlparse(base_url.rstrip("/") + "/")
+    path_segments = []
+    for segment in parsed.path.split("/"):
+        if not segment:
+            continue
+        if path_segments and path_segments[-1] == segment:
+            continue
+        path_segments.append(segment)
+
+    for value in parts:
+        for segment in str(value).split("/"):
+            if not segment:
+                continue
+            if path_segments and path_segments[-1] == segment:
+                continue
+            path_segments.append(segment)
+
+    path = "/" + "/".join(path_segments) + "/" if path_segments else "/"
+    return urlunparse((parsed.scheme, parsed.netloc, path, "", "", ""))
+
+
+def _url_contains_bucket(base_url, bucket_name):
+    parsed = urlparse(base_url)
+    path_segments = [segment for segment in parsed.path.split("/") if segment]
+    host = parsed.netloc.split("@")[-1].split(":")[0]
+    return host.startswith(f"{bucket_name}.") or (
+        bool(path_segments) and path_segments[0] == bucket_name
+    )
+
+
+def _digitalocean_static_url(endpoint_url, bucket_name, location):
+    parts = []
+    if not _url_contains_bucket(endpoint_url, bucket_name):
+        parts.append(bucket_name)
+    parts.append(location)
+    return _join_url_path(endpoint_url, *parts)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -65,7 +105,7 @@ INSTALLED_APPS = [
     "storages",
     "djmail",
     "avaliacoes",
-    "blog",
+    "blog.apps.BlogConfig",
     "equipamentos",
     "ordem_servico",
 ]
@@ -276,7 +316,16 @@ else:
     AWS_QUERYSTRING_AUTH = os.getenv("AWS_QUERYSTRING_AUTH", "false").lower() == "true"
 
     STATICFILES_STORAGE = "rkp_platform.storage_backends.StaticStorage"
-    STATIC_URL = os.getenv("STATIC_URL", f"{AWS_S3_ENDPOINT_URL.rstrip('/')}/{AWS_LOCATION}/")
+    STATIC_URL = _join_url_path(
+        os.getenv(
+            "STATIC_URL",
+            _digitalocean_static_url(
+                AWS_S3_ENDPOINT_URL,
+                AWS_STORAGE_BUCKET_NAME,
+                AWS_LOCATION,
+            ),
+        )
+    )
     MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/media/")
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 

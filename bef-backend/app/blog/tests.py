@@ -1,6 +1,7 @@
 from django.test import SimpleTestCase, override_settings
 
 from blog.models import ArquivoPost
+from rkp_platform.settings import _digitalocean_static_url, _join_url_path
 from rkp_platform.storage_backends import BlogPublicMediaStorage, MediaStorage, StaticStorage
 
 
@@ -74,3 +75,35 @@ class MediaStorageUrlTests(SimpleTestCase):
             url,
             "https://kometro.nyc3.digitaloceanspaces.com/static/admin/css/base.css",
         )
+
+    def test_digitalocean_static_url_adds_bucket_for_path_style_endpoint(self):
+        url = _digitalocean_static_url(
+            "https://nyc3.digitaloceanspaces.com",
+            "kometro",
+            "static",
+        )
+
+        self.assertEqual(url, "https://nyc3.digitaloceanspaces.com/kometro/static/")
+
+    def test_digitalocean_static_url_does_not_duplicate_bucket_for_virtual_host_endpoint(self):
+        url = _digitalocean_static_url(
+            "https://kometro.nyc3.digitaloceanspaces.com",
+            "kometro",
+            "static",
+        )
+
+        self.assertEqual(url, "https://kometro.nyc3.digitaloceanspaces.com/static/")
+
+    def test_digitalocean_static_url_does_not_duplicate_bucket_in_endpoint_path(self):
+        url = _digitalocean_static_url(
+            "https://nyc3.digitaloceanspaces.com/kometro",
+            "kometro",
+            "static",
+        )
+
+        self.assertEqual(url, "https://nyc3.digitaloceanspaces.com/kometro/static/")
+
+    def test_static_url_normalization_collapses_adjacent_duplicate_segments(self):
+        url = _join_url_path("https://nyc3.digitaloceanspaces.com/kometro/kometro/static/")
+
+        self.assertEqual(url, "https://nyc3.digitaloceanspaces.com/kometro/static/")
