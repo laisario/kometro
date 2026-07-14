@@ -326,7 +326,7 @@ else:
             ),
         )
     )
-    MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/media/")
+    MEDIA_URL = os.getenv("MEDIA_URL", f"https://{AWS_S3_CUSTOM_DOMAIN}/kometro/media/")
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 
 # celery
