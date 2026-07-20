@@ -66,6 +66,21 @@ def _digitalocean_static_url(endpoint_url, bucket_name, location):
     parts.append(location)
     return _join_url_path(endpoint_url, *parts)
 
+
+def _canonical_media_location(location, bucket_name):
+    clean_location = str(location or "media").strip("/")
+    media_root_prefix = str(bucket_name or "").strip("/")
+
+    if not media_root_prefix:
+        return clean_location
+
+    if clean_location == media_root_prefix or clean_location.startswith(
+        f"{media_root_prefix}/"
+    ):
+        return clean_location
+
+    return f"{media_root_prefix}/{clean_location}"
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -313,7 +328,11 @@ else:
         "CacheControl": "max-age=86400",
     }
     AWS_LOCATION = "static"
-    AWS_MEDIA_LOCATION = os.getenv("AWS_MEDIA_LOCATION", "kometro/media")
+    AWS_MEDIA_LOCATION = _canonical_media_location(
+        os.getenv("AWS_MEDIA_LOCATION", "media"),
+        AWS_STORAGE_BUCKET_NAME,
+    )
+    AWS_LEGACY_MEDIA_LOCATION = os.getenv("AWS_LEGACY_MEDIA_LOCATION", "media")
     AWS_DEFAULT_ACL = "public-read"
     AWS_QUERYSTRING_AUTH = os.getenv("AWS_QUERYSTRING_AUTH", "false").lower() == "true"
 

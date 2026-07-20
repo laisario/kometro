@@ -2,8 +2,22 @@ import os
 from urllib.parse import urljoin
 
 from django.conf import settings
+from django.core.exceptions import SuspiciousOperation
 from django.utils.encoding import filepath_to_uri
+from storages.utils import clean_name, safe_join
 from storages.backends.s3boto3 import S3Boto3Storage
+
+
+def _strip_known_media_prefix(name):
+    clean = str(name).lstrip("/")
+    media_location = str(getattr(settings, "AWS_MEDIA_LOCATION", "")).strip("/")
+    legacy_location = str(getattr(settings, "AWS_LEGACY_MEDIA_LOCATION", "")).strip("/")
+
+    for prefix in (media_location, legacy_location):
+        if prefix and clean.startswith(f"{prefix}/"):
+            return clean[len(prefix) + 1 :]
+
+    return clean
 
 
 class MediaStorage(S3Boto3Storage):
@@ -22,6 +36,19 @@ class MediaStorage(S3Boto3Storage):
             self.querystring_auth,
         )
 
+    def _normalize_name(self, name):
+        clean = clean_name(name)
+        location = str(self.location or "").strip("/")
+        if location and clean.startswith(f"{location}/"):
+            return clean
+
+        clean = _strip_known_media_prefix(clean)
+
+        try:
+            return safe_join(self.location, clean)
+        except ValueError:
+            raise SuspiciousOperation("Attempted access to '%s' denied." % name)
+
     def url(self, name, parameters=None, expire=None, http_method=None):
         if not name:
             return ""
@@ -36,7 +63,7 @@ class MediaStorage(S3Boto3Storage):
 
         media_url = getattr(settings, "MEDIA_URL", "")
         if media_url.startswith(("http://", "https://")):
-            clean_name = filepath_to_uri(str(name).lstrip("/"))
+            clean_name = filepath_to_uri(_strip_known_media_prefix(name))
             return urljoin(media_url.rstrip("/") + "/", clean_name)
 
         return super().url(

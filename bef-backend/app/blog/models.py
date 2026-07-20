@@ -103,13 +103,23 @@ class ArquivoPost(models.Model):
         if content_type:
             return content_type
 
-        file_obj = getattr(self.arquivo, "file", None)
-        content_type = getattr(file_obj, "content_type", None)
-        if content_type:
-            return content_type
+        if not getattr(self.arquivo, "_committed", True):
+            file_obj = getattr(self.arquivo, "file", None)
+            content_type = getattr(file_obj, "content_type", None)
+            if content_type:
+                return content_type
 
         guessed_type, _ = mimetypes.guess_type(self.arquivo.name)
         return guessed_type
+
+    def _get_file_size(self):
+        if not self.arquivo:
+            return None
+
+        if getattr(self.arquivo, "_committed", True):
+            return self.tamanho
+
+        return getattr(self.arquivo, "size", None)
 
     def clean(self):
         super().clean()
@@ -149,7 +159,7 @@ class ArquivoPost(models.Model):
 
         max_size_mb = getattr(settings, "BLOG_POST_FILE_MAX_SIZE_MB", 20)
         max_size = max_size_mb * 1024 * 1024
-        size = getattr(self.arquivo, "size", None)
+        size = self._get_file_size()
 
         if size and size > max_size:
             raise ValidationError(
@@ -166,7 +176,7 @@ class ArquivoPost(models.Model):
             if not self.tipo:
                 self.tipo = self._get_content_type()
             if not self.tamanho:
-                self.tamanho = getattr(self.arquivo, "size", None)
+                self.tamanho = self._get_file_size()
 
         self.full_clean()
         super().save(*args, **kwargs)
