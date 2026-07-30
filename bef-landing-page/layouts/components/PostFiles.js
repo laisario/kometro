@@ -1,4 +1,6 @@
 import { ExternalLink, FileText } from "lucide-react";
+import { useCallback, useState } from "react";
+import PostFileAccessDialog from "./PostFileAccessDialog";
 
 const formatFileSize = (size) => {
   if (!size || Number.isNaN(Number(size))) {
@@ -25,6 +27,9 @@ const getFileLabel = (file) => {
 };
 
 export default function PostFiles({ files }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const closeDialog = useCallback(() => setSelectedFile(null), []);
+
   if (!Array.isArray(files) || files.length === 0) {
     return null;
   }
@@ -62,21 +67,22 @@ export default function PostFiles({ files }) {
                 </div>
               </div>
 
-              {file?.url && (
-                <a
-                  href={file.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {file?.id && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedFile(file)}
                   className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-semibold text-white transition hover:opacity-90"
                 >
-                  Abrir ou baixar
+                  Abrir ou baixar arquivo
                   <ExternalLink size={16} aria-hidden="true" />
-                </a>
+                </button>
               )}
             </div>
           );
         })}
       </div>
+
+      <PostFileAccessDialog file={selectedFile} onClose={closeDialog} />
     </section>
   );
 }

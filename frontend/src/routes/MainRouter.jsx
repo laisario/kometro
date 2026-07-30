@@ -22,6 +22,7 @@ import RegisterFromInvite from '../auth/pages/ResgisterFromInvite.jsx';
 import ResetPasswordRequestPage from '../auth/pages/ResetPasswordRequestPage.jsx';
 import ResetPasswordPage from '../auth/pages/ResetPasswordPage.jsx';
 import EquipePage from '../equipe/pages/EquipePage.jsx';
+import FileAccessRequestsPage from '../blog/pages/FileAccessRequestsPage.jsx';
 
 
 export default function MainRouter() {
@@ -74,6 +75,7 @@ export default function MainRouter() {
         <Route path="cliente/:id" element={<ClientDetailsPage />} />
         <Route path="acessos" element={<UserAccessPage />} />
         <Route path="ordens-servico" element={<EquipePage />} />
+        <Route path="solicitacoes-arquivos" element={<FileAccessRequestsPage />} />
       </Route>
 
       <Route element={<SimpleLayout />}>

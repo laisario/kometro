@@ -1,16 +1,26 @@
+from datetime import timedelta
 from unittest.mock import patch
 
+from django.contrib import admin
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
+from rest_framework.test import APIClient
 
-from blog.models import ArquivoPost, Post
+from blog.admin import SolicitacaoAcessoArquivoPostAdmin
+from blog.models import ArquivoPost, Post, SolicitacaoAcessoArquivoPost
 from rkp_platform.settings import (
     _canonical_media_location,
     _digitalocean_static_url,
     _join_url_path,
 )
-from rkp_platform.storage_backends import BlogPublicMediaStorage, MediaStorage, StaticStorage
+from rkp_platform.storage_backends import (
+    BlogPublicMediaStorage,
+    MediaStorage,
+    StaticStorage,
+)
 
 
 class InMemoryBlogMediaStorage(BlogPublicMediaStorage):
@@ -99,10 +109,12 @@ class MediaStorageUrlTests(SimpleTestCase):
         self.assertEqual(storage.default_acl, "public-read")
         self.assertFalse(storage.querystring_auth)
 
-    def test_blog_attachment_field_uses_public_storage(self):
+    def test_blog_attachment_field_keeps_public_storage(self):
         field = ArquivoPost._meta.get_field("arquivo")
 
         self.assertIsInstance(field.storage, BlogPublicMediaStorage)
+        self.assertEqual(field.storage.default_acl, "public-read")
+        self.assertFalse(field.storage.querystring_auth)
 
     @override_settings(
         MEDIA_URL="https://kometro.nyc3.digitaloceanspaces.com/kometro/media/",
@@ -380,3 +392,239 @@ class BlogUploadPathAndVisibilityTests(SimpleTestCase):
 
         self.assertEqual(self.attachment_storage.opened_keys, [])
         self.assertEqual(self.attachment_storage.size_keys, [])
+
+
+class BlogAttachmentAccessTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.storage = InMemoryBlogMediaStorage()
+        attachment_field = ArquivoPost._meta.get_field("arquivo")
+        self.storage_patcher = patch.object(
+            attachment_field,
+            "storage",
+            self.storage,
+        )
+        self.storage_patcher.start()
+        self.addCleanup(self.storage_patcher.stop)
+
+        self.post = Post.objects.create(
+            titulo="Post com material",
+            visivel=True,
+        )
+        self.arquivo = ArquivoPost.objects.create(
+            post=self.post,
+            arquivo=SimpleUploadedFile(
+                "material.pdf",
+                b"%PDF-1.4 material",
+                content_type="application/pdf",
+            ),
+            titulo="Material técnico",
+        )
+
+    def test_post_publico_nao_expoe_url_direta_do_anexo(self):
+        response = self.api.get(f"/posts/{self.post.id}/")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(len(response.data["arquivos"]), 1)
+        self.assertNotIn("url", response.data["arquivos"][0])
+        self.assertEqual(response.data["arquivos"][0]["id"], self.arquivo.id)
+
+    def test_submissao_valida_e_vinculada_ao_arquivo_retorna_url_existente(self):
+        with patch.object(
+            self.storage,
+            "url",
+            return_value="https://files.example.com/material.pdf",
+        ) as url_mock:
+            response = self.api.post(
+                f"/blog/arquivos/{self.arquivo.id}/acesso/",
+                {
+                    "nome": "Maria da Silva",
+                    "empresa": "Empresa Exemplo",
+                    "email": "maria@example.com",
+                    "telefone": "+55 24 99999-9999",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        solicitacao = SolicitacaoAcessoArquivoPost.objects.get()
+        self.assertEqual(solicitacao.arquivo, self.arquivo)
+        self.assertEqual(solicitacao.nome, "Maria da Silva")
+        self.assertEqual(solicitacao.empresa, "Empresa Exemplo")
+        self.assertEqual(solicitacao.email, "maria@example.com")
+        self.assertEqual(solicitacao.telefone, "+55 24 99999-9999")
+        self.assertEqual(response.data["arquivo"], self.arquivo.id)
+        self.assertEqual(
+            response.data["download_url"],
+            "https://files.example.com/material.pdf",
+        )
+        url_mock.assert_called_once_with(self.arquivo.arquivo.name)
+
+    def test_todos_os_campos_sao_obrigatorios_e_arquivo_nao_e_liberado(self):
+        with patch.object(self.storage, "url") as url_mock:
+            response = self.api.post(
+                f"/blog/arquivos/{self.arquivo.id}/acesso/",
+                {},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(
+            set(response.data),
+            {"nome", "empresa", "email", "telefone"},
+        )
+        self.assertFalse(SolicitacaoAcessoArquivoPost.objects.exists())
+        url_mock.assert_not_called()
+
+    def test_email_invalido_retorna_erro_e_nao_libera_arquivo(self):
+        with patch.object(self.storage, "url") as url_mock:
+            response = self.api.post(
+                f"/blog/arquivos/{self.arquivo.id}/acesso/",
+                {
+                    "nome": "Maria",
+                    "empresa": "Empresa",
+                    "email": "email-invalido",
+                    "telefone": "24999999999",
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("email", response.data)
+        self.assertFalse(SolicitacaoAcessoArquivoPost.objects.exists())
+        url_mock.assert_not_called()
+
+    def test_anexo_de_post_nao_visivel_nao_pode_ser_liberado(self):
+        self.post.visivel = False
+        self.post.save(update_fields=["visivel"])
+
+        response = self.api.post(
+            f"/blog/arquivos/{self.arquivo.id}/acesso/",
+            {
+                "nome": "Maria",
+                "empresa": "Empresa",
+                "email": "maria@example.com",
+                "telefone": "24999999999",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 404, response.data)
+        self.assertFalse(SolicitacaoAcessoArquivoPost.objects.exists())
+
+
+class BlogAttachmentAccessAdminListTests(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.admin_user = get_user_model().objects.create_user(
+            username="admin-blog@example.com",
+            password="senha-teste",
+            is_staff=True,
+        )
+        self.regular_user = get_user_model().objects.create_user(
+            username="cliente-blog@example.com",
+            password="senha-teste",
+            is_staff=False,
+        )
+        post = Post.objects.create(titulo="Post administrativo", visivel=True)
+        self.arquivo = ArquivoPost.objects.create(
+            post=post,
+            arquivo="blog/posts/arquivos/material-admin.pdf",
+            nome_original="material-admin.pdf",
+            titulo="Material administrativo",
+            tipo="application/pdf",
+            tamanho=123,
+        )
+        self.solicitacao_antiga = SolicitacaoAcessoArquivoPost.objects.create(
+            arquivo=self.arquivo,
+            nome="Ana Antiga",
+            empresa="Empresa Antiga",
+            email="ana@example.com",
+            telefone="24999999991",
+        )
+        self.solicitacao_recente = SolicitacaoAcessoArquivoPost.objects.create(
+            arquivo=self.arquivo,
+            nome="Bruno Recente",
+            empresa="Empresa Recente",
+            email="bruno@example.com",
+            telefone="24999999992",
+        )
+        agora = timezone.now()
+        SolicitacaoAcessoArquivoPost.objects.filter(
+            id=self.solicitacao_antiga.id
+        ).update(criado_em=agora - timedelta(days=1))
+        SolicitacaoAcessoArquivoPost.objects.filter(
+            id=self.solicitacao_recente.id
+        ).update(criado_em=agora)
+        self.solicitacao_recente.refresh_from_db()
+
+    def test_admin_lista_solicitacoes_paginadas_com_arquivo_data_e_hora(self):
+        self.api.force_authenticate(user=self.admin_user)
+
+        response = self.api.get(
+            "/solicitacoes-arquivos/",
+            {"page": 1, "page_size": 1},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["results"]), 1)
+
+        result = response.data["results"][0]
+        criado_em_local = timezone.localtime(self.solicitacao_recente.criado_em)
+        self.assertEqual(result["nome"], "Bruno Recente")
+        self.assertEqual(result["empresa"], "Empresa Recente")
+        self.assertEqual(result["email"], "bruno@example.com")
+        self.assertEqual(result["telefone"], "24999999992")
+        self.assertEqual(result["arquivo"]["id"], self.arquivo.id)
+        self.assertEqual(
+            result["arquivo"]["nome_original"],
+            "material-admin.pdf",
+        )
+        self.assertEqual(
+            result["data_solicitacao"],
+            criado_em_local.strftime("%Y-%m-%d"),
+        )
+        self.assertEqual(
+            result["hora_solicitacao"],
+            criado_em_local.strftime("%H:%M:%S"),
+        )
+        self.assertIn("criado_em", result)
+
+    def test_usuario_autenticado_nao_admin_nao_pode_listar_solicitacoes(self):
+        self.api.force_authenticate(user=self.regular_user)
+
+        response = self.api.get("/solicitacoes-arquivos/")
+
+        self.assertEqual(response.status_code, 403, response.data)
+
+    def test_usuario_nao_autenticado_nao_pode_listar_solicitacoes(self):
+        response = self.api.get("/solicitacoes-arquivos/")
+
+        self.assertEqual(response.status_code, 401, response.data)
+
+    def test_endpoint_administrativo_e_somente_leitura(self):
+        self.api.force_authenticate(user=self.admin_user)
+
+        response = self.api.post(
+            "/solicitacoes-arquivos/",
+            {
+                "nome": "Novo",
+                "empresa": "Empresa",
+                "email": "novo@example.com",
+                "telefone": "24999999999",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 405, response.data)
+
+
+class BlogAttachmentAccessAdminConfigurationTests(SimpleTestCase):
+    def test_solicitacao_esta_registrada_como_somente_leitura_no_admin(self):
+        model_admin = admin.site._registry[SolicitacaoAcessoArquivoPost]
+
+        self.assertIsInstance(model_admin, SolicitacaoAcessoArquivoPostAdmin)
+        self.assertFalse(model_admin.has_add_permission(request=None))
+        self.assertFalse(model_admin.has_change_permission(request=None))
+        self.assertFalse(model_admin.has_delete_permission(request=None))

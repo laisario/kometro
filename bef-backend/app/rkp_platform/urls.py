@@ -31,7 +31,12 @@ from instrumentos.views import (
 from propostas.views import PropostaFileViewSet, PropostaViewSet
 from documentos.views import DocumentoViewSet, RevisaoViewSet
 from procedimentos.views import ProcedimentoViewSet
-from blog.views import PostViewSet, CategoriaViewSet
+from blog.views import (
+    ArquivoPostAccessView,
+    CategoriaViewSet,
+    PostViewSet,
+    SolicitacaoAcessoArquivoPostViewSet,
+)
 from avaliacoes.views import AvaliacaoViewSet
 from equipamentos.views import CategoriaEquipamentosViewSet, EquipamentosViewSet
 from ordem_servico.views import OrdemServicoViewSet
@@ -51,6 +56,11 @@ router.register(r"dashboard", DashboardViewSet, basename="dashboard")
 router.register(r"avaliacoes", AvaliacaoViewSet, basename="avaliacao")
 router.register(r"posts", PostViewSet, basename="post")
 router.register(r"categorias", CategoriaViewSet, basename="categoria")
+router.register(
+    r"solicitacoes-arquivos",
+    SolicitacaoAcessoArquivoPostViewSet,
+    basename="solicitacao-arquivo",
+)
 router.register(r"setores", SetorViewSet, basename="setor")
 router.register(r'normativos', NormativoViewSet, basename="normativo")
 router.register(r'grupos', GrupoViewSet, basename="grupo")
@@ -71,6 +81,11 @@ urlpatterns = i18n_patterns(
     ),
     path("register/auth/", RegisterAuthView.as_view(), name="register-auth"),
     path("", include(router.urls)),
+    path(
+        "blog/arquivos/<int:arquivo_id>/acesso/",
+        ArquivoPostAccessView.as_view(),
+        name="blog-arquivo-acesso",
+    ),
     path("invites/create/", CriarConviteView.as_view(), name="create-invite"),
     path('djrichtextfield/', include('djrichtextfield.urls')),
     path("invites/register/<str:token>/", RegistroDoConviteView.as_view(), name="register-invite"),

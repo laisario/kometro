@@ -180,3 +180,24 @@ class ArquivoPost(models.Model):
 
         self.full_clean()
         super().save(*args, **kwargs)
+
+
+class SolicitacaoAcessoArquivoPost(models.Model):
+    arquivo = models.ForeignKey(
+        ArquivoPost,
+        on_delete=models.CASCADE,
+        related_name="solicitacoes_acesso",
+    )
+    nome = models.CharField(max_length=255)
+    empresa = models.CharField(max_length=255)
+    email = models.EmailField()
+    telefone = models.CharField(max_length=30)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-criado_em", "-id"]
+        verbose_name = "Solicitação de acesso a arquivo do post"
+        verbose_name_plural = "Solicitações de acesso a arquivos dos posts"
+
+    def __str__(self):
+        return f"{self.nome} - {self.arquivo}"

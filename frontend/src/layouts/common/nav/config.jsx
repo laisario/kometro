@@ -5,6 +5,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import Groups2Icon from '@mui/icons-material/Groups2';
 import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import AssignmentIcon from '@mui/icons-material/Assignment';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
 
 export const navConfig = (admin, hasPermission) => {
   const data = [
@@ -36,6 +37,11 @@ export const navConfig = (admin, hasPermission) => {
       path: '/admin/ordens-servico',
       icon: <AssignmentIcon  />
     })
+    data.push({
+      title: 'Solicitações de arquivos',
+      path: '/admin/solicitacoes-arquivos',
+      icon: <AttachFileIcon />
+    })
   }
   
   if (hasPermission) {
@@ -47,4 +53,3 @@ export const navConfig = (admin, hasPermission) => {
   }
   return data
 };
-

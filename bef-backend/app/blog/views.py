@@ -1,8 +1,17 @@
-from rest_framework import viewsets, response
-from .models import Post, Categoria
-from .serializers import PostSerializer, CategoriaSerializer
-from .pagination import CustomPagination
+from django.shortcuts import get_object_or_404
+from rest_framework import response, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.views import APIView
+
+from .models import ArquivoPost, Categoria, Post, SolicitacaoAcessoArquivoPost
+from .serializers import (
+    CategoriaSerializer,
+    PostSerializer,
+    SolicitacaoAcessoArquivoPostAdminSerializer,
+    SolicitacaoAcessoArquivoPostSerializer,
+)
+from .pagination import CustomPagination
 
 class PostViewSet(viewsets.ModelViewSet):
     serializer_class = PostSerializer
@@ -47,3 +56,40 @@ class CategoriaViewSet(viewsets.ModelViewSet):
     queryset = Categoria.objects.all()
     serializer_class = CategoriaSerializer
     pagination_class = None
+
+
+class ArquivoPostAccessView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request, arquivo_id):
+        arquivo = get_object_or_404(
+            ArquivoPost.objects.select_related("post"),
+            id=arquivo_id,
+            post__visivel=True,
+        )
+        serializer = SolicitacaoAcessoArquivoPostSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(arquivo=arquivo)
+
+        return response.Response(
+            {
+                "arquivo": arquivo.id,
+                "download_url": arquivo.arquivo.url,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class SolicitacaoAcessoArquivoPostViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = (
+        SolicitacaoAcessoArquivoPost.objects.select_related(
+            "arquivo",
+            "arquivo__post",
+        )
+        .all()
+        .order_by("-criado_em", "-id")
+    )
+    serializer_class = SolicitacaoAcessoArquivoPostAdminSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = CustomPagination

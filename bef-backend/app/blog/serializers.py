@@ -1,5 +1,13 @@
+from django.utils import timezone
 from rest_framework import serializers
-from .models import Post, Categoria, ImagemExtra, ArquivoPost
+
+from .models import (
+    ArquivoPost,
+    Categoria,
+    ImagemExtra,
+    Post,
+    SolicitacaoAcessoArquivoPost,
+)
 
 
 class CategoriaSerializer(serializers.ModelSerializer):
@@ -15,7 +23,6 @@ class ImagemExtraSerializer(serializers.ModelSerializer):
 
 
 class ArquivoPostSerializer(serializers.ModelSerializer):
-    url = serializers.SerializerMethodField()
     extensao = serializers.CharField(read_only=True)
 
     class Meta:
@@ -26,21 +33,9 @@ class ArquivoPostSerializer(serializers.ModelSerializer):
             "nome_original",
             "tipo",
             "extensao",
-            "url",
             "tamanho",
             "criado_em",
         ]
-
-    def get_url(self, obj):
-        if not obj.arquivo:
-            return None
-
-        url = obj.arquivo.url
-        request = self.context.get("request")
-        if request and url.startswith("/"):
-            return request.build_absolute_uri(url)
-        return url
-
 
 class PostSerializer(serializers.ModelSerializer):
     categoria = CategoriaSerializer(read_only=True)
@@ -77,3 +72,56 @@ class PostSerializer(serializers.ModelSerializer):
         for video in obj.videos_url.all():
             result.append({"tipo": "url", "src": video.url})
         return result
+
+
+class SolicitacaoAcessoArquivoPostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SolicitacaoAcessoArquivoPost
+        fields = ["nome", "empresa", "email", "telefone"]
+        extra_kwargs = {
+            "nome": {"required": True, "allow_blank": False, "trim_whitespace": True},
+            "empresa": {
+                "required": True,
+                "allow_blank": False,
+                "trim_whitespace": True,
+            },
+            "email": {"required": True, "allow_blank": False},
+            "telefone": {
+                "required": True,
+                "allow_blank": False,
+                "trim_whitespace": True,
+            },
+        }
+
+
+class SolicitacaoAcessoArquivoPostAdminSerializer(serializers.ModelSerializer):
+    arquivo = ArquivoPostSerializer(read_only=True)
+    data_solicitacao = serializers.SerializerMethodField()
+    hora_solicitacao = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SolicitacaoAcessoArquivoPost
+        fields = [
+            "id",
+            "nome",
+            "empresa",
+            "email",
+            "telefone",
+            "arquivo",
+            "criado_em",
+            "data_solicitacao",
+            "hora_solicitacao",
+        ]
+        read_only_fields = fields
+
+    @staticmethod
+    def _local_criado_em(obj):
+        if timezone.is_aware(obj.criado_em):
+            return timezone.localtime(obj.criado_em)
+        return obj.criado_em
+
+    def get_data_solicitacao(self, obj):
+        return self._local_criado_em(obj).strftime("%Y-%m-%d")
+
+    def get_hora_solicitacao(self, obj):
+        return self._local_criado_em(obj).strftime("%H:%M:%S")
