@@ -16,6 +16,14 @@ class CalibracaoFilter(filters.FilterSet):
 
 
 class InstrumentoDoClienteFilter(filters.FilterSet):
+    expiration_status = filters.ChoiceFilter(
+        choices=(
+            ("all", "All"),
+            ("expired", "Expired"),
+            ("up_to_date", "Up to date"),
+        ),
+        method="filter_by_expiration_status",
+    )
     status = filters.CharFilter(method='filter_by_status')
     norma = filters.CharFilter(method="filter_by_norma")
     expirado = filters.BooleanFilter(field_name='expirado')
@@ -54,6 +62,13 @@ class InstrumentoDoClienteFilter(filters.FilterSet):
     def filter_by_norma(self, queryset, name, value):
         return queryset.filter(normativos__nome__icontains=value).distinct()
 
+    def filter_by_expiration_status(self, queryset, name, value):
+        if value == "expired":
+            return queryset.filter(expirado=True)
+        if value == "up_to_date":
+            return queryset.filter(expirado=False)
+        return queryset
+
     class Meta:
         model = InstrumentoDoCliente
-        fields = ['expirado', 'tipo_instrumento']
+        fields = ['expiration_status', 'expirado', 'tipo_instrumento']

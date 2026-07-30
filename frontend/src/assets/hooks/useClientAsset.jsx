@@ -1,6 +1,6 @@
 import { useQuery, useInfiniteQuery } from "react-query";
 import { useEffect, useState, useMemo } from "react";
-import _, {debounce} from 'lodash';
+import { debounce } from 'lodash';
 import { axios } from "../../api";
 
 const useClientAssets = (clientId, table = false, infinite = false, proposalId = null) => {
@@ -8,13 +8,22 @@ const useClientAssets = (clientId, table = false, infinite = false, proposalId =
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [expirationStatus, setExpirationStatus] = useState('all');
 
   const { 
     data: assets, 
     error: errorAssets, 
     isLoading: isLoadingAssets, 
   } = useQuery({
-    queryKey: ['instrumentos', clientId, debouncedSearch, page, rowsPerPage, proposalId],
+    queryKey: [
+      'instrumentos',
+      clientId,
+      debouncedSearch,
+      page,
+      rowsPerPage,
+      proposalId,
+      expirationStatus,
+    ],
     queryFn: async () => {
       const response = await axios.get(`/instrumentos/`, {
         params: {
@@ -23,6 +32,9 @@ const useClientAssets = (clientId, table = false, infinite = false, proposalId =
           page: page + 1,
           search: debouncedSearch,
           ...(proposalId && { proposta: proposalId }),
+          ...(expirationStatus !== 'all' && {
+            expiration_status: expirationStatus,
+          }),
         },
       });
       return response?.data;
@@ -80,6 +92,11 @@ const useClientAssets = (clientId, table = false, infinite = false, proposalId =
     return () => handleSearch.cancel();
   }, [search, handleSearch]);
 
+  const handleExpirationStatusChange = (value) => {
+    setExpirationStatus(value);
+    setPage(0);
+  };
+
   return {
     assets: infinite ? { results: allInfiniteAssets, count: infiniteData?.pages[0]?.count } : assets, 
     errorAssets, 
@@ -90,6 +107,8 @@ const useClientAssets = (clientId, table = false, infinite = false, proposalId =
     setRowsPerPage,
     search,
     setSearch,
+    expirationStatus,
+    handleExpirationStatusChange,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,

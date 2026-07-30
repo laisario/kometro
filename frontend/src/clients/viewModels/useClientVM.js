@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useClient from '../hooks/useClient';
 import useResponsive from '../../theme/hooks/useResponsive';
 import useClientAssets from '../../assets/hooks/useClientAsset';
@@ -24,6 +24,8 @@ function useClientVM(id) {
     setRowsPerPage,
     search,
     setSearch,
+    expirationStatus,
+    handleExpirationStatusChange,
   } = useClientAssets(id, true);
 
   const { 
@@ -92,6 +94,8 @@ function useClientVM(id) {
     handleChangeRowsPerPage,
     search,
     setSearch,
+    expirationStatus,
+    handleExpirationStatusChange,
     isDeleting,
     mutateDelete,
     openCreateForm,

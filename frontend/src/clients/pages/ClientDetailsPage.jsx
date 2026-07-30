@@ -1,5 +1,4 @@
-import { Box, Button, CircularProgress, Container, InputAdornment, Paper, Snackbar, Stack, TablePagination, TextField, Typography } from '@mui/material'
-import React from 'react'
+import { Box, Button, CircularProgress, Container, FormControl, InputAdornment, InputLabel, MenuItem, Select, Stack, TablePagination, TextField, Typography } from '@mui/material'
 import { Helmet } from 'react-helmet-async'
 import { useParams } from 'react-router';
 import SearchIcon from '@mui/icons-material/Search';
@@ -19,6 +18,8 @@ function ClientDetailsPage() {
     isMobile,
     search,
     setSearch,
+    expirationStatus,
+    handleExpirationStatusChange,
     handleOpenCreateForm,
     handleCloseCreateForm,
     handleOpenEditForm,
@@ -68,7 +69,21 @@ function ClientDetailsPage() {
           <Typography variant="h4" gutterBottom>
             Instrumentos
           </Typography>
-          <Stack direction='row' gap={2}>
+          <Stack direction='row' gap={2} sx={{ flexWrap: 'wrap' }}>
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel id="instrument-status-filter-label">Status</InputLabel>
+              <Select
+                labelId="instrument-status-filter-label"
+                id="instrument-status-filter"
+                value={expirationStatus}
+                label="Status"
+                onChange={(event) => handleExpirationStatusChange(event.target.value)}
+              >
+                <MenuItem value="all">Todos</MenuItem>
+                <MenuItem value="expired">Vencidos</MenuItem>
+                <MenuItem value="up_to_date">Em dia</MenuItem>
+              </Select>
+            </FormControl>
             <TextField
               id="search-instrument"
               size='small'

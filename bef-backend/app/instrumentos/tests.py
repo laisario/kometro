@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -38,6 +39,115 @@ def _make_cliente():
 def _make_instrumento_base():
     tipo = TipoInstrumento.objects.create(descricao="Termometro")
     return Instrumento.objects.create(tipo_de_instrumento=tipo)
+
+
+class InstrumentoDoClienteExpirationStatusFilterTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.admin = User.objects.create_user(
+            username="admin-status-instrumentos",
+            password="pass",
+            is_staff=True,
+        )
+        self.api.force_authenticate(user=self.admin)
+
+        self.cliente = _make_cliente()
+        self.outro_cliente = _make_cliente()
+        self.instrumento_base = _make_instrumento_base()
+
+        self.vencido = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="VENCIDO-001",
+            data_proxima_calibracao=date.today() - timedelta(days=1),
+        )
+        self.outro_vencido = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="VENCIDO-002",
+            data_proxima_calibracao=date.today() - timedelta(days=2),
+        )
+        self.em_dia = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="EM-DIA-001",
+            data_proxima_calibracao=date.today() + timedelta(days=1),
+        )
+        self.vencido_de_outro_cliente = InstrumentoDoCliente.objects.create(
+            cliente=self.outro_cliente,
+            instrumento=self.instrumento_base,
+            tag="VENCIDO-OUTRO-CLIENTE",
+            data_proxima_calibracao=date.today() - timedelta(days=3),
+        )
+
+        self.cliente.instrumentos_vencidos = self.cliente.instrumentos.filter(
+            expirado=True
+        ).count()
+        self.cliente.instrumentos_em_dia = self.cliente.instrumentos.filter(
+            expirado=False
+        ).count()
+        self.cliente.save(
+            update_fields=["instrumentos_vencidos", "instrumentos_em_dia"]
+        )
+
+    def test_all_preserva_todos_os_instrumentos_do_cliente(self):
+        response = self.api.get(
+            "/instrumentos/",
+            {"client": self.cliente.id, "expiration_status": "all"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 3)
+        self.assertNotIn(
+            self.vencido_de_outro_cliente.id,
+            [item["id"] for item in response.data["results"]],
+        )
+
+    def test_expired_reutiliza_a_mesma_regra_da_estatistica(self):
+        response = self.api.get(
+            "/instrumentos/",
+            {"client": self.cliente.id, "expiration_status": "expired"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], self.cliente.instrumentos_vencidos)
+        self.assertEqual(
+            {item["id"] for item in response.data["results"]},
+            {self.vencido.id, self.outro_vencido.id},
+        )
+
+    def test_up_to_date_reutiliza_a_mesma_regra_da_estatistica(self):
+        response = self.api.get(
+            "/instrumentos/",
+            {"client": self.cliente.id, "expiration_status": "up_to_date"},
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], self.cliente.instrumentos_em_dia)
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [self.em_dia.id],
+        )
+
+    def test_status_funciona_com_busca_e_paginacao(self):
+        response = self.api.get(
+            "/instrumentos/",
+            {
+                "client": self.cliente.id,
+                "expiration_status": "expired",
+                "search": "VENCIDO",
+                "page": 2,
+                "page_size": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertIn(
+            response.data["results"][0]["id"],
+            {self.vencido.id, self.outro_vencido.id},
+        )
 
 
 class InstrumentoDoClienteSetorPatchTest(TestCase):
