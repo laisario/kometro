@@ -13,6 +13,7 @@ const Base = ({
   image,
   noindex,
   canonical,
+  reserveMobileCtaSpace = false,
   children,
 }) => {
   const { meta_image, meta_author, meta_description } = config.metadata;
@@ -90,12 +91,15 @@ const Base = ({
         />
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
-      <div className="min-h-screen flex flex-col">
-
-      <Header />
-      <main className="container flex-grow">{children}</main>
-      <RightSide />
-      <Footer />
+      <div
+        className={`flex min-h-screen flex-col ${
+          reserveMobileCtaSpace ? "pb-[74px] lg:pb-0" : ""
+        }`}
+      >
+        <Header />
+        <main className="container flex-grow">{children}</main>
+        <RightSide />
+        <Footer />
       </div>
     </>
   );

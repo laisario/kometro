@@ -19,6 +19,10 @@ const Header = () => {
   const { logo } = config.site;
   const { enable, label, link } = config.nav_button;
 
+  const isActive = (url) =>
+    router.asPath.split(/[?#]/)[0].replace(/\/$/, "") ===
+    url.replace(/\/$/, "");
+
   return (
     <header className="header">
       <nav className="navbar container">
@@ -30,7 +34,7 @@ const Header = () => {
         {/* navbar toggler */}
         <button
           id="show-button"
-          className="order-2 flex cursor-pointer items-center md:hidden md:order-1"
+          className="order-2 flex cursor-pointer items-center lg:order-1 lg:hidden"
           onClick={() => setNavOpen(!navOpen)}
         >
           {navOpen ? (
@@ -52,11 +56,11 @@ const Header = () => {
         {/* Menu */}
         <div
           id="nav-menu"
-          className={`order-3 md:order-1 ${
+          className={`order-3 lg:order-1 ${
             navOpen ? "max-h-[1000px]" : "max-h-0"
           }`}
         >
-          <ul className="navbar-nav block w-full md:flex md:w-auto lg:space-x-2">
+          <ul className="navbar-nav block w-full lg:flex lg:w-auto">
             {main.map((menu, i) => (
               <React.Fragment key={`menu-${i}`}>
                 {menu.hasChildren ? (
@@ -67,7 +71,7 @@ const Header = () => {
                         <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
                       </svg>
                     </span>
-                    <ul className="nav-dropdown-list hidden group-hover:block md:invisible md:absolute md:block md:opacity-0 md:group-hover:visible md:group-hover:opacity-100">
+                    <ul className="nav-dropdown-list hidden group-hover:block lg:invisible lg:absolute lg:block lg:opacity-0 lg:group-hover:visible lg:group-hover:opacity-100">
                       {menu.children.map((child, i) => (
                         <li className="nav-dropdown-item" key={`children-${i}`}>
                           <Link
@@ -86,7 +90,7 @@ const Header = () => {
                       href={menu.url}
                       onClick={() => setNavOpen(false)}
                       className={`nav-link block ${
-                        router.asPath === menu.url ? "nav-link-active" : ""
+                        isActive(menu.url) ? "nav-link-active" : ""
                       }`}
                     >
                       {menu.name}
@@ -96,7 +100,7 @@ const Header = () => {
               </React.Fragment>
             ))}
             {enable && (
-              <li className="md:hidden">
+              <li className="xl:hidden">
                 <Link
                   className="btn btn-primary z-0 py-[14px]"
                   href={link}
@@ -109,7 +113,7 @@ const Header = () => {
           </ul>
         </div>
         {enable && (
-          <div className="d-flex order-1 ml-auto hidden min-w-[200px] items-center justify-end md:ml-0 md:flex md:order-2">
+          <div className="d-flex order-1 ml-auto hidden min-w-[200px] items-center justify-end xl:order-2 xl:ml-0 xl:flex">
             <Link className="btn btn-primary z-0 py-[14px]" href={link} rel="">
               {label}
             </Link>
