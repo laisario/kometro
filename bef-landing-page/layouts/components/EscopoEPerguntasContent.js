@@ -11,17 +11,17 @@ export const trustedCompanies = [
 
 export const comparisonRows = [
   {
-    criterion: "Aceito em auditoria ISO 9001 / 17025",
+    criterion: "Aceito em auditoria das Normas ISO, de clientes e normativas",
     kometro: "Sem ressalvas",
     other: "Pode ser questionado",
   },
   {
-    criterion: "Rastreabilidade documentada ao Inmetro",
+    criterion: "Rastreabilidade documentada",
     kometro: "Garantida",
     other: "Não comprovável",
   },
   {
-    criterion: "Escopo verificável no site do Inmetro",
+    criterion: "Escopo verificável no site RBC/Inmetro",
     kometro: "Sim, público",
     other: "Não",
   },
@@ -41,7 +41,7 @@ export const differentials = [
   {
     title: "Acreditação RBC 0686",
     description:
-      "Certificados sob acreditação Inmetro, com rastreabilidade documentada e escopo público — o que sustenta sua conformidade em qualquer auditoria.",
+      "Certificados sob acreditação CGCRE/Inmetro, com rastreabilidade documentada e escopo público — o que sustenta sua conformidade em qualquer auditoria.",
   },
   {
     title: "Logística facilitada",
@@ -56,12 +56,12 @@ export const differentials = [
   {
     title: "Gestão metrológica",
     description:
-      "Organizamos seu parque de instrumentos com alertas de vencimento pela plataforma Kometro. Nunca mais pego por certificado vencido.",
+      "Organizamos seu parque de instrumentos com alertas de vencimento pela plataforma Kometro go. Nunca mais pego por certificado vencido.",
   },
   {
     title: "Consultoria e auditoria",
     description:
-      "Apoio técnico em ISO/IEC 17025 e ISO 9001. Você fala com quem entende de metrologia, não com atendente de balcão.",
+      "Apoio técnico em ISO/IEC 17025 e ISO 9001. Você fala com quem entende de metrologia.",
   },
   {
     title: "Aprovado por quem exige",
@@ -241,12 +241,12 @@ export const processSteps = [
   {
     title: "Calibramos",
     description:
-      "Calibração sob acreditação RBC, com prazo reduzido e emissão do certificado rastreável ao Inmetro.",
+      "Calibração com prazo reduzido e emissão do certificado RBC ou Rastreável.",
   },
   {
     title: "Devolvemos",
     description:
-      "Instrumentos de volta na sua planta, com certificado válido para auditoria e alerta do próximo vencimento.",
+      "Instrumentos de volta na sua planta, com certificado válido para auditoria.",
   },
 ];
 
@@ -254,33 +254,29 @@ export const questions = [
   {
     question: "O que é acreditação RBC e por que importa para minha auditoria?",
     answer:
-      "RBC é a Rede Brasileira de Calibração, coordenada pelo Inmetro. Um certificado acreditado RBC comprova, de forma documentada e rastreável, que a medição está ligada aos padrões nacionais — exatamente o que um auditor ISO 9001 ou 17025 exige. Sem acreditação, o certificado pode ser questionado ou reprovado, e você refaz tudo com a auditoria em andamento.",
+      'A acreditação RBC (Rede Brasileira de Calibração) é o reconhecimento formal de que um laboratório possui competência técnica para realizar calibrações com o mais alto nível de confiabilidade e exatidão. Na prática, quando um laboratório é "acreditado à RBC", significa que ele foi rigorosamente avaliado e aprovado pela CGCRE (Coordenação Geral de Acreditação), que é o braço do Inmetro responsável por isso — exatamente o que um auditor ISO exige. Sem acreditação, o certificado pode ser questionado ou reprovado, e você refaz tudo com a auditoria em andamento.',
   },
   {
-    question: "O certificado da Kometro é mesmo rastreável ao Inmetro?",
+    question:
+      "O certificado de acreditação da Kometro é mesmo rastreável ao Inmetro?",
     answer:
-      "Sim. Nosso escopo de acreditação (RBC 0686) é público e verificável direto no site do Inmetro — você confere grandezas e faixas antes de fechar.",
+      "Sim. Nosso escopo de acreditação (RBC 0686) é público e verificável direto no site da RBC/Inmetro — você confere grandezas e faixas antes de fechar.",
     showAccreditationLink: true,
-  },
-  {
-    question: "Preciso parar a produção ou deslocar equipe para calibrar?",
-    answer:
-      "Não. Coletamos e devolvemos os instrumentos na sua planta pela nossa rota na região. Sua equipe não perde tempo e a operação segue enquanto cuidamos da calibração.",
   },
   {
     question: "Com que frequência preciso recalibrar meus instrumentos?",
     answer:
-      "Depende do instrumento, do uso e da sua norma interna — geralmente entre 6 e 12 meses. O que pega a maioria das empresas é perder o vencimento e descobrir na véspera da auditoria. Por isso controlamos seu parque com alerta de vencimento na plataforma Kometro: você recalibra no tempo certo, sem susto.",
+      "Depende do instrumento, do uso e da sua norma interna — geralmente entre 6 e 12 meses, mas o usuário do instrumento que deve definir a frequência. O que acontece na maioria das empresas é perder o vencimento e descobrir na véspera da auditoria. Por isso podemos controlar seu parque com alerta de vencimento na plataforma Kometro go: você calibra no tempo certo, sem susto.",
   },
   {
     question: "Vocês calibram o meu tipo de instrumento?",
     answer:
-      "Temos escopo acreditado em Dimensional, Massa, Pressão e Temperatura, além de calibração de Torque e outras grandezas rastreáveis. Mande sua lista no WhatsApp que confirmamos item a item.",
+      "Temos escopo acreditado em diversas grandezas: dimensional, massa, pressão e temperatura e umidade, além de calibração de torque e outras grandezas rastreáveis. Mande sua lista no WhatsApp que confirmamos item a item.",
   },
   {
     question: "Qual o prazo e como recebo o orçamento?",
     answer:
-      "Você envia a lista de instrumentos e retornamos com orçamento no mesmo dia útil. O prazo de calibração é abaixo da média regional. Atendemos o Sul Fluminense, Médio Paraíba e Vale do Paraíba.",
+      "Você envia a lista de instrumentos e retornamos com orçamento no mesmo dia útil. O prazo de calibração é abaixo da média regional. Atendemos a região do Sul Fluminense, Costa Verde, Grande Rio, Vale do Paraíba, Médio Paraíba, além de outras regiões do RJ, SP, MG e Brasil.",
   },
 ];
 

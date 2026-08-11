@@ -24,7 +24,7 @@ const budgetMessage =
 
 const pageSections = [
   { id: "escopo", label: "Escopo" },
-  { id: "diferenca", label: "RBC vs. simples" },
+  { id: "diferenca", label: "Acreditado x Rastreável" },
   { id: "clientes", label: "Clientes" },
   { id: "faq", label: "Dúvidas" },
 ];
@@ -122,16 +122,14 @@ const Hero = () => {
                 <br />
                 0686
               </span>
-              Laboratório acreditado pelo Inmetro
+              Laboratório acreditado pela CGCRE/INMETRO
             </span>
 
             <p className="mb-2 mt-6 text-sm font-bold text-green-700">
               Seu sucesso é a nossa medida.
             </p>
             <h1 className="mb-5 max-w-[760px] text-[clamp(2rem,4.7vw,3.125rem)]">
-              Calibração de instrumentos{" "}
-              <span className="text-green-700">acreditada RBC/Inmetro</span> no
-              Sul Fluminense.
+              Calibração de instrumentos de medição
             </h1>
             <p className="max-w-[620px] text-[clamp(1.03rem,1.5vw,1.16rem)] leading-relaxed text-text">
               Certificados rastreáveis à Rede Brasileira de Calibração e prazo
@@ -155,22 +153,6 @@ const Hero = () => {
                 Ver escopo de calibração
               </a>
             </div>
-
-            <div className="mt-5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-gray-500">
-              {[
-                "Rastreável ao Inmetro",
-                "Coleta e devolução na sua planta",
-                "Resposta no mesmo dia útil",
-              ].map((item) => (
-                <span key={item} className="inline-flex items-center gap-1.5">
-                  <Check
-                    aria-hidden="true"
-                    className="h-4 w-4 text-green-600"
-                  />
-                  {item}
-                </span>
-              ))}
-            </div>
           </div>
 
           <Reveal className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-7 shadow-lg">
@@ -184,14 +166,21 @@ const Hero = () => {
             />
             <h2 className="mb-1 text-base">Certificado de calibração</h2>
             <p className="mb-5 text-[13px] font-bold text-primary">
-              acreditação RBC · escopo 0686
+              acreditação CGCRE/INMETRO conforme{" "}
+              <a
+                href={INMETRO_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline transition hover:text-orange-600"
+              >
+                escopo 0686
+              </a>
             </p>
             {[
               ["Rastreabilidade", "Inmetro ✓", true],
               ["Válido em auditoria ISO 9001 / 17025", "Sim ✓", true],
-              ["Grandezas atendidas", "05"],
               ["Prazo médio de entrega", "reduzido"],
-              ["Logística de coleta", "na sua planta"],
+              ["Logística de coleta e devolução", "na sua planta"],
             ].map(([label, value, positive], index) => (
               <div
                 key={label}
@@ -241,7 +230,7 @@ const Comparison = () => (
   >
     <SectionHeading
       eyebrow="A conta que ninguém faz"
-      title='Calibração acreditada RBC não é a mesma coisa que calibração "simples".'
+      title="Laboratório acreditado na 17025 pela CGCRE/INMETRO não é a mesma coisa que rastreável à RBC."
       description="Na hora de comparar três cotações, o preço parece próximo. Na hora da auditoria, a diferença aparece — e refazer sai muito mais caro. Veja o que está em jogo:"
     />
 
@@ -427,7 +416,7 @@ const Testimonials = () => (
   <section id="clientes" className="section scroll-mt-24">
     <SectionHeading
       eyebrow="Quem já confia"
-      title="Aprovado por quem tem auditoria de verdade."
+      title="A escolha certa de quem responde pela qualidade."
     />
     <div className="grid gap-4 md:grid-cols-2">
       {testimonials.map((testimonial) => (
