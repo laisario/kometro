@@ -67,7 +67,7 @@ const PageNavigation = () => {
 
 const SectionHeading = ({ eyebrow, title, description }) => (
   <Reveal className="mb-10 max-w-3xl md:mb-12">
-    <span className="text-xs font-bold uppercase tracking-[0.14em] text-green-700">
+    <span className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
       {eyebrow}
     </span>
     <h2 className="mb-3 mt-3">{title}</h2>
@@ -125,7 +125,7 @@ const Hero = () => {
               Laboratório acreditado pela CGCRE/INMETRO
             </span>
 
-            <p className="mb-2 mt-6 text-sm font-bold text-green-700">
+            <p className="mb-2 mt-6 text-sm font-bold text-primary">
               Seu sucesso é a nossa medida.
             </p>
             <h1 className="mb-5 max-w-[760px] text-[clamp(2rem,4.7vw,3.125rem)]">
@@ -206,7 +206,7 @@ const Hero = () => {
 };
 
 const TrustBar = () => (
-  <div className="rounded-xl border-y border-gray-200 bg-theme-lighter px-4 py-9">
+  <div className="rounded-xl border-y border-gray-200 bg-[#F5F5F5] px-4 py-9">
     <p className="mb-5 text-center text-xs font-bold uppercase tracking-widest text-gray-500">
       Confiança de indústrias que não podem falhar em auditoria
     </p>
@@ -226,7 +226,7 @@ const TrustBar = () => (
 const Comparison = () => (
   <section
     id="diferenca"
-    className="section scroll-mt-24 rounded-xl border-y border-gray-200 bg-theme-lighter px-4 sm:px-8"
+    className="section mt-16 scroll-mt-24 rounded-xl border-y border-gray-200 bg-[#F5F5F5] px-4 sm:px-8"
   >
     <SectionHeading
       eyebrow="A conta que ninguém faz"
@@ -276,7 +276,7 @@ const Comparison = () => (
               aria-hidden="true"
               className="h-4 w-4 flex-none text-green-600"
             />
-            <strong className="text-green-700">Kometro (RBC):</strong>{" "}
+            <strong className="text-primary">Kometro (RBC):</strong>{" "}
             {row.kometro}
           </div>
           <div className="flex items-center gap-2 border-t border-gray-200 p-4 text-sm text-gray-500">
@@ -328,7 +328,7 @@ const Differentials = () => (
 const Scope = () => (
   <section
     id="escopo"
-    className="section scroll-mt-24 rounded-xl border-y border-gray-200 bg-theme-lighter px-4 sm:px-8"
+    className="section scroll-mt-24 rounded-xl border-y border-gray-200 bg-[#F5F5F5] px-4 sm:px-8"
   >
     <SectionHeading
       eyebrow="Escopo de calibração"
@@ -347,7 +347,7 @@ const Scope = () => (
             <span
               className={`rounded-md border px-2.5 py-1 text-[11px] font-bold leading-tight ${
                 group.accredited
-                  ? "border-green-100 bg-green-100 text-green-700"
+                  ? "border-green-100 bg-green-100 text-primary"
                   : "border-gray-200 bg-theme-lighter text-gray-500"
               }`}
             >
@@ -456,7 +456,7 @@ const Testimonials = () => (
 const Process = () => (
   <section
     id="processo"
-    className="section scroll-mt-24 rounded-xl border-y border-gray-200 bg-theme-lighter px-4 sm:px-8"
+    className="section scroll-mt-24 rounded-xl border-y border-gray-200 bg-[#F5F5F5] px-4 sm:px-8"
   >
     <SectionHeading
       eyebrow="Como funciona"
@@ -507,7 +507,7 @@ const Faq = () => {
                   aria-expanded={isOpen}
                   aria-controls={answerId}
                   onClick={() => setOpenQuestion(isOpen ? null : index)}
-                  className="flex w-full items-center justify-between gap-5 bg-transparent py-5 text-left text-base font-bold leading-snug text-dark transition hover:text-green-700 md:text-lg"
+                  className="flex w-full items-center justify-between gap-5 bg-transparent py-5 text-left text-base font-bold leading-snug text-dark transition hover:text-primary md:text-lg"
                 >
                   <span>{item.question}</span>
                   <Plus
@@ -572,20 +572,20 @@ const FinalBudget = () => {
   };
 
   return (
-    <section className="section mb-12 rounded-xl bg-dark px-4 sm:px-8 md:mb-16">
+    <section className="section mb-12 rounded-xl bg-[#F5F5F5] px-4 sm:px-8 md:mb-16">
       <div className="grid items-center gap-9 lg:grid-cols-2 lg:gap-[52px]">
         <Reveal>
           <span className="text-xs font-bold uppercase tracking-[0.14em] text-primary">
             Solicite agora
           </span>
-          <h2 className="mb-4 mt-3 text-white">
+          <h2 className="mb-4 mt-3 text-dark">
             Peça seu orçamento de calibração acreditada.
           </h2>
-          <p className="mb-7 text-lg leading-relaxed text-gray-300">
+          <p className="mb-7 text-lg leading-relaxed text-text">
             Envie a lista dos seus instrumentos e receba a proposta no mesmo dia
             útil. Sem compromisso.
           </p>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-gray-400">
+          <div className="flex flex-wrap gap-x-5 gap-y-2 text-[13px] text-gray-500">
             {[
               "Resposta no mesmo dia útil",
               "Coleta na sua planta",
