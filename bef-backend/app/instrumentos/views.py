@@ -1,3 +1,7 @@
+import logging
+
+from boto3.exceptions import Boto3Error
+from botocore.exceptions import BotoCoreError, ClientError
 from rest_framework import filters, permissions, viewsets, status
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from rest_framework.decorators import action
@@ -57,6 +61,30 @@ from django.core.cache import cache
 from django.db.models import Prefetch
 from rest_framework import pagination
 from clientes.models import Cliente
+
+
+logger = logging.getLogger(__name__)
+
+FILE_STORAGE_EXCEPTIONS = (Boto3Error, BotoCoreError, ClientError, OSError)
+FILE_STORAGE_ERROR_RESPONSE = {
+    "error": "file_storage_error",
+    "message": "Erro de armazenamento de arquivos.",
+}
+
+
+def file_storage_error_response(exc, *, operation, calibracao_id, certificado_id=None):
+    logger.exception(
+        "File storage failure operation=%s calibracao_id=%s certificado_id=%s: %s",
+        operation,
+        calibracao_id,
+        certificado_id,
+        exc,
+    )
+    return response.Response(
+        FILE_STORAGE_ERROR_RESPONSE,
+        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+    )
+
 
 class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -719,13 +747,21 @@ class CalibracaoViewSet(viewsets.ModelViewSet):
             numero=numero_certificado, calibracao=calibracao
         )
         if not certificado_instance.exists():
-            certificado = Certificado.objects.create(
-                numero=numero_certificado,
-                calibracao_id=calibracao.id,
-                arquivo=arquivo,
-            )
+            try:
+                certificado = Certificado.objects.create(
+                    numero=numero_certificado,
+                    calibracao_id=calibracao.id,
+                    arquivo=arquivo,
+                )
+                certificado_data = CertificadoSerializer(certificado).data
+            except FILE_STORAGE_EXCEPTIONS as exc:
+                return file_storage_error_response(
+                    exc,
+                    operation="adicionar_certificado",
+                    calibracao_id=calibracao.id,
+                )
             return response.Response(
-                CertificadoSerializer(certificado).data,
+                certificado_data,
                 status=status.HTTP_201_CREATED,
             )
         return response.Response(
@@ -742,9 +778,21 @@ class CalibracaoViewSet(viewsets.ModelViewSet):
                 anexo=anexo, certificado_id=certificado_id
             )
             if not anexo_instance.exists():
-                anexo = Anexo.objects.create(anexo=anexo, certificado_id=certificado_id)
+                try:
+                    anexo = Anexo.objects.create(
+                        anexo=anexo,
+                        certificado_id=certificado_id,
+                    )
+                    anexo_data = AnexoSerializer(anexo).data
+                except FILE_STORAGE_EXCEPTIONS as exc:
+                    return file_storage_error_response(
+                        exc,
+                        operation="anexar_certificado",
+                        calibracao_id=None,
+                        certificado_id=certificado_id,
+                    )
                 return response.Response(
-                    AnexoSerializer(anexo).data, status=status.HTTP_201_CREATED
+                    anexo_data, status=status.HTTP_201_CREATED
                 )
             return response.Response(
                 {"message": "Arquivo ja anexado"}, status=status.HTTP_200_OK
@@ -802,21 +850,31 @@ class CalibracaoViewSet(viewsets.ModelViewSet):
 
         update_fields = []
 
-        if numero is not None:
-            certificado.numero = str(numero).strip() if str(numero).strip() else None
-            update_fields.append("numero")
+        try:
+            if numero is not None:
+                certificado.numero = str(numero).strip() if str(numero).strip() else None
+                update_fields.append("numero")
 
-        if arquivo:
-            if certificado.arquivo:
-                certificado.arquivo.delete(save=False)
-            certificado.arquivo = arquivo
-            update_fields.append("arquivo")
+            if arquivo:
+                if certificado.arquivo:
+                    certificado.arquivo.delete(save=False)
+                certificado.arquivo = arquivo
+                update_fields.append("arquivo")
 
-        if update_fields:
-            certificado.save(update_fields=update_fields)
+            if update_fields:
+                certificado.save(update_fields=update_fields)
+
+            certificado_data = CertificadoSerializer(certificado).data
+        except FILE_STORAGE_EXCEPTIONS as exc:
+            return file_storage_error_response(
+                exc,
+                operation="atualizar_certificado",
+                calibracao_id=calibracao.id,
+                certificado_id=certificado.id,
+            )
 
         return response.Response(
-            CertificadoSerializer(certificado).data,
+            certificado_data,
             status=status.HTTP_200_OK,
         )
 

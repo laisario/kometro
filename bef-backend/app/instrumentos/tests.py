@@ -2,13 +2,17 @@ from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 
+from botocore.exceptions import ClientError
 from django.contrib.auth.models import Group, User
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from clientes.models import Cliente, Empresa
 from instrumentos.models import (
     Calibracao,
+    Anexo,
+    Certificado,
     CriterioAceitacao,
     CalibracaoStatus,
     Instrumento,
@@ -39,6 +43,13 @@ def _make_cliente():
 def _make_instrumento_base():
     tipo = TipoInstrumento.objects.create(descricao="Termometro")
     return Instrumento.objects.create(tipo_de_instrumento=tipo)
+
+
+def _make_storage_client_error():
+    return ClientError(
+        {"Error": {"Code": "403", "Message": "Forbidden"}},
+        "HeadObject",
+    )
 
 
 class InstrumentoDoClienteExpirationStatusFilterTest(TestCase):
@@ -856,6 +867,129 @@ class CalibracaoResultadoHistoricoTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("maior_erro", response.data)
+
+
+class CalibracaoFileStorageErrorTest(TransactionTestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.cliente = _make_cliente()
+        self.user = User.objects.create_user(
+            username="gerente-cal-storage",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        instrumento_base = _make_instrumento_base()
+        self.instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=instrumento_base,
+            tag="TAG-CAL-STORAGE",
+        )
+        self.calibracao = Calibracao.objects.create(
+            instrumento=self.instrumento,
+            local="P",
+            data="2026-08-17",
+            ordem_de_servico="OS-STORAGE",
+            checagem=False,
+        )
+
+    def _uploaded_file(self, name="certificado.pdf"):
+        return SimpleUploadedFile(
+            name,
+            b"conteudo do arquivo",
+            content_type="application/pdf",
+        )
+
+    def assert_file_storage_error(self, response):
+        self.assertEqual(response.status_code, 503, response.data)
+        self.assertEqual(
+            response.data,
+            {
+                "error": "file_storage_error",
+                "message": "Erro de armazenamento de arquivos.",
+            },
+        )
+
+    def test_adicionar_certificado_retorna_503_quando_storage_falha(self):
+        storage = Certificado._meta.get_field("arquivo").storage
+
+        with patch.object(storage, "save", side_effect=_make_storage_client_error()):
+            with self.assertLogs("instrumentos.views", level="ERROR") as logs:
+                response = self.api.post(
+                    f"/calibracoes/{self.calibracao.id}/adicionar_certificado/",
+                    {
+                        "numero": "CERT-STORAGE",
+                        "arquivo": self._uploaded_file(),
+                    },
+                    format="multipart",
+                )
+
+        self.assert_file_storage_error(response)
+        self.assertFalse(
+            Certificado.objects.filter(calibracao=self.calibracao).exists()
+        )
+        self.assertIn("operation=adicionar_certificado", logs.output[0])
+        self.assertIn(f"calibracao_id={self.calibracao.id}", logs.output[0])
+        self.assertIn("HeadObject", logs.output[0])
+
+    def test_anexar_retorna_503_quando_storage_falha(self):
+        certificado = Certificado.objects.create(
+            numero="CERT-ANEXO",
+            calibracao=self.calibracao,
+        )
+        storage = Anexo._meta.get_field("anexo").storage
+
+        with patch.object(storage, "save", side_effect=_make_storage_client_error()):
+            with self.assertLogs("instrumentos.views", level="ERROR") as logs:
+                response = self.api.patch(
+                    "/calibracoes/anexar/",
+                    {
+                        "certificado": certificado.id,
+                        "anexo": self._uploaded_file("anexo.pdf"),
+                    },
+                    format="multipart",
+                )
+
+        self.assert_file_storage_error(response)
+        self.assertFalse(Anexo.objects.filter(certificado=certificado).exists())
+        self.assertIn("operation=anexar_certificado", logs.output[0])
+        self.assertIn(f"certificado_id={certificado.id}", logs.output[0])
+
+    def test_atualizar_certificado_retorna_503_quando_storage_falha(self):
+        certificado = Certificado.objects.create(
+            numero="CERT-ATUALIZAR",
+            calibracao=self.calibracao,
+        )
+        storage = Certificado._meta.get_field("arquivo").storage
+
+        with patch.object(storage, "save", side_effect=_make_storage_client_error()):
+            response = self.api.patch(
+                f"/calibracoes/{self.calibracao.id}/atualizar_certificado/",
+                {
+                    "certificado_id": certificado.id,
+                    "arquivo": self._uploaded_file("certificado-atualizado.pdf"),
+                },
+                format="multipart",
+            )
+
+        self.assert_file_storage_error(response)
+
+    def test_erro_de_programacao_nao_e_convertido_em_erro_de_storage(self):
+        with patch(
+            "instrumentos.views.Certificado.objects.create",
+            side_effect=ValueError("erro inesperado"),
+        ):
+            with self.assertRaises(ValueError):
+                self.api.post(
+                    f"/calibracoes/{self.calibracao.id}/adicionar_certificado/",
+                    {
+                        "numero": "CERT-ERRO",
+                        "arquivo": self._uploaded_file(),
+                    },
+                    format="multipart",
+                )
 
 
 class InstrumentoRelacionamentosIncrementaisTest(TestCase):

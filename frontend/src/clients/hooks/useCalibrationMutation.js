@@ -7,6 +7,15 @@ import { enqueueSnackbar } from 'notistack';
 import { useForm } from 'react-hook-form';
 
 
+const FILE_STORAGE_ERROR_MESSAGE = 'Erro de armazenamento de arquivos. Tente novamente mais tarde.';
+
+export const getCalibrationUploadErrorMessage = (error, fallbackMessage) => (
+  error?.response?.data?.error === 'file_storage_error'
+    ? FILE_STORAGE_ERROR_MESSAGE
+    : fallbackMessage
+);
+
+
 const useCalibrationsMutations = (id, instrumento, checagem) => {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [search, setSearch] = useState('');
@@ -282,8 +291,12 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
           await updateCertificate(calibracaoId, certificadoId, newNumero ?? '', arquivo);
         } catch (e) {
           console.error('Erro ao atualizar certificado:', e);
-          enqueueSnackbar('Calibração atualizada, mas atualização do certificado falhou.', {
-            variant: 'warning'
+          const message = getCalibrationUploadErrorMessage(
+            e,
+            'Calibração atualizada, mas atualização do certificado falhou.'
+          );
+          enqueueSnackbar(message, {
+            variant: e?.response?.data?.error === 'file_storage_error' ? 'error' : 'warning'
           });
         }
       }
@@ -341,7 +354,10 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     }, 
     onError: (error) => {
       setError(error?.response?.data);
-      enqueueSnackbar('Erro ao adicionar certificado. Tente novamente!', {
+      enqueueSnackbar(getCalibrationUploadErrorMessage(
+        error,
+        'Erro ao adicionar certificado. Tente novamente!'
+      ), {
         variant: 'error'
       });
     },
@@ -367,7 +383,10 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     }, 
     onError: (error) => {
       setError(error?.response?.data);
-      enqueueSnackbar('Erro ao adicionar certificado. Tente novamente!', {
+      enqueueSnackbar(getCalibrationUploadErrorMessage(
+        error,
+        'Erro ao adicionar certificado. Tente novamente!'
+      ), {
         variant: 'error'
       });
     },
