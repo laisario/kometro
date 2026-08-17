@@ -210,14 +210,26 @@ const TrustBar = () => (
     <p className="mb-5 text-center text-xs font-bold uppercase tracking-widest text-gray-500">
       Confiança de indústrias que não podem falhar em auditoria
     </p>
-    <Reveal className="flex flex-wrap justify-center gap-2.5">
-      {trustedCompanies.map((company) => (
-        <span
-          key={company}
-          className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-text"
+    <Reveal
+      as="ul"
+      className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-8"
+    >
+      {trustedCompanies.map(({ name, image }) => (
+        <li
+          key={name}
+          className="flex min-h-[64px] items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-center"
         >
-          {company}
-        </span>
+          {image ? (
+            <img
+              src={image}
+              alt={`Logo ${name}`}
+              className="h-10 w-full object-contain"
+              loading="lazy"
+            />
+          ) : (
+            <span className="text-sm font-bold text-text">{name}</span>
+          )}
+        </li>
       ))}
     </Reveal>
   </div>

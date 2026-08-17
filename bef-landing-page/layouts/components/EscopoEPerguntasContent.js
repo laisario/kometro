@@ -1,12 +1,44 @@
 export const trustedCompanies = [
-  "ArcelorMittal",
-  "Chevron",
-  "Volkswagen",
-  "Nissan",
-  "Hyundai Heavy Industries",
-  "Meritor",
-  "Texaco",
-  "IMBEL",
+  {
+    name: "ArcelorMittal",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/arcelormital-client.png",
+  },
+  {
+    name: "Chevron",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/chevron-client.png",
+  },
+  {
+    name: "Volkswagen",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/vw.png",
+  },
+  {
+    name: "Nissan",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/nissan.png",
+  },
+  {
+    name: "Hyundai Heavy Industries",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/hyundai-client.png",
+  },
+  {
+    name: "Meritor",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/meritor-client.png",
+  },
+  {
+    name: "Texaco",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/texaco-client.png",
+  },
+  {
+    name: "IMBEL",
+    image:
+      "https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/imbel.png",
+  },
 ];
 
 export const comparisonRows = [
