@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async';
 import { Box, Button, Container, Stack, Typography, Tabs, Tab } from '@mui/material';
 import GetAppIcon from '@mui/icons-material/GetApp';
@@ -59,8 +59,6 @@ function AssetsPage() {
     hasNextPage,
     isFetchingNextPage,
     mutateCreateClient,
-    expandedItems,
-    setExpandedItems,
     selectedItem,
     setSelectedItem,
     handleEdit,
@@ -137,7 +135,6 @@ function AssetsPage() {
                   search={search}
                   setSearch={setSearch}
                   data={assets}
-                  onSelectInstrument={setSelectedItem}
                 />
               )}
               <Button
@@ -235,8 +232,6 @@ function AssetsPage() {
                   hasNextPage={hasNextPage}
                   isFetchingNextPage={isFetchingNextPage}
                   mutate={mutateCreateClient}
-                  expandedItems={expandedItems}
-                  setExpandedItems={setExpandedItems}
                   setSelectedItem={setSelectedItem}
                   handleCloseCreateSector={handleCloseCreateSector}
                   isFetching={isFetching}

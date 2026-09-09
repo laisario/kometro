@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router';
 import { SnackbarProvider } from 'notistack';
 import { HelmetProvider } from 'react-helmet-async';
 import AssetsPage from '../../src/assets/pages/AssetsPage';
+import { SectorTreeProvider } from '../../src/assets/contexts/SectorTreeContext';
 
 // Desabilitar mock automático do react-query
 jest.unmock('react-query');
@@ -120,7 +121,7 @@ const renderWithProviders = (ui) => {
       <BrowserRouter>
         <QueryClientProvider client={queryClient}>
           <SnackbarProvider maxSnack={3}>
-            {ui}
+            <SectorTreeProvider>{ui}</SectorTreeProvider>
           </SnackbarProvider>
         </QueryClientProvider>
       </BrowserRouter>

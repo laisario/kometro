@@ -166,6 +166,7 @@ function InstrumentDetails({
   handleCloseCreateInstrument,
   mutateCreateClient,
   onDeleteSuccess,
+  renderCreateDialog = true,
 }) {
   const { user } = useAuth();
   
@@ -177,21 +178,23 @@ function InstrumentDetails({
           onCreate={() =>  setOpenFormCreateInstrument({status: true, type: 'create'})}
           imageAlt="Mascote da empresa"
         />
-        <CreateInstrument
-          handleClose={() => handleCloseCreateInstrument("create")}
-          open={openFormCreateInstrument?.type === 'create' && openFormCreateInstrument?.status}
-          defaultAssets={defaultAssets}
-          search={search}
-          setSearch={setSearch}
-          fetchNextPage={fetchNextPage}
-          hasNextPage={hasNextPage}
-          isFetchingNextPage={isFetchingNextPage}
-          setor={selectedItem}
-          cliente={user?.cliente}
-          mutate={mutateCreateClient}
-          error={error}
-          setError={setError}
-        />
+        {renderCreateDialog && (
+          <CreateInstrument
+            handleClose={() => handleCloseCreateInstrument("create")}
+            open={openFormCreateInstrument?.type === 'create' && openFormCreateInstrument?.status}
+            defaultAssets={defaultAssets}
+            search={search}
+            setSearch={setSearch}
+            fetchNextPage={fetchNextPage}
+            hasNextPage={hasNextPage}
+            isFetchingNextPage={isFetchingNextPage}
+            setor={selectedItem}
+            cliente={user?.cliente}
+            mutate={mutateCreateClient}
+            error={error}
+            setError={setError}
+          />
+        )}
       </>
     )
   }

@@ -5,6 +5,32 @@ import { render, createMockProps, mockAsset, mockDefaultAssets, mockSetores, moc
 import CreateInstrument from '../../src/assets/components/CreateInstrument';
 import * as reactQuery from 'react-query';
 
+const mockRefetchSectors = jest.fn(() => Promise.resolve({
+  data: [
+    { id: 1, nome: 'Produção', cliente: 1, subsetores: [] },
+    { id: 2, nome: 'Qualidade', cliente: 1, subsetores: [] },
+    { id: 3, nome: 'Controle', cliente: 1, subsetores: [] },
+  ],
+  isError: false,
+}));
+const mockSelectNode = jest.fn();
+
+jest.mock('../../src/assets/contexts/SectorTreeContext', () => ({
+  useSectorTreeContext: () => ({
+    clienteId: 1,
+    nodes: {
+      1: { id: '1', label: 'Produção', type: 'sector', childIds: [], instrumentIds: [] },
+      2: { id: '2', label: 'Qualidade', type: 'sector', childIds: [], instrumentIds: [] },
+      3: { id: '3', label: 'Controle', type: 'sector', childIds: [], instrumentIds: [] },
+    },
+    rootIds: ['1', '2', '3'],
+    hasLoadedTree: true,
+    isLoadingTree: false,
+    refetchSectors: mockRefetchSectors,
+    selectNode: mockSelectNode,
+  }),
+}));
+
 // Mock the hooks
 jest.mock('../../src/theme/hooks/useResponsive', () => ({
   __esModule: true,
@@ -120,6 +146,8 @@ jest.mock('../../src/assets/components/FormDefaultAsset', () => {
 
 jest.mock('../../src/components/AddArrayField', () => {
   return function MockAddArrayField({ label, fieldName, form, field }) {
+    const currentItems = form.getValues(fieldName);
+    const items = Array.isArray(currentItems) ? currentItems : [];
     return (
       <div data-testid="add-array-field">
         <label>{label}</label>
@@ -132,7 +160,7 @@ jest.mock('../../src/components/AddArrayField', () => {
           }}
         />
         <div data-testid={`${fieldName}-list`}>
-          {(form.getValues(fieldName) || []).map((item, index) => (
+          {items.map((item, index) => (
             <div key={index} data-testid={`${fieldName}-item-${index}`}>
               {item[field]}
             </div>
@@ -168,6 +196,8 @@ jest.mock('../../src/components/FormNorms', () => {
 
 jest.mock('../../src/components/CriteriosDeAceitacao', () => {
   return function MockCriteriosDeAceitacao({ form, fieldName }) {
+    const currentItems = form.getValues(fieldName);
+    const items = Array.isArray(currentItems) ? currentItems : [];
     return (
       <div data-testid="criterios-aceitacao">
         <input
@@ -179,7 +209,7 @@ jest.mock('../../src/components/CriteriosDeAceitacao', () => {
           }}
         />
         <div data-testid={`${fieldName}-list`}>
-          {(form.getValues(fieldName) || []).map((item, index) => (
+          {items.map((item, index) => (
             <div key={index} data-testid={`${fieldName}-item-${index}`}>
               {item.nome}
             </div>

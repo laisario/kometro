@@ -34,6 +34,35 @@ export const tipoServicoMap = {
   I: 'Interno',
 };
 
+export const buildTreeItems = (sector, parentId = null) => {
+  const children = [];
+
+  if (sector?.subsetores?.length) {
+    sector.subsetores.forEach((subsector) => {
+      children.push(buildTreeItems(subsector, sector.id));
+    });
+  }
+
+  if (sector?.instrumentos?.length) {
+    sector.instrumentos.forEach((instrument) => {
+      children.push({
+        id: `instrument-${instrument.id}`,
+        label: instrument.tag || instrument.numeroDeSerie || 'Instrumento',
+        itemType: 'instrument',
+        parentId: String(sector.id),
+      });
+    });
+  }
+
+  return {
+    id: String(sector?.id),
+    label: sector?.nome,
+    itemType: 'sector',
+    parentId: parentId ? String(parentId) : null,
+    children,
+  };
+};
+
 
 
 export function flattenSectors(data, depth = 0) {
@@ -73,8 +102,6 @@ export function flattenSectorsFromNodes(nodes, rootIds, depth = 0) {
   }
 
   const result = [];
-  const indentPrefix = '— '.repeat(depth); // Visual indentation prefix
-
   function traverse(nodeId, currentDepth = 0) {
     const node = nodes[nodeId];
     if (!node) return;

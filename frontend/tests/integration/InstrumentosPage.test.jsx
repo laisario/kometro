@@ -65,19 +65,10 @@ jest.mock('../../src/assets/hooks/useDefaultAssets', () => ({
   }),
 }));
 
-jest.mock('../../src/assets/hooks/useSectorTree', () => ({
-  __esModule: true,
-  default: () => ({
-    sectors: [
-      { id: '1', label: 'Produção', itemType: 'sector', depth: 0 },
-      { id: '2', label: 'Qualidade', itemType: 'sector', depth: 1 },
-    ],
-    isLoadingSectors: false,
-  }),
-}));
-
 jest.mock('../../src/assets/hooks/useAssetMutations', () => ({
   __esModule: true,
+  isSectorValidationError: () => false,
+  SECTOR_UNAVAILABLE_MESSAGE: 'Este setor não está mais disponível.',
   default: () => ({
     mutateCreateClient: jest.fn(),
     mutateUpdateClient: jest.fn(),
@@ -85,6 +76,18 @@ jest.mock('../../src/assets/hooks/useAssetMutations', () => ({
     mutateChangePosition: jest.fn(),
     error: {},
     setError: jest.fn(),
+  }),
+}));
+
+jest.mock('../../src/assets/contexts/SectorTreeContext', () => ({
+  useSectorTreeContext: () => ({
+    clienteId: 1,
+    nodes: {},
+    rootIds: [],
+    hasLoadedTree: true,
+    isLoadingTree: false,
+    refetchSectors: jest.fn(() => Promise.resolve({ data: [], isError: false })),
+    selectNode: jest.fn(),
   }),
 }));
 

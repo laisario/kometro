@@ -1,5 +1,4 @@
-import { useContext, useEffect, useState } from "react";
-import AssetsContext from "../components/context";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSectorTreeContext } from "../contexts/SectorTreeContext";
 import useResponsive from '../../theme/hooks/useResponsive';
 import useAsset from "../hooks/useAsset";
@@ -28,25 +27,28 @@ const useAssetsVm = (id, idSetor) => {
   const [selected, setSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
   const [openCreateSectorId, setOpenCreateSectorId] = useState(null);
-  const [expandedItems, setExpandedItems] = useState([])
-  const [selectedItem, setSelectedItem] = useState(null)
   const [creatingSector, setCreatingSector] = useState(false);
 
-  const { selectNode } = useSectorTreeContext();
+  const { nodes, selectedId, selectNode, expandPathToSector } = useSectorTreeContext();
+  const selectedItem = useMemo(() => {
+    if (!selectedId || !nodes[selectedId]) return null;
+    const node = nodes[selectedId];
+    return {
+      id: selectedId,
+      type: node.type === 'sector' ? 'sector' : 'instrument',
+      parentId: node.parentId,
+    };
+  }, [nodes, selectedId]);
+  const setSelectedItem = useCallback((item) => {
+    selectNode(item?.id ?? null);
+  }, [selectNode]);
 
   useEffect(() => {
     if (id && idSetor) {
-      setSelectedItem({id: `instrument-${id}`, type: 'instrument', parentId: idSetor})
       selectNode(`instrument-${id}`);
-      setExpandedItems(prevExpandedItems => {
-        const idSetorStr = String(idSetor);
-        if (prevExpandedItems?.includes(idSetorStr)) {
-          return prevExpandedItems;
-        }
-        return [...(prevExpandedItems || []), idSetorStr];
-      })
+      expandPathToSector(String(idSetor));
     }
-  }, [id, idSetor, selectNode])
+  }, [expandPathToSector, id, idSetor, selectNode])
 
   const [openFormCreateInstrument, setOpenFormCreateInstrument] = useState({
     status: false,
@@ -88,7 +90,7 @@ const useAssetsVm = (id, idSetor) => {
     isLoadingUpdateSectors, 
     isLoadingCreateSectors,
     errorSectors,
-  } = useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector)
+  } = useSectorMutations(setOpenCreateSectorId, setSelectedItem, handleCloseCreateSector, setCreatingSector)
   
   const { 
     defaultAssets, 
@@ -188,7 +190,6 @@ const useAssetsVm = (id, idSetor) => {
     setSearch,
     selectAll,
     valueCheckbox,
-    setError,
     selected,
     setSelected,
     asset, 
@@ -210,8 +211,6 @@ const useAssetsVm = (id, idSetor) => {
     hasNextPage,
     isFetchingNextPage,
     mutateCreateClient,
-    expandedItems,
-    setExpandedItems,
     selectedItem,
     setSelectedItem,
     handleEdit,

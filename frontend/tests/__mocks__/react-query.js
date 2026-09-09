@@ -20,12 +20,14 @@ export const useQueryClient = jest.fn(() => ({
   invalidateQueries: jest.fn(),
   setQueryData: jest.fn(),
   getQueryData: jest.fn(),
+  removeQueries: jest.fn(),
 }));
 
 export const QueryClient = jest.fn(() => ({
   invalidateQueries: jest.fn(),
   setQueryData: jest.fn(),
   getQueryData: jest.fn(),
+  removeQueries: jest.fn(),
 }));
 
 export const QueryClientProvider = ({ children }) => children;

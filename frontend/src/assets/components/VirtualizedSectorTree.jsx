@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { FixedSizeList } from 'react-window';
 import { Box, Button, Stack, Tooltip, Typography, CircularProgress, OutlinedInput, InputAdornment, IconButton } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
@@ -107,7 +107,6 @@ function VirtualizedSectorTree({
   handleEdit,
   handleCloseCreateSector,
   creatingSector,
-  setSelectedItem, // ADICIONAR: para sincronizar com estado externo
 }) {
   const { user, hasCreatePermission, hasEditPermission } = useAuth();
   
@@ -118,6 +117,7 @@ function VirtualizedSectorTree({
     selectedId,
     loadingIds,
     isLoadingTree,
+    hasLoadedTree,
     toggleExpand,
     loadChildren,
     selectNode,
@@ -179,18 +179,7 @@ function VirtualizedSectorTree({
   
   const handleSelect = useCallback((id) => {
     selectNode(id);
-    
-    if (setSelectedItem) {
-      const node = nodes[id];
-      if (node) {
-        setSelectedItem({
-          id: id,
-          type: node.type === 'sector' ? 'sector' : 'instrument',
-          parentId: node.parentId,
-        });
-      }
-    }
-  }, [selectNode, nodes, setSelectedItem]);
+  }, [selectNode]);
   
   const handleCreateSubsector = useCallback((id) => {
     handleCreate({ id, type: 'sector' });
@@ -229,9 +218,10 @@ function VirtualizedSectorTree({
         action: 'delete_all' 
       });
     }
+    selectNode(null);
     handleCloseCreateSector && handleCloseCreateSector();
     setNewSectorName('');
-  }, [openCreateSectorId, onDeleteSetor, handleCloseCreateSector]);
+  }, [openCreateSectorId, onDeleteSetor, handleCloseCreateSector, selectNode]);
   
   const handleCancelEdit = useCallback(() => {
     setEditingSectorId(null);
@@ -292,7 +282,7 @@ function VirtualizedSectorTree({
     return node?.label || '';
   }, [getSelectedNode]);
   
-  if (isLoadingTree) {
+  if (isLoadingTree && !hasLoadedTree) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 352 }}>
         <CircularProgress />

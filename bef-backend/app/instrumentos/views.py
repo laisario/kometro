@@ -57,7 +57,6 @@ from rkp_platform.pagination import CustomPagination
 from django.db.models import Count
 from rest_framework.decorators import action
 from rest_framework import response, status
-from django.core.cache import cache
 from django.db.models import Prefetch
 from rest_framework import pagination
 from clientes.models import Cliente
@@ -342,8 +341,6 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
                     criterio.instrumento = new_inst
                     criterio.save()
                 
-                cache.delete(f"hierarquia:{original.cliente_id}")
-
             ser = self.get_serializer(new_inst)
             return response.Response(ser.data, status=status.HTTP_201_CREATED)
 
@@ -898,24 +895,15 @@ class SetorViewSet(viewsets.ModelViewSet):
         if self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
             return Setor.objects.all()
         cliente_id = self.request.query_params.get("cliente_id")
+        if (
+            not self.request.user.is_staff
+            and not self.request.user.clientes.filter(pk=cliente_id).exists()
+        ):
+            return Setor.objects.none()
         return Setor.objects.filter(cliente=cliente_id)
-    
-    def perform_create(self, serializer):
-        obj = serializer.save()
-        cache.delete(f"hierarquia:{obj.cliente_id}")
-
-    def perform_update(self, serializer):
-        old = self.get_object()
-        old_cliente_id = old.cliente_id
-        obj = serializer.save()
-        cache.delete(f"hierarquia:{obj.cliente_id}")
-        if old_cliente_id != obj.cliente_id:
-            cache.delete(f"hierarquia:{old_cliente_id}")
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
-        cliente_id = instance.cliente_id
-        
         action_type = request.data.get('action', 'transfer_existing')
         instruments_to_move = request.data.get('instrumentsToMove') or request.data.get('instruments_to_move', [])
         instruments_to_delete = request.data.get('instrumentsToDelete') or request.data.get('instruments_to_delete', [])
@@ -951,7 +939,6 @@ class SetorViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        cache.delete(f"hierarquia:{cliente_id}")
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=False, methods=["get"])
@@ -963,14 +950,18 @@ class SetorViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        cache_key = f"hierarquia:{cliente_id}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return response.Response(cached)
+        if (
+            not request.user.is_staff
+            and not request.user.clientes.filter(pk=cliente_id).exists()
+        ):
+            return response.Response(
+                {"detail": "Cliente não pertence ao usuário autenticado."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         qs = (Setor.objects
               .filter(cliente_id=cliente_id)
-              .only("id", "nome", "setor_pai_id")
+              .only("id", "nome", "setor_pai_id", "cliente_id")
               .order_by("nome"))
         
         nodes = {}
@@ -979,6 +970,7 @@ class SetorViewSet(viewsets.ModelViewSet):
             nodes[s.id] = {
                 "id": s.id,
                 "nome": s.nome,
+                "cliente": s.cliente_id,
                 "subsetores": [],
             }
 
@@ -1010,7 +1002,6 @@ class SetorViewSet(viewsets.ModelViewSet):
             if sid in nodes:
                 nodes[sid]["instrumentos"] = payload
         
-        cache.set(cache_key, roots, 300)
         return response.Response(roots)
 
 

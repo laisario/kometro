@@ -178,6 +178,11 @@ class InstrumentoDoClienteSetorPatchTest(TestCase):
             setor=None,
         )
         self.setor = Setor.objects.create(nome="Laboratorio", cliente=self.cliente)
+        self.outro_cliente = _make_cliente()
+        self.setor_outro_cliente = Setor.objects.create(
+            nome="Setor externo",
+            cliente=self.outro_cliente,
+        )
 
     def test_patch_adiciona_setor_quando_instrumento_estava_sem_setor(self):
         response = self.api.patch(
@@ -212,6 +217,119 @@ class InstrumentoDoClienteSetorPatchTest(TestCase):
                 instrumento=self.instrumento
             ).exists()
         )
+
+    def test_create_aceita_setor_do_cliente_autenticado(self):
+        response = self.api.post(
+            "/instrumentos/",
+            {
+                "cliente": self.cliente.id,
+                "instrumento": self.instrumento_base.id,
+                "tag": "TAG-SETOR-PROPRIO",
+                "posicao": "I",
+                "setor": self.setor.id,
+                "criterios_aceitacao": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(
+            InstrumentoDoCliente.objects.get(tag="TAG-SETOR-PROPRIO").setor_id,
+            self.setor.id,
+        )
+
+    def test_create_rejeita_setor_inexistente(self):
+        response = self.api.post(
+            "/instrumentos/",
+            {
+                "cliente": self.cliente.id,
+                "instrumento": self.instrumento_base.id,
+                "tag": "TAG-SETOR-INEXISTENTE",
+                "posicao": "I",
+                "setor": 999999999,
+                "criterios_aceitacao": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("setor", response.data)
+        self.assertFalse(
+            InstrumentoDoCliente.objects.filter(tag="TAG-SETOR-INEXISTENTE").exists()
+        )
+
+    def test_create_rejeita_setor_de_outro_cliente(self):
+        response = self.api.post(
+            "/instrumentos/",
+            {
+                "cliente": self.cliente.id,
+                "instrumento": self.instrumento_base.id,
+                "tag": "TAG-SETOR-EXTERNO",
+                "posicao": "I",
+                "setor": self.setor_outro_cliente.id,
+                "criterios_aceitacao": [],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertIn("não pertence", str(response.data["setor"][0]).lower())
+        self.assertFalse(
+            InstrumentoDoCliente.objects.filter(tag="TAG-SETOR-EXTERNO").exists()
+        )
+
+    def test_patch_rejeita_setor_de_outro_cliente(self):
+        response = self.api.patch(
+            f"/instrumentos/{self.instrumento.id}/",
+            {"setor": self.setor_outro_cliente.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.data)
+        self.instrumento.refresh_from_db()
+        self.assertIsNone(self.instrumento.setor_id)
+
+
+class SetorHierarchyConsistencyTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.cliente = _make_cliente()
+        self.outro_cliente = _make_cliente()
+        self.user = User.objects.create_user(
+            username="observador-hierarquia",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="observador")[0])
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+    def test_hierarquia_reflete_exclusao_feita_fora_da_view(self):
+        setor = Setor.objects.create(nome="Temporario", cliente=self.cliente)
+        first_response = self.api.get(
+            "/setores/hierarquia/",
+            {"cliente_id": self.cliente.id},
+        )
+        self.assertEqual(first_response.status_code, 200, first_response.data)
+        self.assertIn(setor.id, [item["id"] for item in first_response.data])
+
+        Setor.objects.filter(pk=setor.pk).delete()
+
+        second_response = self.api.get(
+            "/setores/hierarquia/",
+            {"cliente_id": self.cliente.id},
+        )
+        self.assertEqual(second_response.status_code, 200, second_response.data)
+        self.assertNotIn(setor.id, [item["id"] for item in second_response.data])
+
+    def test_cliente_nao_pode_consultar_hierarquia_de_outro_cliente(self):
+        Setor.objects.create(nome="Externo", cliente=self.outro_cliente)
+
+        response = self.api.get(
+            "/setores/hierarquia/",
+            {"cliente_id": self.outro_cliente.id},
+        )
+
+        self.assertEqual(response.status_code, 403, response.data)
 
 
 class InstrumentoDoClienteSetorDuplicadoTest(TestCase):

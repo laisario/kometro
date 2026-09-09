@@ -1,12 +1,12 @@
-import { Accordion, AccordionDetails, AccordionSummary, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, IconButton, InputAdornment, InputLabel, List, MenuItem, Select, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from '@mui/material'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Accordion, AccordionDetails, AccordionSummary, Autocomplete, Box, Button, Chip, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, FormControl, Grid, InputAdornment, InputLabel, MenuItem, Select, TextField, Typography } from '@mui/material'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import useResponsive from '../../theme/hooks/useResponsive';
 import { useForm, useWatch } from 'react-hook-form';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FormDefaultAsset from './FormDefaultAsset';
 import useNorms from '../hooks/useNorms';
 import useClient from '../../clients/hooks/useClient';
-import { frequenceCriterion, flattenSectors, flattenSectorsFromNodes } from '../../utils/assets';
+import { frequenceCriterion, flattenSectorsFromNodes } from '../../utils/assets';
 import { useSectorTreeContext } from '../contexts/SectorTreeContext';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import 'dayjs/locale/pt-br';
@@ -20,6 +20,8 @@ import CriteriosDeAceitacao from '../../components/CriteriosDeAceitacao';
 import { useQuery } from 'react-query';
 import { axios } from '../../api';
 import { enqueueSnackbar } from 'notistack';
+import { findSectorInHierarchy } from '../api/sectorsApi';
+import { isSectorValidationError, SECTOR_UNAVAILABLE_MESSAGE } from '../hooks/useAssetMutations';
 
 const normalizeNormName = (value) => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -34,6 +36,32 @@ const dedupeNormsByName = (items = []) => {
     return true;
   });
 };
+
+const buildInstrumentFormValues = (instrument = null) => ({
+  tag: instrument?.tag || '',
+  numeroDeSerie: instrument?.numeroDeSerie || '',
+  classe: instrument?.classe || '',
+  posicao: instrument?.posicao || 'I',
+  observacao: instrument?.observacao || '',
+  frequenciaChecagem: {
+    quantidade: instrument?.frequenciaChecagem?.quantidade || null,
+    periodo: instrument?.frequenciaChecagem?.periodo || 'dia',
+  },
+  frequenciaCalibracao: {
+    quantidade: instrument?.frequenciaCalibracao?.quantidade || null,
+    periodo: instrument?.frequenciaCalibracao?.periodo || 'dia',
+  },
+  pontosDeCalibracao: instrument?.pontosDeCalibracao?.length
+    ? instrument.pontosDeCalibracao
+    : [],
+  dataUltimaCalibracao: instrument?.dataUltimaCalibracao || null,
+  dataUltimaChecagem: instrument?.dataUltimaChecagem || null,
+  criteriosAceitacao: instrument?.criteriosAceitacao?.length
+    ? instrument.criteriosAceitacao
+    : [],
+  criterioFrequencia: instrument?.criterioFrequencia || '',
+  setor: instrument?.setor?.caminhoHierarquia || '',
+});
 
 const PriceSection = ({ form, error, setError }) => {
   return (
@@ -55,7 +83,7 @@ const PriceSection = ({ form, error, setError }) => {
             ),
           }}
           {...form.register("precoAlternativoCalibracao", {
-            onChange: (e) => { if (error?.preco_alternativo_calibracao) setError({}) },
+            onChange: () => { if (error?.preco_alternativo_calibracao) setError({}) },
           })}
           error={!!error?.preco_alternativo_calibracao}
           helperText={!!error?.preco_alternativo_calibracao && error?.preco_alternativo_calibracao}
@@ -83,7 +111,6 @@ function CreateInstrument(props) {
     error,
     setError,
     isFetching,
-    setores = [],
     adminPreview = false,
     tableViewCreate = false, // New prop: when true, shows sector selector for creating instruments from table view
   } = props;
@@ -91,22 +118,22 @@ function CreateInstrument(props) {
   const isMobile = useResponsive('down', 'md');
 
   // Contexto sempre disponível pois provider está no CommonLayout
-  const context = useSectorTreeContext();
+  const {
+    nodes,
+    rootIds,
+    clienteId,
+    hasLoadedTree,
+    isFetchingTree,
+    refetchSectors,
+    selectNode,
+  } = useSectorTreeContext();
   
   const options = useMemo(() => {
-    // Priorizar contexto (sempre disponível)
-    if (context?.nodes && context?.rootIds && context.rootIds.length > 0) {
-      const flattened = flattenSectorsFromNodes(context.nodes, context.rootIds);
-      return flattened;
+    if (nodes && rootIds && rootIds.length > 0) {
+      return flattenSectorsFromNodes(nodes, rootIds);
     }
-    // Fallback para setores da prop (caso edge raro)
-    if (setores && setores.length > 0) {
-      const flattened = flattenSectors(setores);
-      return flattened;
-    }
-   
     return [];
-  }, [context?.nodes, context?.rootIds, setores]);
+  }, [nodes, rootIds]);
   
 
   // Buscar instrumento atualizado quando o formulário estiver aberto (para edição)
@@ -148,6 +175,11 @@ function CreateInstrument(props) {
   const [showFormNewNorm, setShowFormNewNorm] = useState(false);
   const [inputNorm, setInputNorm] = useState('');
   const [setorId, setSetorId] = useState(currentAsset?.setor?.id ? currentAsset?.setor?.id : null);
+  const [sectorSelectionError, setSectorSelectionError] = useState('');
+  const [isRefreshingSectors, setIsRefreshingSectors] = useState(false);
+  const previousClienteIdRef = useRef(clienteId);
+  const previousTreeSectorIdRef = useRef(null);
+  const previousOpenRef = useRef(false);
   const [deletingItems, setDeletingItems] = useState({
     normativos: {},
     pontos: {},
@@ -166,29 +198,38 @@ function CreateInstrument(props) {
     return found || null;
   }, [setorId, options]);
 
+  const treeSectorId = useMemo(() => {
+    if (tableViewCreate || currentAsset?.id || adminPreview) return null;
+    return setor?.type === 'sector' ? setor?.id : setor?.parentId;
+  }, [adminPreview, currentAsset?.id, setor, tableViewCreate]);
+
   const form = useForm({
-    defaultValues: {
-      tag: currentAsset?.tag ? currentAsset.tag : '',
-      numeroDeSerie: currentAsset?.numeroDeSerie ? currentAsset.numeroDeSerie : '',
-      classe: currentAsset?.classe ? currentAsset.classe : '',
-      posicao: currentAsset?.posicao ? currentAsset.posicao : "I",
-      observacao: currentAsset?.observacao ? currentAsset.observacao : '',
-      frequenciaChecagem: {
-        quantidade: currentAsset?.frequenciaChecagem?.quantidade ? currentAsset.frequenciaChecagem.quantidade : null,
-        periodo: currentAsset?.frequenciaChecagem?.periodo ? currentAsset.frequenciaChecagem.periodo : 'dia',
-      },
-      frequenciaCalibracao: {
-        quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
-        periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
-      },
-      pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao : [],
-      dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
-      dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
-      criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
-      criterioFrequencia: currentAsset?.criterioFrequencia || '',
-      setor: currentAsset?.setor?.caminhoHierarquia || '',
-    }
+    defaultValues: buildInstrumentFormValues(currentAsset),
   });
+
+  const resetTransientFormState = useCallback(() => {
+    form.reset(buildInstrumentFormValues());
+    setInstrumentoSelecionado(null);
+    setNorms([]);
+    setShowFormNewAsset(false);
+    setShowFormNewNorm(false);
+    setInputNorm('');
+    setSetorId(null);
+    setSectorSelectionError('');
+    previousTreeSectorIdRef.current = null;
+    if (setError) setError({});
+  }, [form, setError]);
+
+  const invalidateSectorSelection = useCallback((notify = false) => {
+    setSetorId(null);
+    setSectorSelectionError(SECTOR_UNAVAILABLE_MESSAGE);
+    if (!tableViewCreate) {
+      selectNode(null);
+    }
+    if (notify) {
+      enqueueSnackbar(SECTOR_UNAVAILABLE_MESSAGE, { variant: 'warning' });
+    }
+  }, [selectNode, tableViewCreate]);
 
   const {
     dataUltimaChecagem,
@@ -197,27 +238,7 @@ function CreateInstrument(props) {
 
   useEffect(() => {
     if (currentAsset && open) {
-      form.reset({
-        tag: currentAsset?.tag ? currentAsset.tag : '',
-        numeroDeSerie: currentAsset?.numeroDeSerie ? currentAsset.numeroDeSerie : '',
-        classe: currentAsset?.classe ? currentAsset.classe : '',
-        posicao: currentAsset?.posicao ? currentAsset.posicao : "I",
-        observacao: currentAsset?.observacao ? currentAsset.observacao : '',
-        frequenciaChecagem: {
-          quantidade: currentAsset?.frequenciaChecagem?.quantidade ? currentAsset.frequenciaChecagem.quantidade : null,
-          periodo: currentAsset?.frequenciaChecagem?.periodo ? currentAsset.frequenciaChecagem.periodo : 'dia',
-        },
-        frequenciaCalibracao: {
-          quantidade: currentAsset?.frequenciaCalibracao?.quantidade ? currentAsset.frequenciaCalibracao.quantidade : null,
-          periodo: currentAsset?.frequenciaCalibracao?.periodo ? currentAsset.frequenciaCalibracao.periodo : 'dia',
-        },
-        pontosDeCalibracao: currentAsset?.pontosDeCalibracao?.length ? currentAsset?.pontosDeCalibracao : [],
-        dataUltimaCalibracao: currentAsset?.dataUltimaCalibracao ? currentAsset?.dataUltimaCalibracao : null,
-        dataUltimaChecagem: currentAsset?.dataUltimaChecagem ? currentAsset?.dataUltimaChecagem : null,
-        criteriosAceitacao: currentAsset?.criteriosAceitacao?.length ? currentAsset?.criteriosAceitacao : [],
-        criterioFrequencia: currentAsset?.criterioFrequencia || '',
-        setor: currentAsset?.setor?.caminhoHierarquia || '',
-      });
+      form.reset(buildInstrumentFormValues(currentAsset));
 
       if (currentAsset?.instrumento) {
         setInstrumentoSelecionado({
@@ -238,7 +259,69 @@ function CreateInstrument(props) {
         setSetorId(null);
       }
     }
-  }, [currentAsset, open]);
+  }, [currentAsset, form, open]);
+
+  useEffect(() => {
+    const previousClienteId = previousClienteIdRef.current;
+    if (String(previousClienteId) === String(clienteId)) return;
+
+    previousClienteIdRef.current = clienteId;
+    setSetorId(null);
+    setSectorSelectionError('');
+    previousTreeSectorIdRef.current = null;
+  }, [clienteId]);
+
+  useEffect(() => {
+    if (
+      !adminPreview
+      && hasLoadedTree
+      && !isFetchingTree
+      && setorId
+      && !selectedOption
+    ) {
+      invalidateSectorSelection(false);
+    }
+  }, [
+    adminPreview,
+    hasLoadedTree,
+    isFetchingTree,
+    invalidateSectorSelection,
+    selectedOption,
+    setorId,
+  ]);
+
+  useEffect(() => {
+    if (!open || tableViewCreate || currentAsset?.id || adminPreview) {
+      previousTreeSectorIdRef.current = treeSectorId || null;
+      return;
+    }
+
+    if (treeSectorId) {
+      previousTreeSectorIdRef.current = treeSectorId;
+      setSectorSelectionError('');
+    } else if (previousTreeSectorIdRef.current) {
+      invalidateSectorSelection(false);
+      previousTreeSectorIdRef.current = null;
+    }
+  }, [adminPreview, currentAsset?.id, invalidateSectorSelection, open, tableViewCreate, treeSectorId]);
+
+  useEffect(() => {
+    const justOpened = open && !previousOpenRef.current;
+    previousOpenRef.current = open;
+
+    if (!justOpened) return;
+
+    if (!currentAsset?.id) {
+      resetTransientFormState();
+      previousTreeSectorIdRef.current = treeSectorId || null;
+    }
+
+    if (!adminPreview) {
+      refetchSectors().catch(() => {
+        enqueueSnackbar('Não foi possível atualizar a lista de setores.', { variant: 'error' });
+      });
+    }
+  }, [adminPreview, currentAsset?.id, open, refetchSectors, resetTransientFormState, treeSectorId]);
 
   const setDeletingItem = (type, id, value) => {
     setDeletingItems((prev) => ({
@@ -272,7 +355,7 @@ function CreateInstrument(props) {
       await deleteInstrumentNormativo(currentAsset.id, item.id);
       removeFromState();
       enqueueSnackbar('Normativo removido do instrumento.', { variant: 'success' });
-    } catch (error) {
+    } catch {
       enqueueSnackbar('Erro ao remover normativo. Tente novamente.', { variant: 'error' });
     } finally {
       setDeletingItem('normativos', item.id, false);
@@ -292,7 +375,7 @@ function CreateInstrument(props) {
       await deleteInstrumentPontoCalibracao(currentAsset.id, item.id);
       removeFromState();
       enqueueSnackbar('Ponto de calibração removido.', { variant: 'success' });
-    } catch (error) {
+    } catch {
       enqueueSnackbar('Erro ao remover ponto de calibração. Tente novamente.', { variant: 'error' });
     } finally {
       setDeletingItem('pontos', item.id, false);
@@ -312,14 +395,14 @@ function CreateInstrument(props) {
       await deleteInstrumentCriterioAceitacao(currentAsset.id, item.id);
       removeFromState();
       enqueueSnackbar('Critério de aceitação removido.', { variant: 'success' });
-    } catch (error) {
+    } catch {
       enqueueSnackbar('Erro ao remover critério de aceitação. Tente novamente.', { variant: 'error' });
     } finally {
       setDeletingItem('criterios', item.id, false);
     }
   };
 
-  const onSubmit = (data) => {
+  const onSubmit = async (data) => {
     const payload = {
       ...data,
       cliente,
@@ -338,6 +421,74 @@ function CreateInstrument(props) {
     }
 
 
+    const setorPk = currentAsset?.id
+      ? (setorId ? Number(setorId) : null)
+      : tableViewCreate
+        ? (setorId ? Number(setorId) : null)
+        : (treeSectorId ? Number(treeSectorId) : null);
+
+    if (!adminPreview) {
+      if (sectorSelectionError) {
+        enqueueSnackbar(SECTOR_UNAVAILABLE_MESSAGE, { variant: 'warning' });
+        return;
+      }
+
+      if (
+        clienteId == null
+        || cliente == null
+        || String(clienteId) !== String(cliente)
+      ) {
+        invalidateSectorSelection(true);
+        return;
+      }
+
+      setIsRefreshingSectors(true);
+      let refreshedSectors;
+      try {
+        const result = await refetchSectors();
+        if (result?.isError) throw result.error;
+        refreshedSectors = result?.data;
+      } catch {
+        enqueueSnackbar(
+          'Não foi possível atualizar a lista de setores. Tente novamente antes de salvar.',
+          { variant: 'error' },
+        );
+        return;
+      } finally {
+        setIsRefreshingSectors(false);
+      }
+
+      if (setorPk != null) {
+        const refreshedSector = findSectorInHierarchy(refreshedSectors, setorPk);
+        const belongsToCurrentClient = refreshedSector
+          && String(refreshedSector.cliente) === String(clienteId);
+
+        if (!belongsToCurrentClient) {
+          invalidateSectorSelection(true);
+          return;
+        }
+      }
+    }
+
+    const mutationCallbacks = {
+      onSuccess: () => {
+        if (!currentAsset?.id) {
+          resetTransientFormState();
+        } else {
+          setSectorSelectionError('');
+        }
+      },
+      onError: async (mutationError) => {
+        if (!isSectorValidationError(mutationError)) return;
+
+        try {
+          await refetchSectors();
+        } finally {
+          invalidateSectorSelection(false);
+        }
+      },
+    };
+
     if (currentAsset?.id) {
       const adminPayload = {
         ...payload,
@@ -347,32 +498,20 @@ function CreateInstrument(props) {
       const clientPayload = {
         ...payload,
         id: currentAsset?.id,
-        setor: setorId,
+        setor: setorPk,
         previousSetorId: currentAsset?.setor?.id,
       }
 
 
       const paramEdit = adminPreview ? adminPayload : clientPayload
-      mutate(paramEdit);
+      mutate(paramEdit, mutationCallbacks);
     } else {
-      const setorPk = tableViewCreate
-        ? (setorId ? Number(setorId) : null)
-        : (setor?.type === 'sector' ? Number(setor?.id) : Number(setor?.parentId));
       const paramCreate = adminPreview ? payload : ({
         ...payload,
         previousSetorId: null,
         setor: setorPk,
       });
-      if (import.meta.env.DEV) {
-        console.debug('[CreateInstrument] create payload setor', {
-          tableViewCreate,
-          adminPreview,
-          setorProp: setor,
-          setorIdLocal: setorId,
-          setorPk,
-        });
-      }
-      mutate(paramCreate);
+      mutate(paramCreate, mutationCallbacks);
     }
   }
 
@@ -391,7 +530,14 @@ function CreateInstrument(props) {
     ? posicao === 'U'
     : !currentAsset?.checagens?.length, [criterioFrequencia, posicao, currentAsset])
   return (
-    <Dialog onClose={() => { handleClose() }} open={open} fullScreen={isMobile}>
+    <Dialog
+      onClose={() => {
+        resetTransientFormState();
+        handleClose();
+      }}
+      open={open}
+      fullScreen={isMobile}
+    >
       <DialogTitle>{currentAsset ? 'Editar instrumento' : 'Crie seu instrumento'}</DialogTitle>
       <DialogContent sx={{ display: 'flex', flexDirection: 'column' }}>
         <Accordion defaultExpanded>
@@ -473,7 +619,7 @@ function CreateInstrument(props) {
                   size="small"
                   fullWidth
                   {...form.register('tag', {
-                    onChange: (e) => { if (error['non_field_errors']) setError({}) },
+                    onChange: () => { if (error['non_field_errors']) setError({}) },
                   })}
                   error={!!error['non_field_errors']}
                   helperText={!!error['non_field_errors'] && error['non_field_errors'][0]}
@@ -793,6 +939,7 @@ function CreateInstrument(props) {
                 onChange={(event, newValue) => {
                   const newId = newValue?.id || null;
                   setSetorId(newId);
+                  setSectorSelectionError('');
                 }}
                 getOptionLabel={(option) => option?.label ?? ''}
                 isOptionEqualToValue={(option, value) => {
@@ -805,7 +952,8 @@ function CreateInstrument(props) {
                     {...params}
                     label="Selecione o setor"
                     variant="outlined"
-                    helperText={!currentAsset?.id ? 'Deixe em branco para criar instrumento sem setor' : undefined}
+                    error={!!sectorSelectionError}
+                    helperText={sectorSelectionError || (!currentAsset?.id ? 'Deixe em branco para criar instrumento sem setor' : undefined)}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -884,12 +1032,13 @@ function CreateInstrument(props) {
         {adminPreview && <PriceSection form={form} error={error} setError={setError} isMobile={isMobile} />}
       </DialogContent>
       <DialogActions sx={{ justifyContent: 'space-between' }}>
-        <Button onClick={() => { handleClose(); form.reset() }}>Cancelar</Button>
+        <Button onClick={() => { resetTransientFormState(); handleClose(); }}>Cancelar</Button>
         <Button
-          onClick={() => { form.handleSubmit(onSubmit)(); setInstrumentoSelecionado(null) }}
+          onClick={() => { form.handleSubmit(onSubmit)() }}
           variant="contained"
+          disabled={isRefreshingSectors}
         >
-          {asset ? 'Editar instrumento' : 'Criar instrumento'}
+          {isRefreshingSectors ? <CircularProgress size={20} /> : (asset ? 'Editar instrumento' : 'Criar instrumento')}
         </Button>
       </DialogActions>
     </Dialog>

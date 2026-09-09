@@ -263,7 +263,7 @@ export const createMockProps = (overrides = {}) => ({
   hasNextPage: false,
   isFetchingNextPage: false,
   setor: { type: 'sector', id: 1, parentId: null },
-  cliente: mockCliente,
+  cliente: mockCliente.id,
   mutate: jest.fn(),
   asset: null,
   error: {},

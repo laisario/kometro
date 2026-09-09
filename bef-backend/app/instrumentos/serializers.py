@@ -935,6 +935,28 @@ class InstrumentoDoClienteWriteSerializer(serializers.ModelSerializer):
             )
         ]
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        cliente = attrs.get("cliente") or getattr(self.instance, "cliente", None)
+        setor = attrs.get("setor", serializers.empty)
+        if setor is serializers.empty:
+            setor = getattr(self.instance, "setor", None)
+
+        if setor is not None and cliente is not None and setor.cliente_id != cliente.id:
+            raise serializers.ValidationError({
+                "setor": "O setor selecionado não pertence ao cliente do instrumento."
+            })
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user and user.is_authenticated and not user.is_staff:
+            if cliente is None or not user.clientes.filter(pk=cliente.pk).exists():
+                raise serializers.ValidationError({
+                    "cliente": "O cliente informado não pertence ao usuário autenticado."
+                })
+
+        return attrs
+
 
     def create(self, validated_data):
         freq_checagem_data = validated_data.pop('frequencia_checagem', None)

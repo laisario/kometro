@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Card, CardContent, Grid } from '@mui/material';
 import Loading from '../../components/Loading';
 import EmptyYet from '../../components/EmptyYet';
@@ -24,8 +23,6 @@ function SectorTreeView({
   hasNextPage,
   isFetchingNextPage,
   mutate,
-  expandedItems,
-  setExpandedItems,
   setSelectedItem,
   handleCloseCreateSector,
   isFetching,
@@ -41,7 +38,6 @@ function SectorTreeView({
   mutateCreateClient,
   isLoadingUpdateClient,
   mutateDeleteClient,
-  setores,
   mutateChangePosition,
   selectedCalibrationId,
 }) {
@@ -111,7 +107,6 @@ function SectorTreeView({
             setError={setError}
             creatingSector={creatingSector}
             handleCloseCreateSector={handleCloseCreateSector}
-            setSelectedItem={setSelectedItem}
           />
           </Box>
         </Grid>
@@ -152,11 +147,11 @@ function SectorTreeView({
               error={error}
               setError={setError}
               isFetching={isFetching}
-              setores={setores}
               mutateChangePosition={mutateChangePosition}
               openFormCreateInstrument={openFormCreateInstrument}
               setOpenFormCreateInstrument={setOpenFormCreateInstrument}
               handleCloseCreateInstrument={handleCloseCreateInstrument}
+              renderCreateDialog={false}
             />
           </Box>
 

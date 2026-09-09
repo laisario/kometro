@@ -1,14 +1,18 @@
 import { enqueueSnackbar } from 'notistack';
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import 'dayjs/locale/pt-br';
 import { axios } from '../../api';
 import {getErrorMessage} from '../../utils/error'
-import { buildTreeItems } from './useSectorTree';
+import { buildTreeItems } from '../../utils/assets';
+import useAuth from '../../auth/hooks/useAuth';
+import { sectorQueryKey } from '../api/sectorsApi';
 
-function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelectedItem, handleCloseCreateSector, setCreatingSector) {
+function useSectorMutations(setOpenCreateSectorId, setSelectedItem, handleCloseCreateSector, setCreatingSector) {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const clienteId = user?.cliente ?? null;
   const mountedRef = useRef(true);
 
   // Track mount/unmount to prevent setState after unmount
@@ -41,8 +45,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     mutationFn: deleteSector,
     
     onSuccess: (_, variables) => {
-      // ✅ Nova estratégia: invalidate para forçar refetch
-      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      queryClient.invalidateQueries(sectorQueryKey(clienteId), { exact: true });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] });
       
       const actionMessages = {
@@ -82,8 +85,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
     mutationFn: updateSector,
     
     onSuccess: () => {
-      // ✅ Nova estratégia: invalidate para forçar refetch
-      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      queryClient.invalidateQueries(sectorQueryKey(clienteId), { exact: true });
       
       if (mountedRef.current) {
         handleCloseCreateSector()
@@ -118,7 +120,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
   } = useMutation({
     mutationFn: createSector,
     
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       if (!mountedRef.current) return;
 
       const realSector = buildTreeItems(res?.data);
@@ -127,8 +129,7 @@ function useSectorMutations(setOpenCreateSectorId, setExpandedItems, setSelected
         return;
       }
       
-      // ✅ Nova estratégia: invalidate para refetch + mostrar input de rename no topo
-      queryClient.invalidateQueries({ queryKey: ['setores'] });
+      await queryClient.invalidateQueries(sectorQueryKey(clienteId), { exact: true });
       
       if (mountedRef.current) {
         // Salvar ID do setor criado para renomear depois

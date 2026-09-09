@@ -1,14 +1,57 @@
 import { enqueueSnackbar } from 'notistack';
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQueryClient } from 'react-query';
 import 'dayjs/locale/pt-br';
 import dayjs from 'dayjs';
 import { axios } from '../../api';
 import {getErrorMessage} from '../../utils/error'
+import useAuth from '../../auth/hooks/useAuth';
+import { sectorQueriesKey, sectorQueryKey } from '../api/sectorsApi';
+
+export const SECTOR_UNAVAILABLE_MESSAGE = 'Este setor não está mais disponível. A lista de setores foi atualizada. Selecione outro setor e tente novamente.';
+
+export const isSectorValidationError = (error) => (
+  error?.response?.status === 400
+  && error?.response?.data
+  && Object.prototype.hasOwnProperty.call(error.response.data, 'setor')
+);
+
+export const getCreateInstrumentClientErrorMessage = (error) => {
+  if (isSectorValidationError(error)) {
+    return SECTOR_UNAVAILABLE_MESSAGE;
+  }
+
+  const errors = error?.response?.data;
+  if (!errors || typeof errors !== 'object') {
+    return getErrorMessage(error?.response?.status);
+  }
+
+  return Object.entries(errors)
+    .map(([field, messages]) => {
+      if (field === 'non_field_errors') {
+        return 'Você já possui um instrumento com essa Tag. Escolha outra.';
+      }
+
+      const formattedField = field === 'instrumento'
+        ? 'Instrumento base'
+        : field.charAt(0).toUpperCase() + field.slice(1);
+      const formattedMessages = Array.isArray(messages) ? messages.join(', ') : messages;
+      return `${formattedField} - ${formattedMessages}`;
+    })
+    .join('\n');
+};
 
 function useAssetMutations(handleClose, adminPreview) {
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const clienteId = user?.cliente ?? null;
+
+  const invalidateSectorQueries = () => (
+    clienteId == null
+      ? queryClient.invalidateQueries({ queryKey: sectorQueriesKey() })
+      : queryClient.invalidateQueries(sectorQueryKey(clienteId), { exact: true })
+  );
 
   const deleteAsset = async (id) => {
     await axios.delete(`/instrumentos/${id}/`);
@@ -146,12 +189,12 @@ function useAssetMutations(handleClose, adminPreview) {
     isLoading: isLoadingCreateClient, 
   } = useMutation({
     mutationFn: createInstrumentClient,
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       
       if (!adminPreview) {
-        queryClient.invalidateQueries({ queryKey: ['setores'] })
+        invalidateSectorQueries()
         queryClient.invalidateQueries({ queryKey: ['tipos-instrumento'] })
       }
       handleClose('create')
@@ -161,31 +204,10 @@ function useAssetMutations(handleClose, adminPreview) {
     },
     onError: (erro) => {
       const errors = erro?.response?.data;
-    
-      const mensagemDetalhada =
-      errors && typeof errors === "object"
-        ? Object.entries(errors)
-            .map(([campo, mensagens]) => {
-              let nomeFormatado;
-
-              if (campo === "instrumento") {
-                nomeFormatado = "Instrumento base";
-              } else if (campo === "non_field_errors") {
-                return "Você já possui um instrumento com essa Tag. Escolha outra.";
-              } else {
-                nomeFormatado =
-                  campo.charAt(0).toUpperCase() + campo.slice(1);
-              }
-
-              return `${nomeFormatado} - ${mensagens.join(", ")}`;
-            })
-            .join("\n")
-        : null;
-    
       setError(errors);
-    
+
       enqueueSnackbar(
-        mensagemDetalhada || getErrorMessage(erro?.response?.status),
+        getCreateInstrumentClientErrorMessage(erro),
         { variant: 'error', autoHideDuration: 2000 }
       );
     }
@@ -201,13 +223,13 @@ function useAssetMutations(handleClose, adminPreview) {
     isLoading: isLoadingUpdateClient,
   } = useMutation({
     mutationFn: updateInstrumentClient,
-    onSuccess: (_data, variables) => {
+    onSuccess: () => {
       enqueueSnackbar('Instrumento atualizado com sucesso!', {
         variant: 'success'
       });
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
-      queryClient.invalidateQueries({ queryKey: ['setores'] })
+      invalidateSectorQueries()
       
       handleClose('edit')
     },
@@ -225,7 +247,7 @@ function useAssetMutations(handleClose, adminPreview) {
   } = useMutation({
     mutationFn: async(id) => await axios.delete(`/instrumentos/${id}/`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores'] })
+      invalidateSectorQueries()
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
       enqueueSnackbar('Instrumento deletado com sucesso!', {
@@ -254,7 +276,7 @@ function useAssetMutations(handleClose, adminPreview) {
       queryClient.setQueryData(['instrumentos', String(variables?.id)], updateInstrumentPosition);
       queryClient.invalidateQueries({ queryKey: ['instrumentos'] })
       queryClient.invalidateQueries({ queryKey: ['instrumentos-table'] })
-      queryClient.invalidateQueries({ queryKey: ['setores'] })
+      invalidateSectorQueries()
       enqueueSnackbar('Mudança posição realizada com sucesso!', {
         variant: 'success'
       });
@@ -273,7 +295,7 @@ function useAssetMutations(handleClose, adminPreview) {
   } = useMutation({
     mutationFn: async(id) => await axios.post(`/instrumentos/${+(id)}/duplicar/`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['setores'] })
+      invalidateSectorQueries()
       enqueueSnackbar('Duplicação realizada com sucesso!', {
         variant: 'success'
       });

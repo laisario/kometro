@@ -5,6 +5,8 @@ import dayjs from 'dayjs';
 import { axios, axiosForFiles } from '../../api';
 import { enqueueSnackbar } from 'notistack';
 import { useForm } from 'react-hook-form';
+import useAuth from '../../auth/hooks/useAuth';
+import { sectorQueriesKey, sectorQueryKey } from '../../assets/api/sectorsApi';
 
 
 const FILE_STORAGE_ERROR_MESSAGE = 'Erro de armazenamento de arquivos. Tente novamente mais tarde.';
@@ -25,6 +27,7 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
   const [openCreateCertificate, setOpenCreateCertificate] = useState(false);
   const [error, setError] = useState({});
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const upsertCalibrationInList = (current, calibration) => {
     if (!Array.isArray(current) || !calibration?.id) return current;
@@ -128,7 +131,12 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
       queryClient.invalidateQueries(['calibracoes'])
       queryClient.invalidateQueries(['instrumentos'])
       queryClient.invalidateQueries(['dashboard'])
-      queryClient.invalidateQueries({ queryKey: ['setores'] })
+      if (user?.cliente != null) {
+        queryClient.invalidateQueries(sectorQueryKey(user.cliente), { exact: true })
+      } else {
+        // Staff sem cliente selecionado pode afetar qualquer árvore já armazenada.
+        queryClient.invalidateQueries({ queryKey: sectorQueriesKey() })
+      }
       setSelectedCalibration({});
       enqueueSnackbar(`${checagem ? 'Checagem' : 'Calibração'} deletada com sucesso!`, {
         variant: 'success'

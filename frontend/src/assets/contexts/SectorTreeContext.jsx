@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from 'react-query';
-import { axios } from '../../api';
 import useAuth from '../../auth/hooks/useAuth';
 import { normalizeTree } from '../hooks/useNormalizedTree';
+import { fetchSectorHierarchy, sectorQueryKey } from '../api/sectorsApi';
 
 const SectorTreeContext = createContext(null);
 
@@ -11,6 +11,7 @@ const SectorTreeContext = createContext(null);
  */
 export function SectorTreeProvider({ children }) {
   const { user } = useAuth();
+  const clienteId = user?.cliente ?? null;
   
   // Estado de UI (não derivado de dados)
   const [expandedIds, setExpandedIds] = useState(new Set());
@@ -20,24 +21,39 @@ export function SectorTreeProvider({ children }) {
   // Carregar árvore inicial do backend
   const { 
     data: hierarchicalData,
-    isFetching: isLoadingTree,
+    isLoading: isLoadingTree,
+    isFetching: isFetchingTree,
     isSuccess: querySuccess,
+    dataUpdatedAt,
+    refetch: queryRefetchSectors,
   } = useQuery(
-    ['setores'],
-    async () => {
-      const params = { cliente_id: user?.cliente };
-      const response = await axios.get('/setores/hierarquia/', { params });
-      return response.data;
-    },
+    sectorQueryKey(clienteId),
+    () => fetchSectorHierarchy(clienteId),
     {
-      enabled: !!user?.cliente,
+      enabled: clienteId != null,
       staleTime: 0,
       cacheTime: 10 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
       refetchOnMount: true,
     }
   );
+
+  // React Query normalmente mantém `refetch` estável, mas o contexto é consumido por
+  // efeitos críticos. Esta fachada garante identidade estável mesmo se a implementação
+  // da biblioteca mudar a referência retornada em algum render.
+  const queryRefetchSectorsRef = useRef(queryRefetchSectors);
+  queryRefetchSectorsRef.current = queryRefetchSectors;
+  const refetchSectors = useCallback(
+    (...args) => queryRefetchSectorsRef.current(...args),
+    [],
+  );
+
+  useEffect(() => {
+    setExpandedIds(new Set());
+    setSelectedId(null);
+    setLoadingIds(new Set());
+  }, [clienteId]);
   
   // ✅ FIX: Derivar nodes/rootIds/nodesMap DIRETAMENTE de hierarchicalData (síncrono!)
   // Isso garante que setQueryData → hierarchicalData muda → normalização roda → UI atualiza
@@ -64,6 +80,12 @@ export function SectorTreeProvider({ children }) {
   
   // ✅ hasLoadedTree: simples - se query teve sucesso, tree "carregou"
   const hasLoadedTree = querySuccess;
+
+  useEffect(() => {
+    if (!isFetchingTree && querySuccess && selectedId && !nodes[selectedId]) {
+      setSelectedId(null);
+    }
+  }, [isFetchingTree, nodes, querySuccess, selectedId]);
   
   // Lazy loading de filhos de um setor específico
   const loadChildren = useCallback(async (sectorId) => {
@@ -178,14 +200,19 @@ export function SectorTreeProvider({ children }) {
     
     // Status
     isLoadingTree,
+    isFetchingTree,
     hasLoadedTree,
     hasSectors: rootIds.length > 0,
+    dataUpdatedAt,
+    clienteId,
+    sectorQueryKey: sectorQueryKey(clienteId),
     
     // Actions
     toggleExpand,
     expandPathToSector,
     loadChildren,
     selectNode,
+    refetchSectors,
     
     // Helpers
     getRootIds,
@@ -203,11 +230,15 @@ export function SectorTreeProvider({ children }) {
     selectedId,
     loadingIds,
     isLoadingTree,
+    isFetchingTree,
     hasLoadedTree,
+    dataUpdatedAt,
+    clienteId,
     toggleExpand,
     expandPathToSector,
     loadChildren,
     selectNode,
+    refetchSectors,
     getRootIds,
     getChildIds,
     isLoaded,

@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen, waitFor, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from 'react-query';
+import { focusManager, QueryClient, QueryClientProvider } from 'react-query';
 import VirtualizedSectorTree from '../../src/assets/components/VirtualizedSectorTree';
 import { SectorTreeProvider } from '../../src/assets/contexts/SectorTreeContext';
 
@@ -19,6 +19,21 @@ jest.mock('../../src/api', () => ({
 
 import { axios as mockAxios } from '../../src/api';
 const mockAxiosGet = mockAxios.get;
+let mockCreateInstrumentMounts = 0;
+let mockCreateInstrumentUnmounts = 0;
+
+jest.mock('../../src/assets/components/CreateInstrument', () => {
+  const ReactActual = jest.requireActual('react');
+  return function MockCreateInstrument({ open }) {
+    ReactActual.useEffect(() => {
+      mockCreateInstrumentMounts += 1;
+      return () => {
+        mockCreateInstrumentUnmounts += 1;
+      };
+    }, []);
+    return open ? <div data-testid="create-instrument-dialog">Formulário</div> : null;
+  };
+});
 
 // Mock do useAuth
 jest.mock('../../src/auth/hooks/useAuth', () => ({
@@ -34,7 +49,6 @@ jest.mock('../../src/auth/hooks/useAuth', () => ({
 // Mock do react-window
 jest.mock('react-window', () => ({
   FixedSizeList: ({ children, itemCount, height, width }) => {
-    console.log('FixedSizeList render:', { itemCount, height, width });
     if (itemCount === 0) {
       return <div data-testid="fixed-size-list-empty">Vazio</div>;
     }
@@ -53,7 +67,6 @@ jest.mock('react-window', () => ({
 // Mock do AutoSizer
 jest.mock('react-virtualized-auto-sizer', () => ({
   AutoSizer: ({ children }) => {
-    console.log('AutoSizer render');
     return <div data-testid="autosizer">{children({ height: 600, width: 400 })}</div>;
   },
 }));
@@ -128,15 +141,17 @@ const createWrapper = () => {
 };
 
 beforeEach(() => {
-  console.log('Setting up mocks with data:', mockSectorData);
-  
   // Reset mocks
   mockAxiosGet.mockClear();
+  mockCreateInstrumentMounts = 0;
+  mockCreateInstrumentUnmounts = 0;
   
   // Setup axios mock to return resolved promise
   mockAxiosGet.mockResolvedValue({ data: mockSectorData });
-  
-  console.log('Mock setup complete, mockAxiosGet:', mockAxiosGet);
+});
+
+afterEach(() => {
+  focusManager.setFocused(undefined);
 });
 
 describe('VirtualizedSectorTree', () => {
@@ -217,5 +232,40 @@ describe('VirtualizedSectorTree', () => {
     await waitFor(() => {
       expect(screen.getByText('Setor Teste 2')).toBeInTheDocument();
     }, { timeout: 3000 });
+  });
+
+  it('não desmonta o formulário nem troca a árvore por loading durante refetch', async () => {
+    render(
+      <VirtualizedSectorTree
+        {...defaultProps}
+        openFormCreateInstrument={{ status: true, type: 'create' }}
+      />,
+      { wrapper: createWrapper() },
+    );
+
+    await waitFor(() => expect(screen.getByTestId('create-instrument-dialog')).toBeInTheDocument());
+    expect(mockCreateInstrumentMounts).toBe(1);
+
+    let resolveRefetch;
+    mockAxiosGet.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveRefetch = resolve;
+    }));
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => expect(mockAxiosGet).toHaveBeenCalledTimes(2));
+    expect(screen.getByTestId('create-instrument-dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('fixed-size-list')).toBeInTheDocument();
+    expect(mockCreateInstrumentMounts).toBe(1);
+    expect(mockCreateInstrumentUnmounts).toBe(0);
+
+    await act(async () => {
+      resolveRefetch({ data: mockSectorData });
+    });
+    await waitFor(() => expect(mockAxiosGet).toHaveBeenCalledTimes(2));
+    expect(mockCreateInstrumentMounts).toBe(1);
+    expect(mockCreateInstrumentUnmounts).toBe(0);
   });
 });

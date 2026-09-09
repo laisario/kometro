@@ -1,7 +1,7 @@
 export default {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/tests/setup.js'],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@mui/(.*)$': '<rootDir>/node_modules/@mui/$1',
     '^@emotion/(.*)$': '<rootDir>/node_modules/@emotion/$1',

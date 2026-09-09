@@ -1,11 +1,12 @@
-import { useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import { useContext, useMemo, useState } from 'react';
 import  AuthContext from '../context'
 import { axios } from '../../api';
-import { useMutation } from 'react-query';
+import { useMutation, useQueryClient } from 'react-query';
 import { enqueueSnackbar } from 'notistack';
 import { jwtDecode } from 'jwt-decode';
 import { useNavigate } from 'react-router';
-import { verifyError } from '../../utils/error';
+import { getErrorMessage, verifyError } from '../../utils/error';
+import { sectorQueriesKey } from '../../assets/api/sectorsApi';
 
 
 const errorMessagesLogin = {
@@ -26,6 +27,7 @@ export default function useAuth() {
   const { user, setUser, clienteId, setClienteId } = useContext(AuthContext);
   const navigate = useNavigate();
   const [error, setError] = useState({});
+  const queryClient = useQueryClient();
 
   const handleErrorLogin = (err) => {
     if (!err?.response) {
@@ -57,6 +59,7 @@ export default function useAuth() {
         const decoded = jwtDecode(token);
         window.localStorage.setItem('token', token);
         const user = { token, nome: decoded?.nome, id: decoded?.user_id, admin: decoded?.admin, cliente: decoded?.cliente, empresaNome: decoded?.empresa_nome }
+        queryClient.removeQueries(sectorQueriesKey());
         setUser(user);
         window.localStorage.setItem('user', JSON.stringify(user));
         
@@ -158,6 +161,7 @@ export default function useAuth() {
   );
 
   const logout = () => {
+    queryClient.removeQueries(sectorQueriesKey());
     window.localStorage.removeItem('token');
     window.localStorage.removeItem('user');
     setUser(null);
