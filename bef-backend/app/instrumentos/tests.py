@@ -6,7 +6,8 @@ from botocore.exceptions import ClientError
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, TransactionTestCase
-from rest_framework.test import APIClient
+from rest_framework.request import Request
+from rest_framework.test import APIClient, APIRequestFactory
 
 from clientes.models import Cliente, Empresa
 from instrumentos.models import (
@@ -30,6 +31,8 @@ from instrumentos.serializers import (
     SetorSerializer,
 )
 from clientes.signals import NORMAS_PADRAO, criar_normas_padrao
+from instrumentos.constants import MAX_EXPORT_ITEMS
+from instrumentos.views import InstrumentoPagination
 
 
 def _make_cliente():
@@ -159,6 +162,143 @@ class InstrumentoDoClienteExpirationStatusFilterTest(TestCase):
             response.data["results"][0]["id"],
             {self.vencido.id, self.outro_vencido.id},
         )
+
+
+class InstrumentoPaginationAndExportTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="gerente-exportacao-instrumentos",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+
+        self.cliente = _make_cliente()
+        self.outro_cliente = _make_cliente()
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        instrumento_base = _make_instrumento_base()
+        self.instrumento_autorizado = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=instrumento_base,
+            tag="EXPORT-AUTORIZADO",
+        )
+        self.outro_instrumento_autorizado = (
+            InstrumentoDoCliente.objects.create(
+                cliente=self.cliente,
+                instrumento=instrumento_base,
+                tag="EXPORT-AUTORIZADO-2",
+            )
+        )
+        self.instrumento_outro_cliente = InstrumentoDoCliente.objects.create(
+            cliente=self.outro_cliente,
+            instrumento=instrumento_base,
+            tag="EXPORT-NAO-AUTORIZADO",
+        )
+
+    def _exportar(self, ids):
+        return self.api.post(
+            "/instrumentos/exportar/",
+            {
+                "instrumentos_selecionados": [
+                    {"id": item_id} for item_id in ids
+                ],
+                "campos_selecionados": ["tag"],
+            },
+            format="json",
+        )
+
+    def test_page_size_ate_limite_e_permitido(self):
+        request = Request(APIRequestFactory().get(
+            "/instrumentos/",
+            {"page_size": MAX_EXPORT_ITEMS},
+        ))
+
+        self.assertEqual(
+            InstrumentoPagination().get_page_size(request),
+            MAX_EXPORT_ITEMS,
+        )
+
+    def test_page_size_acima_do_limite_e_reduzido_ao_maximo(self):
+        request = Request(APIRequestFactory().get(
+            "/instrumentos/",
+            {"page_size": MAX_EXPORT_ITEMS + 1},
+        ))
+
+        self.assertEqual(
+            InstrumentoPagination().get_page_size(request),
+            MAX_EXPORT_ITEMS,
+        )
+
+    def test_exportacao_de_instrumentos_autorizados(self):
+        response = self._exportar([
+            self.instrumento_autorizado.id,
+            self.outro_instrumento_autorizado.id,
+        ])
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("EXPORT-AUTORIZADO", response.data)
+        self.assertIn("EXPORT-AUTORIZADO-2", response.data)
+
+    def test_exportacao_com_mais_de_9999_ids_e_rejeitada(self):
+        response = self._exportar(range(1, MAX_EXPORT_ITEMS + 2))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.data)
+
+    def test_payload_grande_com_ids_duplicados_e_rejeitado(self):
+        response = self._exportar(
+            [self.instrumento_autorizado.id] * (MAX_EXPORT_ITEMS + 1)
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.data)
+
+    def test_ids_duplicados_sao_exportados_uma_unica_vez(self):
+        response = self._exportar([
+            self.instrumento_autorizado.id,
+            self.instrumento_autorizado.id,
+        ])
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data.count("EXPORT-AUTORIZADO"), 1)
+
+    def test_instrumento_de_outro_cliente_nao_e_exportado(self):
+        response = self._exportar([
+            self.instrumento_autorizado.id,
+            self.instrumento_outro_cliente.id,
+        ])
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("EXPORT-AUTORIZADO", response.data)
+        self.assertNotIn("EXPORT-NAO-AUTORIZADO", response.data)
+
+    def test_id_invalido_e_rejeitado(self):
+        response = self.api.post(
+            "/instrumentos/exportar/",
+            {
+                "instrumentos_selecionados": [{"id": "invalido"}],
+                "campos_selecionados": ["tag"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.data)
+
+    def test_id_fracionario_e_rejeitado(self):
+        response = self.api.post(
+            "/instrumentos/exportar/",
+            {
+                "instrumentos_selecionados": [{"id": 1.5}],
+                "campos_selecionados": ["tag"],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("detail", response.data)
 
 
 class InstrumentoDoClienteSetorPatchTest(TestCase):

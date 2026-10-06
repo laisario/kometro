@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { enqueueSnackbar } from "notistack";
 import { useSectorTreeContext } from "../contexts/SectorTreeContext";
 import useResponsive from '../../theme/hooks/useResponsive';
 import useAsset from "../hooks/useAsset";
@@ -75,7 +76,13 @@ const useAssetsVm = (id, idSetor) => {
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
+    fetchAllMatchingAssets,
+    filterSignature,
+    isSelectingAll,
   } = useAssets();
+  const activeFilterSignatureRef = useRef(filterSignature);
+  const previousFilterSignatureRef = useRef(filterSignature);
+  activeFilterSignatureRef.current = filterSignature;
   
   const handleCloseCreateSector = () => {
     setOpenCreateSectorId(null)
@@ -141,16 +148,56 @@ const useAssetsVm = (id, idSetor) => {
   };
 
   useEffect(() => {
-    if (selectAll) {
-      setSelected(assets?.results?.map((intrument) => ({id: intrument?.id, instrumento: intrument})))
-    } else {
-      setSelected([])
+    if (previousFilterSignatureRef.current !== filterSignature) {
+      setSelected([]);
+      setSelectAll(false);
+      previousFilterSignatureRef.current = filterSignature;
     }
-  }, [selectAll])
+  }, [filterSignature]);
 
-  const handleCheckboxSelectAll = () => {
-    setSelectAll((oldSelectAll) => !oldSelectAll)
-  }
+  const handleCheckboxSelectAll = async () => {
+    if (isSelectingAll) return;
+
+    if (selectAll) {
+      setSelected([]);
+      setSelectAll(false);
+      return;
+    }
+
+    try {
+      const result = await fetchAllMatchingAssets(assets?.count || 0);
+      if (!result || result.filterSignature !== activeFilterSignatureRef.current) return;
+
+      const selectedResults = (result.results || []).map((instrumento) => ({
+        id: instrumento.id,
+        instrumento,
+      }));
+      setSelected(selectedResults);
+      setSelectAll(selectedResults.length > 0);
+    } catch {
+      enqueueSnackbar('Não foi possível selecionar todos os instrumentos. Tente novamente.', {
+        variant: 'error',
+        autoHideDuration: 3000,
+      });
+    }
+  };
+
+  const handleRowSelect = (idInstrumento, instrumento) => {
+    setSelectAll(false);
+    setSelected((currentSelection) => {
+      const isSelected = currentSelection.some(
+        (item) => String(item.id) === String(idInstrumento)
+      );
+
+      if (isSelected) {
+        return currentSelection.filter(
+          (item) => String(item.id) !== String(idInstrumento)
+        );
+      }
+
+      return [...currentSelection, { id: idInstrumento, instrumento }];
+    });
+  };
 
   const handleClickOpen = () => {
     setOpen(true);
@@ -174,6 +221,7 @@ const useAssetsVm = (id, idSetor) => {
     });
     setError(false);
     setSelectAll(false)
+    setSelected([])
     assetFilterForm.reset()
   };
 
@@ -181,6 +229,7 @@ const useAssetsVm = (id, idSetor) => {
     handleClose,
     handleClickOpen,
     handleCheckboxSelectAll,
+    handleRowSelect,
     handleChangeCheckbox,
     isMobile,
     open,
@@ -234,6 +283,7 @@ const useAssetsVm = (id, idSetor) => {
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
+    isSelectingAll,
     creatingSector,
     setCreatingSector,
   }

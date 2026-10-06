@@ -60,6 +60,7 @@ from rest_framework import response, status
 from django.db.models import Prefetch
 from rest_framework import pagination
 from clientes.models import Cliente
+from .constants import MAX_EXPORT_ITEMS
 
 
 logger = logging.getLogger(__name__)
@@ -69,6 +70,10 @@ FILE_STORAGE_ERROR_RESPONSE = {
     "error": "file_storage_error",
     "message": "Erro de armazenamento de arquivos.",
 }
+
+
+class InstrumentoPagination(CustomPagination):
+    max_page_size = MAX_EXPORT_ITEMS
 
 
 def file_storage_error_response(exc, *, operation, calibracao_id, certificado_id=None):
@@ -98,7 +103,7 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
     ]
     cliente_field = "cliente"
     permission_classes = [NivelPermission]
-    pagination_class = CustomPagination
+    pagination_class = InstrumentoPagination
 
     def get_serializer_class(self, *args, **kwargs):
         user = self.request.user
@@ -171,10 +176,66 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
             "instrumentos_selecionados", []
         )
         campos_selecionados = dados_selecionados.get("campos_selecionados", [])
-        ids = [item["id"] for item in instrumentos_selecionados]
-        instrumentos_exportados = (
-            InstrumentoDoCliente.objects.filter(id__in=ids)
-        )
+
+        if not isinstance(instrumentos_selecionados, list):
+            return response.Response(
+                {"detail": "instrumentos_selecionados deve ser uma lista."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(instrumentos_selecionados) > MAX_EXPORT_ITEMS:
+            return response.Response(
+                {
+                    "detail": (
+                        f"É possível exportar até {MAX_EXPORT_ITEMS} "
+                        "instrumentos por vez."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        ids = []
+        ids_vistos = set()
+        erro_id_invalido = {
+            "detail": (
+                "Cada instrumento selecionado deve possuir um id válido."
+            )
+        }
+        for item in instrumentos_selecionados:
+            if not isinstance(item, dict) or "id" not in item:
+                return response.Response(
+                    erro_id_invalido,
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            item_id = item.get("id")
+            if isinstance(item_id, bool) or (
+                isinstance(item_id, float) and not item_id.is_integer()
+            ):
+                return response.Response(
+                    erro_id_invalido,
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            try:
+                item_id = int(item_id)
+            except (TypeError, ValueError):
+                return response.Response(
+                    erro_id_invalido,
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if item_id <= 0:
+                return response.Response(
+                    erro_id_invalido,
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if item_id not in ids_vistos:
+                ids_vistos.add(item_id)
+                ids.append(item_id)
+
+        instrumentos_exportados = self.get_queryset().filter(id__in=ids)
         resource = InstrumentoExportResource(campos_selecionados=campos_selecionados)
         dataset = resource.export(queryset=instrumentos_exportados)
         csv_content = dataset.csv

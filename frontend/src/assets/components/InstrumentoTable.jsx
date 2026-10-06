@@ -1,25 +1,31 @@
-import React, { forwardRef, useMemo, useState } from 'react';
+import { forwardRef, useMemo } from 'react';
+import PropTypes from 'prop-types';
 import {
   Table, TableBody, TableCell, TableHead, TableRow,
-  Checkbox, Box, TablePagination, TableContainer
+  Checkbox, Box, TablePagination, TableContainer,
+  FormControlLabel, Stack, Typography, Chip,
+  CircularProgress, IconButton, Tooltip
 } from '@mui/material';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { positionLabels } from '../../utils/assets';
 import { fDate } from '../../utils/formatTime';
+import { MAX_EXPORT_ITEMS } from '../constants';
 
-const InstrumentoTable = forwardRef(({ 
+const InstrumentoTable = forwardRef(function InstrumentoTable({
   csvContent, 
   selectAll, 
   instrumentos, 
   valueCheckbox, 
   selected, 
-  setSelected, 
   handleCheckboxSelectAll,
+  handleRowSelect,
+  isSelectingAll,
   page,
   rowsPerPage,
   handleChangePage,
   handleChangeRowsPerPage,
   count,
-}, ref) => {
+}, ref) {
   const fieldMap = {
     tag: { label: 'Tag', path: 'tag' },
     numeroDeSerie: { label: 'Número de Série', path: 'numeroDeSerie' },
@@ -36,17 +42,16 @@ const InstrumentoTable = forwardRef(({
   };
 
   const activeFields = Object.keys(valueCheckbox).filter((key) => valueCheckbox[key]);
-
-  const handleRowSelect = (id, instrumento) => {
-    setSelected((prev) => {
-      const exists = prev.find((item) => item.id === id);
-  
-      if (exists) {
-        return prev.filter((item) => item.id !== id);
-      }
-      return [...prev, { id, instrumento }];
-    });
-  };
+  const selectedCount = selected?.length || 0;
+  const foundCount = count ?? instrumentos?.length ?? 0;
+  const selectionReachedLimit = selectAll && foundCount > MAX_EXPORT_ITEMS;
+  const selectedIds = useMemo(
+    () => new Set(selected.map((item) => String(item.id))),
+    [selected]
+  );
+  const selectedLabel = selectionReachedLimit
+    ? `${selectedCount.toLocaleString('pt-BR')} de ${foundCount.toLocaleString('pt-BR')} resultados selecionados — limite de exportação`
+    : `${selectedCount.toLocaleString('pt-BR')} selecionado${selectedCount === 1 ? '' : 's'}`;
 
   const getValue = (item, path) => {
     return path?.split('.')?.reduce((acc, part) => acc?.[part], item) ?? '';
@@ -57,20 +62,68 @@ const InstrumentoTable = forwardRef(({
       return selected?.map((inst) => inst?.instrumento)
     }
     return instrumentos
-  }, [csvContent])
+  }, [csvContent, instrumentos, selected])
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
-      <TableContainer sx={{ flex: 1, overflow: 'auto', maxHeight: csvContent ? 'none' : '60vh' }}>
-        <Table ref={ref} size="small" stickyHeader>
+    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        alignItems={{ xs: 'flex-start', sm: 'center' }}
+        justifyContent="space-between"
+        spacing={1}
+        sx={{ px: 2, py: 1.25, borderBottom: 1, borderColor: 'divider', flexShrink: 0 }}
+      >
+        <Box>
+          <Typography variant="subtitle1" fontWeight={600}>
+            {csvContent ? 'Pré-visualização do relatório' : 'Instrumentos encontrados'}
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mt: 0.5, flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Chip size="small" variant="outlined" label={`${foundCount.toLocaleString('pt-BR')} encontrado${foundCount === 1 ? '' : 's'}`} />
+            {!csvContent && (
+              <Chip size="small" color={selectedCount ? 'primary' : 'default'} label={selectedLabel} />
+            )}
+          </Stack>
+        </Box>
+
+        {!csvContent && (
+          <Stack direction="row" alignItems="center" spacing={0.25}>
+            <FormControlLabel
+              sx={{ m: 0 }}
+              control={(
+                isSelectingAll
+                  ? <CircularProgress size={20} sx={{ m: 1.125 }} />
+                  : (
+                    <Checkbox
+                      size="small"
+                      checked={selectAll}
+                      indeterminate={!selectAll && selectedCount > 0}
+                      onChange={handleCheckboxSelectAll}
+                      disabled={foundCount === 0}
+                    />
+                  )
+              )}
+              label={(
+                <Typography variant="body2" fontWeight={600} color={isSelectingAll ? 'text.secondary' : 'text.primary'}>
+                  {selectAll ? 'Limpar seleção' : 'Selecionar todos os resultados'}
+                </Typography>
+              )}
+              disabled={isSelectingAll || foundCount === 0}
+            />
+            <Tooltip title={`É possível exportar até ${MAX_EXPORT_ITEMS.toLocaleString('pt-BR')} instrumentos por vez.`}>
+              <IconButton size="small" aria-label="Limite de exportação">
+                <InfoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        )}
+      </Stack>
+
+      <TableContainer sx={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto' }}>
+        <Table ref={ref} size="small" stickyHeader sx={{ minWidth: 'max-content', width: '100%' }}>
           <TableHead>
             <TableRow>
               <TableCell padding="checkbox">
-                {!csvContent && <Checkbox
-                  size="small"
-                  checked={selectAll}
-                  onChange={handleCheckboxSelectAll}
-                />}
+                {!csvContent && <Typography variant="caption" color="text.secondary">Selecionar</Typography>}
               </TableCell>
               {activeFields.map((fieldKey) => (
                 <TableCell key={fieldKey}>
@@ -85,7 +138,7 @@ const InstrumentoTable = forwardRef(({
                 <TableCell padding="checkbox">
                   {!csvContent && <Checkbox
                     size="small"
-                    checked={selected.find((instrumento) => +instrumento?.id === +inst?.id) || selectAll}
+                    checked={selectedIds.has(String(inst.id))}
                     onChange={() => handleRowSelect(inst.id, inst)}
                   />}
                 </TableCell>
@@ -165,10 +218,30 @@ const InstrumentoTable = forwardRef(({
               ? `${count} de ${count}` 
               : `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
           }
+          sx={{ flexShrink: 0, borderTop: 1, borderColor: 'divider' }}
         />
       )}
     </Box>
   );
 });
+
+InstrumentoTable.propTypes = {
+  csvContent: PropTypes.string,
+  selectAll: PropTypes.bool.isRequired,
+  instrumentos: PropTypes.arrayOf(PropTypes.object),
+  valueCheckbox: PropTypes.objectOf(PropTypes.bool).isRequired,
+  selected: PropTypes.arrayOf(PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
+    instrumento: PropTypes.object,
+  })).isRequired,
+  handleCheckboxSelectAll: PropTypes.func.isRequired,
+  handleRowSelect: PropTypes.func.isRequired,
+  isSelectingAll: PropTypes.bool.isRequired,
+  page: PropTypes.number,
+  rowsPerPage: PropTypes.number,
+  handleChangePage: PropTypes.func,
+  handleChangeRowsPerPage: PropTypes.func,
+  count: PropTypes.number,
+};
 
 export default InstrumentoTable;

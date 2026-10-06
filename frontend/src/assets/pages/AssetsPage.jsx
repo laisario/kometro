@@ -37,6 +37,7 @@ function AssetsPage() {
     handleClose,
     handleClickOpen,
     handleCheckboxSelectAll,
+    handleRowSelect,
     handleChangeCheckbox,
     isMobile,
     open,
@@ -44,7 +45,6 @@ function AssetsPage() {
     selectAll,
     valueCheckbox,
     setError,
-    setSelected,
     selected,
     asset, 
     mutateDeleteSectors,
@@ -85,6 +85,7 @@ function AssetsPage() {
     search,
     setSearch,
     creatingSector,
+    isSelectingAll,
   } = useAssetsVm(id, idSetor);
 
   return (
@@ -191,9 +192,9 @@ function AssetsPage() {
               handleClose={handleClose}
               open={open}
               selected={selected}
-              setSelected={setSelected}
               handleChangeCheckbox={handleChangeCheckbox}
               handleCheckboxSelectAll={handleCheckboxSelectAll}
+              handleRowSelect={handleRowSelect}
               valueCheckbox={valueCheckbox}
               error={error}
               setError={setError}
@@ -205,6 +206,7 @@ function AssetsPage() {
               rowsPerPage={rowsPerPage}
               handleChangePage={handleChangePage}
               handleChangeRowsPerPage={handleChangeRowsPerPage}
+              isSelectingAll={isSelectingAll}
             />
             {currentTab === 'tree' && (
                 <Box
