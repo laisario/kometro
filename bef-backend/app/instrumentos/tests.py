@@ -32,6 +32,7 @@ from instrumentos.serializers import (
 )
 from clientes.signals import NORMAS_PADRAO, criar_normas_padrao
 from instrumentos.constants import MAX_EXPORT_ITEMS
+from instrumentos.services import annotate_numero_ultimo_certificado
 from instrumentos.views import InstrumentoPagination
 
 
@@ -299,6 +300,209 @@ class InstrumentoPaginationAndExportTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("detail", response.data)
+
+
+class NumeroUltimoCertificadoTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="gerente-ultimo-certificado",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.cliente = _make_cliente()
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+        self.instrumento_base = _make_instrumento_base()
+
+    def _instrumento(self, tag):
+        return InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag=tag,
+            numero_certificado="NAO-USAR",
+        )
+
+    def _calibracao(self, instrumento, data, checagem=False):
+        return Calibracao.objects.create(
+            instrumento=instrumento,
+            data=data,
+            checagem=checagem,
+        )
+
+    def _item_listagem(self, instrumento):
+        response = self.api.get(
+            "/instrumentos/",
+            {"search": instrumento.tag, "page_size": 10},
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        return next(
+            item
+            for item in response.data["results"]
+            if item["id"] == instrumento.id
+        )
+
+    def _exportar(self, instrumento, campos):
+        return self.api.post(
+            "/instrumentos/exportar/",
+            {
+                "instrumentos_selecionados": [{"id": instrumento.id}],
+                "campos_selecionados": campos,
+            },
+            format="json",
+        )
+
+    def test_instrumento_sem_calibracao_expoe_campo_vazio(self):
+        instrumento = self._instrumento("SEM-CALIBRACAO")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertIn("numero_ultimo_certificado", item)
+        self.assertIsNone(item["numero_ultimo_certificado"])
+
+    def test_uma_calibracao_retorna_seu_certificado(self):
+        instrumento = self._instrumento("UMA-CALIBRACAO")
+        calibracao = self._calibracao(instrumento, date(2026, 5, 20))
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-123")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(item["numero_ultimo_certificado"], "CERT-123")
+
+    def test_varias_calibracoes_usam_a_mais_recente(self):
+        instrumento = self._instrumento("VARIAS-CALIBRACOES")
+        antiga = self._calibracao(instrumento, date(2026, 5, 20))
+        recente = self._calibracao(instrumento, date(2026, 9, 10))
+        Certificado.objects.create(calibracao=antiga, numero="CERT-ANTIGO")
+        Certificado.objects.create(calibracao=recente, numero="CERT-RECENTE")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(item["numero_ultimo_certificado"], "CERT-RECENTE")
+
+    def test_calibracao_mais_recente_sem_certificado_retorna_vazio(self):
+        instrumento = self._instrumento("RECENTE-SEM-CERTIFICADO")
+        antiga = self._calibracao(instrumento, date(2026, 5, 20))
+        self._calibracao(instrumento, date(2026, 9, 10))
+        Certificado.objects.create(calibracao=antiga, numero="CERT-ANTIGO")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertIsNone(item["numero_ultimo_certificado"])
+
+    def test_checagem_posterior_nao_e_considerada(self):
+        instrumento = self._instrumento("IGNORA-CHECAGEM")
+        calibracao = self._calibracao(instrumento, date(2026, 5, 20))
+        checagem = self._calibracao(
+            instrumento,
+            date(2026, 9, 10),
+            checagem=True,
+        )
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-CAL")
+        Certificado.objects.create(calibracao=checagem, numero="CERT-CHECAGEM")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(item["numero_ultimo_certificado"], "CERT-CAL")
+
+    def test_empate_de_data_usa_calibracao_com_maior_id(self):
+        instrumento = self._instrumento("EMPATE-DATA")
+        primeira = self._calibracao(instrumento, date(2026, 5, 20))
+        segunda = self._calibracao(instrumento, date(2026, 5, 20))
+        Certificado.objects.create(calibracao=primeira, numero="CERT-PRIMEIRO")
+        Certificado.objects.create(calibracao=segunda, numero="CERT-SEGUNDO")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(item["numero_ultimo_certificado"], "CERT-SEGUNDO")
+
+    def test_data_nula_fica_depois_de_data_preenchida(self):
+        instrumento = self._instrumento("DATA-NULA")
+        datada = self._calibracao(instrumento, date(2026, 5, 20))
+        sem_data = self._calibracao(instrumento, None)
+        Certificado.objects.create(calibracao=datada, numero="CERT-DATADO")
+        Certificado.objects.create(calibracao=sem_data, numero="CERT-SEM-DATA")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(item["numero_ultimo_certificado"], "CERT-DATADO")
+
+    def test_multiplos_certificados_sao_listados_por_id(self):
+        instrumento = self._instrumento("MULTIPLOS-CERTIFICADOS")
+        calibracao = self._calibracao(instrumento, date(2026, 5, 20))
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-A")
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-B")
+
+        item = self._item_listagem(instrumento)
+
+        self.assertEqual(
+            item["numero_ultimo_certificado"],
+            "CERT-A, CERT-B",
+        )
+
+    def test_exportacao_inclui_campo_quando_selecionado(self):
+        instrumento = self._instrumento("EXPORTA-CERTIFICADO")
+        calibracao = self._calibracao(instrumento, date(2026, 5, 20))
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-EXPORT")
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-EXPORT-2")
+
+        response = self._exportar(
+            instrumento,
+            ["tag", "numeroUltimoCertificado"],
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("Número do último certificado", response.data)
+        self.assertIn("CERT-EXPORT, CERT-EXPORT-2", response.data)
+
+    def test_exportacao_omite_campo_quando_nao_selecionado(self):
+        instrumento = self._instrumento("NAO-EXPORTA-CERTIFICADO")
+        calibracao = self._calibracao(instrumento, date(2026, 5, 20))
+        Certificado.objects.create(calibracao=calibracao, numero="CERT-OCULTO")
+
+        response = self._exportar(instrumento, ["tag"])
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertNotIn("Número do último certificado", response.data)
+        self.assertNotIn("CERT-OCULTO", response.data)
+
+    def test_exportacao_funciona_sem_certificado(self):
+        instrumento = self._instrumento("EXPORTA-SEM-CERTIFICADO")
+
+        response = self._exportar(
+            instrumento,
+            ["tag", "numeroUltimoCertificado"],
+        )
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("Número do último certificado", response.data)
+        self.assertIn("EXPORTA-SEM-CERTIFICADO", response.data)
+        self.assertNotIn("None", response.data)
+
+    def test_annotation_nao_faz_consultas_por_instrumento(self):
+        instrumentos = []
+        for indice in range(3):
+            instrumento = self._instrumento(f"SEM-N-MAIS-UM-{indice}")
+            calibracao = self._calibracao(
+                instrumento,
+                date(2026, 5, 20 + indice),
+            )
+            Certificado.objects.create(
+                calibracao=calibracao,
+                numero=f"CERT-{indice}",
+            )
+            instrumentos.append(instrumento)
+
+        with self.assertNumQueries(1):
+            resultados = list(
+                annotate_numero_ultimo_certificado(
+                    InstrumentoDoCliente.objects.filter(
+                        id__in=[item.id for item in instrumentos]
+                    )
+                ).values_list("numero_ultimo_certificado", flat=True)
+            )
+
+        self.assertCountEqual(resultados, ["CERT-0", "CERT-1", "CERT-2"])
 
 
 class InstrumentoDoClienteSetorPatchTest(TestCase):

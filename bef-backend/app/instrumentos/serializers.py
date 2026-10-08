@@ -1420,6 +1420,10 @@ class InstrumentoDoClienteReadAdminSerializer(serializers.ModelSerializer):
     normativos = NormativoSerializer(many=True)
     historico_posicoes = MovimentacaoInstrumentoSerializer(many=True, read_only=True)
     historico_setores = MovimentacaoSetorInstrumentoSerializer(many=True)
+    numero_ultimo_certificado = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = InstrumentoDoCliente
@@ -1448,6 +1452,7 @@ class InstrumentoDoClienteReadAdminSerializer(serializers.ModelSerializer):
             "criterio_frequencia",
             "historico_setores",
             "historico_posicoes",
+            "numero_ultimo_certificado",
         )
 
 class SetorSerializer(serializers.ModelSerializer):
@@ -1499,6 +1504,10 @@ class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
     frequencia_checagem = FrequenciaSerializer()
     normativos = NormativoSerializer(many=True)
     setor = SetorCalibracaoSerializer()
+    numero_ultimo_certificado = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = InstrumentoDoCliente
@@ -1517,6 +1526,7 @@ class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
             "data_proxima_checagem",
             "data_ultima_checagem",
             "expirado",
+            "numero_ultimo_certificado",
         )
 
 class InstrumentoBaseClienteSerializer(serializers.ModelSerializer):

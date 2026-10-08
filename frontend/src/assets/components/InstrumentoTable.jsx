@@ -39,6 +39,10 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
     dataDaProximaChecagem: { label: 'Data da Próxima Checagem', path: 'dataProximaChecagem' },
     frequenciaDeChecagem: { label: 'Frequência de Checagem' },
     normativos: { label: 'Normativos' },
+    numeroUltimoCertificado: {
+      label: 'Número do último certificado',
+      path: 'numeroUltimoCertificado',
+    },
   };
 
   const activeFields = Object.keys(valueCheckbox).filter((key) => valueCheckbox[key]);

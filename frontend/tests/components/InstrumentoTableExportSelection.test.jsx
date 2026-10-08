@@ -78,4 +78,37 @@ describe('InstrumentoTable - seleção para exportação', () => {
       'É possível exportar até 9.999 instrumentos por vez.'
     )).toBeInTheDocument();
   });
+
+  it('exibe o número do último certificado retornado pela API', () => {
+    render(
+      <InstrumentoTable
+        {...defaultProps}
+        instrumentos={[{
+          id: 1,
+          numeroUltimoCertificado: 'CERT-100, CERT-101',
+        }]}
+        valueCheckbox={{ numeroUltimoCertificado: true }}
+      />
+    );
+
+    expect(screen.getByRole('columnheader', {
+      name: 'Número do último certificado',
+    })).toBeInTheDocument();
+    expect(screen.getByText('CERT-100, CERT-101')).toBeInTheDocument();
+  });
+
+  it('mantém a tabela funcional quando não há último certificado', () => {
+    render(
+      <InstrumentoTable
+        {...defaultProps}
+        instrumentos={[{ id: 1, numeroUltimoCertificado: null }]}
+        valueCheckbox={{ numeroUltimoCertificado: true }}
+      />
+    );
+
+    expect(screen.getByRole('columnheader', {
+      name: 'Número do último certificado',
+    })).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+  });
 });

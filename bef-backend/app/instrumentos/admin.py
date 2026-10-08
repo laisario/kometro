@@ -112,6 +112,11 @@ class InstrumentoExportResource(ModelResource):
     data_proxima_calibracao = Field(column_name="Próxima calibração", attribute="data_proxima_calibracao", widget=DateWidget(format="%d/%m/%Y"))
     data_ultima_calibracao = Field(column_name="Última calibração", attribute="data_ultima_calibracao", widget=DateWidget(format="%d/%m/%Y"))
     normativos = Field(column_name="Normativos", attribute="normativos", widget=CharWidget())
+    numero_ultimo_certificado = Field(
+        column_name="Número do último certificado",
+        attribute="numero_ultimo_certificado",
+        widget=CharWidget(),
+    )
     
     def __init__(self, campos_selecionados):
         self.campos_selecionados = campos_selecionados
@@ -132,7 +137,8 @@ class InstrumentoExportResource(ModelResource):
             "setor",
             "instrumento",
             "laboratorio",
-            "normativos"
+            "normativos",
+            "numero_ultimo_certificado",
         )
 
     def dehydrate_normativos(self, obj):
@@ -169,6 +175,7 @@ class InstrumentoExportResource(ModelResource):
             "Instrumento": "instrumento",
             "Setor": "setor",
             "Normativos": "normativos",
+            "Número do último certificado": "numeroUltimoCertificado",
         }
 
         all_keys = dataset.dict[0].keys() if dataset.dict else []

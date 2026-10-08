@@ -20,6 +20,7 @@ from .models import (
     TipoInstrumento,
 )
 from .services import (
+    annotate_numero_ultimo_certificado,
     deduplicar_normativos,
     get_or_create_normativo_cliente,
 )
@@ -130,10 +131,12 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Optimize with select_related and prefetch_related for search fields
-        queryset = InstrumentoDoCliente.objects.select_related(
-            'instrumento__tipo_de_instrumento',
-            'cliente'
-        ).prefetch_related('normativos')
+        queryset = annotate_numero_ultimo_certificado(
+            InstrumentoDoCliente.objects.select_related(
+                'instrumento__tipo_de_instrumento',
+                'cliente'
+            ).prefetch_related('normativos')
+        )
         
         if self.request.method == 'DELETE':
             return queryset

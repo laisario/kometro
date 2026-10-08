@@ -1,4 +1,53 @@
-from .models import CriterioAceitacao, Normativo, PontoDeCalibracao, Setor
+from django.db.models import Aggregate, CharField, F, OuterRef, Q, Subquery
+
+from .models import (
+    Calibracao,
+    Certificado,
+    CriterioAceitacao,
+    Normativo,
+    PontoDeCalibracao,
+    Setor,
+)
+
+
+class GroupConcat(Aggregate):
+    function = "GROUP_CONCAT"
+    template = "%(function)s(%(expressions)s ORDER BY id ASC SEPARATOR ', ')"
+    output_field = CharField()
+
+
+def annotate_numero_ultimo_certificado(queryset):
+    """Anota os certificados da calibração mais recente de cada instrumento."""
+    numeros_da_calibracao = (
+        Certificado.objects.filter(calibracao_id=OuterRef("pk"))
+        .exclude(Q(numero__isnull=True) | Q(numero=""))
+        .order_by()
+        .values("calibracao_id")
+        .annotate(numeros=GroupConcat("numero"))
+        .values("numeros")[:1]
+    )
+
+    calibracao_mais_recente = (
+        Calibracao.objects.filter(
+            instrumento_id=OuterRef("pk"),
+            checagem=False,
+        )
+        .annotate(
+            numeros_certificados=Subquery(
+                numeros_da_calibracao,
+                output_field=CharField(),
+            )
+        )
+        .order_by(F("data").desc(nulls_last=True), F("id").desc())
+        .values("numeros_certificados")[:1]
+    )
+
+    return queryset.annotate(
+        numero_ultimo_certificado=Subquery(
+            calibracao_mais_recente,
+            output_field=CharField(),
+        )
+    )
 
 
 def normalizar_nome_normativo(nome):

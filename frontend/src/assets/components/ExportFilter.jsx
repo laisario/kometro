@@ -436,6 +436,10 @@ function ExportFilter(props) {
                       control={<Checkbox checked={valueCheckbox?.normativos} onChange={handleChangeCheckbox} name="normativos" />}
                       label="Normativos"
                     />
+                    <FormControlLabel
+                      control={<Checkbox checked={valueCheckbox?.numeroUltimoCertificado} onChange={handleChangeCheckbox} name="numeroUltimoCertificado" />}
+                      label="Número do último certificado"
+                    />
                   </FormGroup>
                   {error && !Object.values(valueCheckbox).includes(true) &&
                     <FormHelperText error={error && !Object.values(valueCheckbox).includes(true)}>

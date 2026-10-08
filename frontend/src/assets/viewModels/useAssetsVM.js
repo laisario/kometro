@@ -24,6 +24,7 @@ const useAssetsVm = (id, idSetor) => {
     dataDaProximaChecagem: true,
     frequenciaDeChecagem: true,
     normativos: true,
+    numeroUltimoCertificado: true,
   });
   const [selected, setSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
@@ -218,6 +219,7 @@ const useAssetsVm = (id, idSetor) => {
       dataDaProximaChecagem: true,
       frequenciaDeChecagem: true,
       normativos: true,
+      numeroUltimoCertificado: true,
     });
     setError(false);
     setSelectAll(false)
