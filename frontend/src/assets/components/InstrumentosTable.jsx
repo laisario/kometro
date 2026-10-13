@@ -99,7 +99,7 @@ const InstrumentosTable = () => {
         >
           <TextField
             size="small"
-            placeholder="Buscar por tag, descrição..."
+            placeholder="Buscar por tag, descrição ou nº do certificado..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             sx={{ minWidth: 250 }}
@@ -319,4 +319,3 @@ const InstrumentosTable = () => {
 };
 
 export default InstrumentosTable;
-

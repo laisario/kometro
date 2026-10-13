@@ -276,7 +276,9 @@ describe('Instrumentos Page - Functional Tests', () => {
     it('has search input', () => {
       render(<InstrumentosTable />);
 
-      const searchInput = screen.getByPlaceholderText('Buscar por tag, descrição...');
+      const searchInput = screen.getByPlaceholderText(
+        'Buscar por tag, descrição ou nº do certificado...'
+      );
       expect(searchInput).toBeInTheDocument();
     });
 

@@ -35,10 +35,17 @@ export default function InstrumentSearch({ data = [], onSelect, search, setSearc
 
   return (
     <ClickAwayListener onClickAway={() => setOpen(false)}>
-      <Box sx={{ position: 'relative' }}>
+      <Box
+        sx={{
+          position: 'relative',
+          width: { xs: '100%', sm: 320, md: 380, lg: 420 },
+          minWidth: { xs: 0, sm: 320 },
+          flexShrink: 1,
+        }}
+      >
         <TextField
           fullWidth
-          placeholder="Procure por tag, descrição ou número de série"
+          placeholder="Buscar por tag, descrição ou nº do certificado..."
           value={search}
           onChange={handleChange}
           InputProps={{

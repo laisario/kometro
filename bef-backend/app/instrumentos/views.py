@@ -101,6 +101,7 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         "instrumento__tipo_de_instrumento__modelo",
         "instrumento__tipo_de_instrumento__fabricante",
         "normativos__nome",
+        "calibracoes__certificados__numero",
     ]
     cliente_field = "cliente"
     permission_classes = [NivelPermission]

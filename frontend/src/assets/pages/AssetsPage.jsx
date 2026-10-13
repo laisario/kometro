@@ -116,6 +116,7 @@ function AssetsPage() {
             alignItems="center"
             justifyContent="space-between"
             flexWrap="wrap"
+            rowGap={2}
             mb={3}
             flexShrink={0}
             >
@@ -128,6 +129,9 @@ function AssetsPage() {
                 flexDirection: "row", 
                 alignItems: 'center', 
                 gap: 2,
+                width: { xs: '100%', md: 'auto' },
+                flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                justifyContent: { xs: 'flex-end', md: 'initial' },
               }}
             >
               {currentTab === 'tree' && (

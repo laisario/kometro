@@ -505,6 +505,178 @@ class NumeroUltimoCertificadoTest(TestCase):
         self.assertCountEqual(resultados, ["CERT-0", "CERT-1", "CERT-2"])
 
 
+class BuscaInstrumentoPorCertificadoTest(TestCase):
+    def setUp(self):
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="gerente-busca-certificado",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.cliente = _make_cliente()
+        self.outro_cliente = _make_cliente()
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+
+        self.instrumento_base = _make_instrumento_base()
+        self.instrumento = self._instrumento(
+            self.cliente,
+            "TAG-BUSCA-CERTIFICADO",
+        )
+        self.outro_instrumento = self._instrumento(
+            self.cliente,
+            "TAG-OUTRO-CERTIFICADO",
+        )
+        self.instrumento_outro_cliente = self._instrumento(
+            self.outro_cliente,
+            "TAG-CERTIFICADO-OUTRO-CLIENTE",
+        )
+
+        calibracao_antiga = self._calibracao(
+            self.instrumento,
+            date(2025, 1, 10),
+        )
+        calibracao_recente = self._calibracao(
+            self.instrumento,
+            date(2026, 2, 15),
+        )
+        Certificado.objects.create(
+            calibracao=calibracao_antiga,
+            numero="CERT-2025-001",
+        )
+        Certificado.objects.create(
+            calibracao=calibracao_recente,
+            numero="CERT-2026-0152",
+        )
+        Certificado.objects.create(
+            calibracao=calibracao_recente,
+            numero="CERT-DUPLICADO-0152",
+        )
+
+        Certificado.objects.create(
+            calibracao=self._calibracao(
+                self.outro_instrumento,
+                date(2026, 3, 1),
+            ),
+            numero="CERT-OUTRO-0152",
+        )
+        Certificado.objects.create(
+            calibracao=self._calibracao(
+                self.instrumento_outro_cliente,
+                date(2026, 3, 1),
+            ),
+            numero="CERT-EXTERNO-0152",
+        )
+
+    def _instrumento(self, cliente, tag):
+        return InstrumentoDoCliente.objects.create(
+            cliente=cliente,
+            instrumento=self.instrumento_base,
+            tag=tag,
+        )
+
+    @staticmethod
+    def _calibracao(instrumento, data):
+        return Calibracao.objects.create(
+            instrumento=instrumento,
+            data=data,
+            checagem=False,
+        )
+
+    def _buscar(self, termo, **params):
+        return self.api.get(
+            "/instrumentos/",
+            {"search": termo, "page_size": 100, **params},
+        )
+
+    def test_busca_existente_por_tag_e_descricao_continua_funcionando(self):
+        response_tag = self._buscar("TAG-BUSCA-CERTIFICADO")
+        response_descricao = self._buscar("Termometro")
+
+        self.assertEqual(response_tag.status_code, 200, response_tag.data)
+        self.assertEqual(
+            [item["id"] for item in response_tag.data["results"]],
+            [self.instrumento.id],
+        )
+        self.assertEqual(
+            {
+                self.instrumento.id,
+                self.outro_instrumento.id,
+            },
+            {item["id"] for item in response_descricao.data["results"]},
+        )
+
+    def test_busca_encontra_certificados_de_calibracoes_antiga_e_recente(self):
+        response_antigo = self._buscar("CERT-2025-001")
+        response_recente = self._buscar("CERT-2026-0152")
+
+        self.assertEqual(response_antigo.status_code, 200, response_antigo.data)
+        self.assertEqual(response_recente.status_code, 200, response_recente.data)
+        self.assertEqual(
+            [item["id"] for item in response_antigo.data["results"]],
+            [self.instrumento.id],
+        )
+        self.assertEqual(
+            [item["id"] for item in response_recente.data["results"]],
+            [self.instrumento.id],
+        )
+
+    def test_busca_parcial_nao_duplica_instrumentos_e_respeita_cliente(self):
+        response = self._buscar("0152")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 2)
+        ids = [item["id"] for item in response.data["results"]]
+        self.assertCountEqual(
+            ids,
+            [self.instrumento.id, self.outro_instrumento.id],
+        )
+        self.assertEqual(ids.count(self.instrumento.id), 1)
+        self.assertNotIn(self.instrumento_outro_cliente.id, ids)
+
+    def test_certificado_inexistente_nao_retorna_instrumentos(self):
+        response = self._buscar("CERT-INEXISTENTE")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 0)
+        self.assertEqual(response.data["results"], [])
+
+    def test_busca_por_certificado_funciona_com_filtro_e_paginacao(self):
+        primeira_pagina = self._buscar(
+            "0152",
+            tipo_instrumento=self.instrumento_base.tipo_de_instrumento_id,
+            page=1,
+            page_size=1,
+        )
+        segunda_pagina = self._buscar(
+            "0152",
+            tipo_instrumento=self.instrumento_base.tipo_de_instrumento_id,
+            page=2,
+            page_size=1,
+        )
+
+        self.assertEqual(
+            primeira_pagina.status_code,
+            200,
+            primeira_pagina.data,
+        )
+        self.assertEqual(
+            segunda_pagina.status_code,
+            200,
+            segunda_pagina.data,
+        )
+        self.assertEqual(primeira_pagina.data["count"], 2)
+        self.assertEqual(segunda_pagina.data["count"], 2)
+        ids = [
+            primeira_pagina.data["results"][0]["id"],
+            segunda_pagina.data["results"][0]["id"],
+        ]
+        self.assertCountEqual(
+            ids,
+            [self.instrumento.id, self.outro_instrumento.id],
+        )
+
+
 class InstrumentoDoClienteSetorPatchTest(TestCase):
     def setUp(self):
         self.api = APIClient()
