@@ -1,12 +1,10 @@
 import config from "@config/config.json";
 import Base from "@layouts/Baseof";
-import { markdownify } from "@lib/utils/textConverter";
 import "swiper/swiper.min.css";
 import 'swiper/css';
 import 'swiper/css/pagination';
 import 'swiper/css/navigation';
 import { getListPage } from "../lib/contentParser";
-import Player from "@layouts/components/Player";
 import Services from "@layouts/components/Services";
 import History from "@layouts/components/History";
 import Pillars from "@layouts/components/Pillars";
@@ -19,13 +17,29 @@ const Home = ({ frontmatter, feedbacks, }) => {
   const { title } = config.site;
   return (
     <Base title={title}>
-      <section className="section">
-        <div className="container flex flex-col items-center text-center ">
-          <div className="mx-auto">
-            <h1 className="font-primary font-bold">{banner?.title}</h1>
-            <div className="mt-4 mb-8">{markdownify(banner?.content, "h6")}</div>
+      <section className="section pt-6 pb-8 md:pt-8 md:pb-10">
+        <div className="container flex flex-col items-center text-center">
+          <div className="mx-auto mb-5 max-w-3xl md:mb-6">
+            <h1 className="font-primary text-2xl font-bold leading-tight md:text-3xl lg:text-4xl">
+              {banner?.title}
+            </h1>
+            <p className="mx-auto mt-2 max-w-2xl text-base leading-relaxed text-text md:mt-3 md:text-lg">
+              {banner?.content}
+            </p>
           </div>
-          <Player videoSrc={banner?.video} />
+          <picture className="relative mx-auto block aspect-[1122/1402] w-full max-w-[1000px] overflow-hidden rounded-lg sm:aspect-video">
+            <source media="(max-width: 539px)" srcSet={banner?.mobile_image} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={banner?.image}
+              alt="Serviços de calibração e metrologia da Kometro"
+              width="1600"
+              height="900"
+              loading="eager"
+              decoding="async"
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          </picture>
         </div>
       </section>
 

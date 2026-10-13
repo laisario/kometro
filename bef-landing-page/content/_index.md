@@ -1,8 +1,9 @@
 ---
 banner:
-  title: Seu sucesso é a nossa medida
-  video: https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/videos/video-institucional.MOV
-  content: Serviços de calibração e ensaio de instrumentos de medição, garantindo a confiabilidade e precisão dos resultados para atendimento de diversas demandas normativas, requisitos de clientes e controle de qualidade
+  title: Calibração, ensaios e confiabilidade para sua operação.
+  image: https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/banner-principal.png
+  mobile_image: https://kometro.nyc3.cdn.digitaloceanspaces.com/landing-page/images/banner-mobile.png
+  content: Soluções em metrologia com rastreabilidade, precisão e atendimento sob medida.
   button:
     label: "Entre em contato"
     link: "/contato"
