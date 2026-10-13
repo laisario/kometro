@@ -69,7 +69,17 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
   }, [csvContent, instrumentos, selected])
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: { xs: 'auto', md: '100%' },
+        minHeight: { xs: 'auto', md: 0 },
+        minWidth: 0,
+        overflow: { xs: 'visible', md: 'hidden' },
+      }}
+    >
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         alignItems={{ xs: 'flex-start', sm: 'center' }}
@@ -122,7 +132,15 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
         )}
       </Stack>
 
-      <TableContainer sx={{ flex: 1, minHeight: 0, minWidth: 0, overflow: 'auto' }}>
+      <TableContainer
+        sx={{
+          flex: { xs: '0 0 auto', md: 1 },
+          minHeight: { xs: 'auto', md: 0 },
+          minWidth: 0,
+          overflowX: 'auto',
+          overflowY: { xs: 'visible', md: 'auto' },
+        }}
+      >
         <Table ref={ref} size="small" stickyHeader sx={{ minWidth: 'max-content', width: '100%' }}>
           <TableHead>
             <TableRow>

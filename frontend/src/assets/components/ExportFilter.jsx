@@ -157,7 +157,8 @@ function ExportFilter(props) {
           maxHeight: '100dvh',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
+          overflowY: { xs: 'auto', md: 'hidden' },
+          overflowX: 'hidden',
         },
         onSubmit: async (event) => {
           event.preventDefault();
@@ -207,9 +208,9 @@ function ExportFilter(props) {
       }
       <DialogContent
         sx={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
+          flex: { xs: '0 0 auto', md: 1 },
+          minHeight: { xs: 'auto', md: 0 },
+          overflow: { xs: 'visible', md: 'hidden' },
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
@@ -224,9 +225,6 @@ function ExportFilter(props) {
                   display: 'grid',
                   gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 0.8fr)' },
                   gap: 2,
-                  maxHeight: { xs: '24vh', md: 'none' },
-                  overflowY: { xs: 'auto', md: 'visible' },
-                  pr: { xs: 1, md: 0 },
                 }}
               >
                 <FormControl component="fieldset">
@@ -293,21 +291,21 @@ function ExportFilter(props) {
 
         <Box
           sx={{
-            flex: 1,
-            minHeight: 0,
+            flex: { xs: '0 0 auto', md: 1 },
+            minHeight: { xs: 'auto', md: 0 },
             minWidth: 0,
             display: 'flex',
             flexDirection: { xs: 'column', md: 'row' },
             gap: 2,
-            overflow: 'hidden',
+            overflow: { xs: 'visible', md: 'hidden' },
           }}
         >
           {isFetchingAssets ? (
             <Paper
               variant="outlined"
               sx={{
-                flex: 1,
-                minHeight: 0,
+                flex: { xs: '0 0 auto', md: 1 },
+                minHeight: { xs: 'auto', md: 0 },
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -320,12 +318,12 @@ function ExportFilter(props) {
             <Paper
               variant="outlined"
               sx={{
-                flex: 1,
+                flex: { xs: '0 0 auto', md: 1 },
                 minWidth: 0,
-                minHeight: 0,
+                minHeight: { xs: 'auto', md: 0 },
                 display: 'flex',
                 flexDirection: 'column',
-                overflow: 'hidden',
+                overflow: { xs: 'visible', md: 'hidden' },
                 order: { xs: 2, md: 1 },
               }}
             >
@@ -356,11 +354,10 @@ function ExportFilter(props) {
                 minWidth: { md: 280 },
                 maxWidth: { md: 380 },
                 width: { xs: '100%', md: 'auto' },
-                maxHeight: { xs: 190, md: 'none' },
                 minHeight: 0,
                 display: 'flex',
                 flexDirection: 'column',
-                overflow: 'hidden',
+                overflow: { xs: 'visible', md: 'hidden' },
                 borderColor: 'primary.light',
                 bgcolor: 'action.hover',
                 order: { xs: 1, md: 2 },
@@ -379,7 +376,7 @@ function ExportFilter(props) {
                 </Typography>
               </Box>
 
-              <Box sx={{ px: 2, pb: 2, overflowY: 'auto', minHeight: 0 }}>
+              <Box sx={{ px: 2, pb: 2, overflowY: { xs: 'visible', md: 'auto' }, minHeight: 0 }}>
                 <FormControl component="fieldset" variant="standard" fullWidth>
                   <FormGroup
                     sx={{
@@ -460,10 +457,15 @@ function ExportFilter(props) {
           px: 3,
           py: 1.5,
           bgcolor: 'background.paper',
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
+          gap: { xs: 1, sm: 0 },
+          '& > :not(style) ~ :not(style)': {
+            ml: { xs: 0, sm: 1 },
+          },
         }}
       >
         {!csvContent && (
-          <Box sx={{ mr: 'auto' }}>
+          <Box sx={{ width: { xs: '100%', sm: 'auto' }, mr: { sm: 'auto' } }}>
             <Typography variant="body2" fontWeight={600}>
               {selectionReachedLimit
                 ? `${selectedInstrumentsCount.toLocaleString('pt-BR')} de ${foundInstrumentsCount.toLocaleString('pt-BR')} resultados selecionados — limite de exportação`
