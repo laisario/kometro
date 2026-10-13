@@ -166,6 +166,12 @@ ALLOWED_HOSTS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = [
+    "Content-Disposition",
+    "X-Matched-Count",
+    "X-Exported-Count",
+    "X-Export-Limit-Applied",
+]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://localhost:4173",

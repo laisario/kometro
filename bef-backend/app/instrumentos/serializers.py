@@ -37,6 +37,7 @@ from .services import (
     get_or_create_setor_from_path,
 )
 from .models import CriterioFrequencia
+from .constants import MAX_EXPORT_ITEMS
 import logging
 from django.db.models import Q
 
@@ -51,6 +52,174 @@ PERIODOS_RELATIVEDELTA = {
     "ano": "years",
     "anos": "years",
 }
+
+
+EXPORT_FIELD_KEYS = (
+    "tag",
+    "numeroDeSerie",
+    "laboratorio",
+    "setor",
+    "posicaoDoInstrumento",
+    "dataUltimaCalibracao",
+    "dataDaProximaCalibracao",
+    "frequenciaDeCalibracao",
+    "dataUltimaChecagem",
+    "dataDaProximaChecagem",
+    "frequenciaDeChecagem",
+    "normativos",
+    "numeroUltimoCertificado",
+    "instrumento",
+)
+
+
+class StrictFieldsSerializer(serializers.Serializer):
+    """Reject unknown keys instead of silently discarding them."""
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            raise serializers.ValidationError("Esperado um objeto.")
+
+        unknown_fields = set(data.keys()) - set(self.fields.keys())
+        if unknown_fields:
+            raise serializers.ValidationError({
+                field: "Filtro ou campo não permitido."
+                for field in sorted(unknown_fields)
+            })
+        return super().to_internal_value(data)
+
+
+class InstrumentExportFiltersSerializer(StrictFieldsSerializer):
+    search = serializers.CharField(required=False, allow_blank=True, default="")
+    status = serializers.ChoiceField(
+        choices=("all", "expired", "expiringSoon"),
+        required=False,
+        default="all",
+    )
+    date_start = serializers.DateField(required=False, allow_null=True)
+    date_stop = serializers.DateField(required=False, allow_null=True)
+    filter_by_date = serializers.BooleanField(required=False, default=False)
+    norma = serializers.CharField(required=False, allow_blank=True, default="")
+    expiration_status = serializers.ChoiceField(
+        choices=("all", "expired", "up_to_date"),
+        required=False,
+        default="all",
+    )
+    expirado = serializers.BooleanField(required=False, allow_null=True)
+    tipo_instrumento = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+    )
+
+    def validate(self, attrs):
+        date_start = attrs.get("date_start")
+        date_stop = attrs.get("date_stop")
+        if date_start and date_stop and date_start > date_stop:
+            raise serializers.ValidationError(
+                "A data inicial não pode ser posterior à data final."
+            )
+        return attrs
+
+
+class InstrumentExportSelectionSerializer(StrictFieldsSerializer):
+    mode = serializers.ChoiceField(choices=("manual", "all_filtered"))
+    ids = serializers.ListField(
+        child=serializers.IntegerField(min_value=1),
+        required=False,
+        min_length=1,
+        max_length=MAX_EXPORT_ITEMS,
+    )
+    filters = InstrumentExportFiltersSerializer(required=False)
+
+    def validate(self, attrs):
+        mode = attrs["mode"]
+        ids = attrs.get("ids")
+        filters = attrs.get("filters")
+
+        if mode == "manual":
+            if ids is None:
+                raise serializers.ValidationError({
+                    "ids": "Informe os IDs para seleção manual."
+                })
+            if filters is not None:
+                raise serializers.ValidationError({
+                    "filters": "Filtros são aceitos somente em all_filtered."
+                })
+            attrs["ids"] = list(dict.fromkeys(ids))
+        else:
+            if ids is not None:
+                raise serializers.ValidationError({
+                    "ids": "IDs são aceitos somente na seleção manual."
+                })
+            attrs["filters"] = filters or {}
+
+        return attrs
+
+
+class InstrumentExportRequestSerializer(StrictFieldsSerializer):
+    selection = InstrumentExportSelectionSerializer(required=False)
+    campos_selecionados = serializers.ListField(
+        child=serializers.ChoiceField(choices=EXPORT_FIELD_KEYS),
+        min_length=1,
+    )
+    # Compatibilidade temporária com o contrato anterior.
+    instrumentos_selecionados = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+    )
+
+    def validate(self, attrs):
+        selection = attrs.get("selection")
+        legacy_selection = attrs.get("instrumentos_selecionados")
+
+        if selection is not None and legacy_selection is not None:
+            raise serializers.ValidationError(
+                "Envie selection ou instrumentos_selecionados, não ambos."
+            )
+
+        if selection is None and legacy_selection is None:
+            raise serializers.ValidationError({
+                "selection": "A seleção de instrumentos é obrigatória."
+            })
+
+        if legacy_selection is not None:
+            if len(legacy_selection) > MAX_EXPORT_ITEMS:
+                raise serializers.ValidationError({
+                    "instrumentos_selecionados": (
+                        f"É possível exportar até {MAX_EXPORT_ITEMS} "
+                        "instrumentos por vez."
+                    )
+                })
+
+            ids = []
+            id_field = serializers.IntegerField(min_value=1)
+            for index, item in enumerate(legacy_selection):
+                if set(item.keys()) != {"id"}:
+                    raise serializers.ValidationError({
+                        "instrumentos_selecionados": {
+                            index: "Cada instrumento deve possuir somente um id válido."
+                        }
+                    })
+                try:
+                    item_id = id_field.run_validation(item.get("id"))
+                except serializers.ValidationError as exc:
+                    raise serializers.ValidationError({
+                        "instrumentos_selecionados": {index: exc.detail}
+                    }) from exc
+                ids.append(item_id)
+
+            if not ids:
+                raise serializers.ValidationError({
+                    "instrumentos_selecionados": "Selecione ao menos um instrumento."
+                })
+
+            attrs["selection"] = {
+                "mode": "manual",
+                "ids": list(dict.fromkeys(ids)),
+            }
+
+        attrs.pop("instrumentos_selecionados", None)
+        return attrs
 
 
 def _norm_str(v, none_if_blank=True):

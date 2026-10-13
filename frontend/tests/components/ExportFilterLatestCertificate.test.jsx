@@ -38,7 +38,9 @@ const defaultProps = {
   },
   error: false,
   setError: jest.fn(),
-  selectAll: false,
+  selection: { mode: 'manual', ids: [1] },
+  selectedCount: 1,
+  selectionDisabled: false,
   assets: { count: 1, results: [instrumento] },
   handleCheckboxSelectAll: jest.fn(),
   assetFilterForm: {
@@ -53,7 +55,6 @@ const defaultProps = {
   handleChangePage: jest.fn(),
   handleChangeRowsPerPage: jest.fn(),
   handleRowSelect: jest.fn(),
-  isSelectingAll: false,
 };
 
 function ExportFilterHarness() {
@@ -109,9 +110,75 @@ describe('ExportFilter - número do último certificado', () => {
 
     await waitFor(() => {
       expect(axios.post).toHaveBeenCalledWith('/instrumentos/exportar/', {
-        instrumentosSelecionados: [{ id: 1 }],
+        selection: { mode: 'manual', ids: [1] },
         camposSelecionados: ['tag', 'numeroUltimoCertificado'],
       });
     });
+  });
+
+  it('envia o snapshot dos filtros em all_filtered', async () => {
+    const user = userEvent.setup();
+    const filtersSnapshot = {
+      search: 'termometro',
+      status: 'expired',
+      date_start: null,
+      date_stop: null,
+      filter_by_date: false,
+      norma: 'ISO 9001',
+    };
+    render(
+      <ExportFilter
+        {...defaultProps}
+        selection={{
+          mode: 'all_filtered',
+          filtersSnapshot,
+          matchedCount: 458,
+          selectedCount: 458,
+        }}
+        selectedCount={458}
+        assets={{ count: 458, results: [instrumento] }}
+      />
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+
+    await waitFor(() => {
+      expect(axios.post).toHaveBeenCalledWith('/instrumentos/exportar/', {
+        selection: { mode: 'all_filtered', filters: filtersSnapshot },
+        camposSelecionados: ['tag', 'numeroUltimoCertificado'],
+      });
+    });
+  });
+
+  it('encerra o loading e mantém o erro visível quando a exportação falha', async () => {
+    const user = userEvent.setup();
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    axios.post.mockRejectedValueOnce(new Error('falha de rede'));
+    render(<ExportFilter {...defaultProps} />);
+
+    await user.click(screen.getByRole('button', { name: 'Exportar' }));
+
+    expect(await screen.findByText(
+      'Não foi possível exportar os instrumentos. Tente novamente.'
+    )).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exportar' })).toBeEnabled();
+    consoleError.mockRestore();
+  });
+
+  it('não dispara duas exportações simultâneas', async () => {
+    const user = userEvent.setup();
+    let resolveExport;
+    axios.post.mockReturnValueOnce(new Promise((resolve) => {
+      resolveExport = resolve;
+    }));
+    render(<ExportFilter {...defaultProps} />);
+
+    const exportButton = screen.getByRole('button', { name: 'Exportar' });
+    await user.dblClick(exportButton);
+
+    expect(axios.post).toHaveBeenCalledTimes(1);
+
+    resolveExport({ status: 200, data: 'TAG\nINST-1' });
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
   });
 });

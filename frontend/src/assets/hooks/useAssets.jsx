@@ -1,15 +1,14 @@
 import { useQuery } from "react-query";
 import { axios } from "../../api";
 import debounce from 'lodash/debounce';
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { MAX_EXPORT_ITEMS } from "../constants";
 
 export const buildAssetsParams = ({
   search,
-  dateStart,
-  dateStop,
-  filterByDate,
+  date_start: dateStart,
+  date_stop: dateStop,
+  filter_by_date: filterByDate,
   status,
   norma,
   page,
@@ -22,14 +21,16 @@ export const buildAssetsParams = ({
   status,
   norma,
   page,
-  page_size: pageSize === -1 ? undefined : pageSize,
+  page_size: pageSize,
 });
 
-const filterValue = (value) => {
-  if (!value) return '';
-  if (typeof value.valueOf === 'function') return String(value.valueOf());
-  return String(value);
+const normalizeDateFilter = (value) => {
+  if (!value) return null;
+  if (typeof value.format === 'function') return value.format('YYYY-MM-DD');
+  return String(value).slice(0, 10);
 };
+
+const buildFilterSignature = (filters) => JSON.stringify(filters);
 
 const useAssets = () => {
   const [debouncedSearchFilter, setDebouncedSearchFilter] = useState('')
@@ -37,8 +38,7 @@ const useAssets = () => {
   const [debouncedSearchNormaFilter, setDebouncedSearchNormaFilter] = useState('')
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
-  const [isSelectingAll, setIsSelectingAll] = useState(false);
-  const selectionRequestInFlight = useRef(false);
+  const previousRawFilterSignatureRef = useRef(null);
 
   const assetFilterForm = useForm({
     defaultValues: {
@@ -58,11 +58,11 @@ const useAssets = () => {
     norma,
   } = useWatch({ control: assetFilterForm.control })
 
-  const currentFilters = useMemo(() => ({
+  const filtersSnapshot = useMemo(() => ({
     search: debouncedSearchFilter,
-    dateStart,
-    dateStop,
-    filterByDate,
+    date_start: normalizeDateFilter(dateStart),
+    date_stop: normalizeDateFilter(dateStop),
+    filter_by_date: Boolean(filterByDate),
     status,
     norma: debouncedSearchNormaFilter,
   }), [
@@ -74,34 +74,54 @@ const useAssets = () => {
     status,
   ]);
 
-  const filterSignature = useMemo(() => JSON.stringify([
-    debouncedSearchFilter,
-    filterValue(dateStart),
-    filterValue(dateStop),
-    Boolean(filterByDate),
+  const rawFilters = useMemo(() => ({
+    search: (search ?? '').trim(),
+    date_start: normalizeDateFilter(dateStart),
+    date_stop: normalizeDateFilter(dateStop),
+    filter_by_date: Boolean(filterByDate),
     status,
-    debouncedSearchNormaFilter,
-  ]), [
+    norma: (norma ?? '').trim(),
+  }), [dateStart, dateStop, filterByDate, norma, search, status]);
+
+  const filterSignature = useMemo(
+    () => buildFilterSignature(filtersSnapshot),
+    [filtersSnapshot]
+  );
+  const rawFilterSignature = useMemo(
+    () => buildFilterSignature(rawFilters),
+    [rawFilters]
+  );
+  const filtersPending = rawFilterSignature !== filterSignature;
+
+  useEffect(() => {
+    if (previousRawFilterSignatureRef.current === null) {
+      previousRawFilterSignatureRef.current = rawFilterSignature;
+      return;
+    }
+
+    if (previousRawFilterSignatureRef.current !== rawFilterSignature) {
+      setPage(0);
+      previousRawFilterSignatureRef.current = rawFilterSignature;
+    }
+  }, [rawFilterSignature]);
+
+  const queryFilterValues = useMemo(() => [
     dateStart,
     dateStop,
     debouncedSearchFilter,
     debouncedSearchNormaFilter,
     filterByDate,
     status,
-  ]);
+  ], [dateStart, dateStop, debouncedSearchFilter, debouncedSearchNormaFilter, filterByDate, status]);
   
   const { 
     data: assets,
     isFetching: isFetchingAssets,
+    isError: hasAssetsError,
   } = useQuery({
     queryKey: [
       'instrumentos', 
-      debouncedSearchFilter,
-      dateStart,
-      dateStop,
-      filterByDate,
-      status,
-      debouncedSearchNormaFilter,
+      ...queryFilterValues,
       page,
       rowsPerPage,
     ], 
@@ -109,7 +129,7 @@ const useAssets = () => {
       const response = await axios.get('/instrumentos/', {
         signal,
         params: buildAssetsParams({
-          ...currentFilters,
+          ...filtersSnapshot,
           page: page + 1,
           pageSize: rowsPerPage,
         }),
@@ -140,42 +160,15 @@ const useAssets = () => {
     return () => handleSearchNormaFilter.cancel();
   }, [norma, handleSearchNormaFilter]);
 
-  const fetchAllMatchingAssets = useCallback(async (total) => {
-    if (selectionRequestInFlight.current) return null;
-
-    const normalizedTotal = Math.max(0, Number(total) || 0);
-    if (normalizedTotal === 0) {
-      return { count: 0, results: [], filterSignature };
-    }
-
-    selectionRequestInFlight.current = true;
-    setIsSelectingAll(true);
-
-    try {
-      const response = await axios.get('/instrumentos/', {
-        params: buildAssetsParams({
-          ...currentFilters,
-          page: 1,
-          pageSize: Math.min(normalizedTotal, MAX_EXPORT_ITEMS),
-        }),
-      });
-
-      return {
-        ...response?.data,
-        filterSignature,
-      };
-    } finally {
-      selectionRequestInFlight.current = false;
-      setIsSelectingAll(false);
-    }
-  }, [currentFilters, filterSignature]);
-
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
   
   const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+    const requestedPageSize = parseInt(event.target.value, 10);
+    setRowsPerPage(
+      [25, 50, 100].includes(requestedPageSize) ? requestedPageSize : 25
+    );
     setPage(0);
   };
 
@@ -185,13 +178,15 @@ const useAssets = () => {
     setSearch,
     assetFilterForm,
     isFetchingAssets,
+    hasAssetsError,
     page,
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
-    fetchAllMatchingAssets,
+    filtersSnapshot,
     filterSignature,
-    isSelectingAll,
+    rawFilterSignature,
+    filtersPending,
   }
 };
 

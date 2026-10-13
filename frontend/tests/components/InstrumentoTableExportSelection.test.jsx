@@ -5,13 +5,15 @@ import { MAX_EXPORT_ITEMS } from '../../src/assets/constants';
 
 const defaultProps = {
   csvContent: null,
-  selectAll: false,
   instrumentos: [{ id: 1, tag: 'INST-1' }],
   valueCheckbox: { tag: true },
   selected: [],
+  selectionMode: 'manual',
+  selectedIds: [],
+  selectedCount: 0,
   handleCheckboxSelectAll: jest.fn(),
   handleRowSelect: jest.fn(),
-  isSelectingAll: false,
+  selectionDisabled: false,
   page: 0,
   rowsPerPage: 25,
   handleChangePage: jest.fn(),
@@ -24,12 +26,19 @@ describe('InstrumentoTable - seleção para exportação', () => {
     jest.clearAllMocks();
   });
 
-  it('deriva o checkbox da linha pelos IDs realmente selecionados', () => {
-    render(<InstrumentoTable {...defaultProps} selectAll />);
+  it('deriva os checkboxes visíveis do modo all_filtered', () => {
+    render(
+      <InstrumentoTable
+        {...defaultProps}
+        selectionMode="all_filtered"
+        selectedCount={1}
+      />
+    );
 
     const checkboxes = screen.getAllByRole('checkbox');
     expect(checkboxes[0]).toBeChecked();
-    expect(checkboxes[1]).not.toBeChecked();
+    expect(checkboxes[1]).toBeChecked();
+    expect(checkboxes[1]).toBeDisabled();
   });
 
   it('mantém a seleção individual funcionando', async () => {
@@ -43,15 +52,11 @@ describe('InstrumentoTable - seleção para exportação', () => {
   });
 
   it('mostra o limite quando existem mais de 9999 resultados', () => {
-    const selected = Array.from({ length: MAX_EXPORT_ITEMS }, (_, index) => ({
-      id: index + 1,
-      instrumento: { id: index + 1 },
-    }));
     render(
       <InstrumentoTable
         {...defaultProps}
-        selectAll
-        selected={selected}
+        selectionMode="all_filtered"
+        selectedCount={MAX_EXPORT_ITEMS}
         count={12345}
       />
     );
@@ -59,13 +64,28 @@ describe('InstrumentoTable - seleção para exportação', () => {
     expect(screen.getByText(
       '9.999 de 12.345 resultados selecionados — limite de exportação'
     )).toBeInTheDocument();
+    expect(screen.getByText('1–25 de 12345')).toBeInTheDocument();
   });
 
-  it('exibe loading e desabilita a ação durante a consulta', () => {
-    render(<InstrumentoTable {...defaultProps} isSelectingAll />);
+  it('desabilita a seleção total enquanto os filtros estão pendentes', () => {
+    render(<InstrumentoTable {...defaultProps} selectionDisabled />);
 
-    expect(screen.getByRole('progressbar')).toBeInTheDocument();
-    expect(screen.getByText('Selecionar todos os resultados').closest('label')).toHaveClass('Mui-disabled');
+    expect(screen.getByText('Selecionar todos os 1 resultados').closest('label')).toHaveClass('Mui-disabled');
+  });
+
+  it('oferece somente 25, 50 e 100 linhas por página', async () => {
+    const user = userEvent.setup();
+    render(<InstrumentoTable {...defaultProps} count={458} />);
+
+    expect(screen.getByText('1–25 de 458')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('combobox'));
+
+    expect(screen.getByRole('option', { name: '25' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '50' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '100' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: '10' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Todos' })).not.toBeInTheDocument();
   });
 
   it('exibe a tooltip com o limite de exportação', async () => {

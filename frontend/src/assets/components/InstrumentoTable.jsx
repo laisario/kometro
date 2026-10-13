@@ -4,7 +4,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableRow,
   Checkbox, Box, TablePagination, TableContainer,
   FormControlLabel, Stack, Typography, Chip,
-  CircularProgress, IconButton, Tooltip
+  IconButton, Tooltip
 } from '@mui/material';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { positionLabels } from '../../utils/assets';
@@ -13,13 +13,15 @@ import { MAX_EXPORT_ITEMS } from '../constants';
 
 const InstrumentoTable = forwardRef(function InstrumentoTable({
   csvContent, 
-  selectAll, 
+  selectionMode,
   instrumentos, 
   valueCheckbox, 
   selected, 
+  selectedIds,
+  selectedCount,
   handleCheckboxSelectAll,
   handleRowSelect,
-  isSelectingAll,
+  selectionDisabled,
   page,
   rowsPerPage,
   handleChangePage,
@@ -46,12 +48,14 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
   };
 
   const activeFields = Object.keys(valueCheckbox).filter((key) => valueCheckbox[key]);
-  const selectedCount = selected?.length || 0;
+  const selectAll = selectionMode === 'all_filtered';
   const foundCount = count ?? instrumentos?.length ?? 0;
+  const selectionActionDisabled = foundCount === 0
+    || (!selectAll && selectionDisabled);
   const selectionReachedLimit = selectAll && foundCount > MAX_EXPORT_ITEMS;
-  const selectedIds = useMemo(
-    () => new Set(selected.map((item) => String(item.id))),
-    [selected]
+  const selectedIdSet = useMemo(
+    () => new Set(selectedIds.map((id) => String(id))),
+    [selectedIds]
   );
   const selectedLabel = selectionReachedLimit
     ? `${selectedCount.toLocaleString('pt-BR')} de ${foundCount.toLocaleString('pt-BR')} resultados selecionados — limite de exportação`
@@ -104,24 +108,22 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
             <FormControlLabel
               sx={{ m: 0 }}
               control={(
-                isSelectingAll
-                  ? <CircularProgress size={20} sx={{ m: 1.125 }} />
-                  : (
-                    <Checkbox
-                      size="small"
-                      checked={selectAll}
-                      indeterminate={!selectAll && selectedCount > 0}
-                      onChange={handleCheckboxSelectAll}
-                      disabled={foundCount === 0}
-                    />
-                  )
+                <Checkbox
+                  size="small"
+                  checked={selectAll}
+                  indeterminate={!selectAll && selectedCount > 0}
+                  onChange={handleCheckboxSelectAll}
+                  disabled={selectionActionDisabled}
+                />
               )}
               label={(
-                <Typography variant="body2" fontWeight={600} color={isSelectingAll ? 'text.secondary' : 'text.primary'}>
-                  {selectAll ? 'Limpar seleção' : 'Selecionar todos os resultados'}
+                <Typography variant="body2" fontWeight={600} color={selectionActionDisabled ? 'text.secondary' : 'text.primary'}>
+                  {selectAll
+                    ? 'Limpar seleção'
+                    : `Selecionar todos os ${foundCount.toLocaleString('pt-BR')} resultados`}
                 </Typography>
               )}
-              disabled={isSelectingAll || foundCount === 0}
+              disabled={selectionActionDisabled}
             />
             <Tooltip title={`É possível exportar até ${MAX_EXPORT_ITEMS.toLocaleString('pt-BR')} instrumentos por vez.`}>
               <IconButton size="small" aria-label="Limite de exportação">
@@ -160,8 +162,9 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
                 <TableCell padding="checkbox">
                   {!csvContent && <Checkbox
                     size="small"
-                    checked={selectedIds.has(String(inst.id))}
+                    checked={selectAll || selectedIdSet.has(String(inst.id))}
                     onChange={() => handleRowSelect(inst.id, inst)}
+                    disabled={selectAll}
                   />}
                 </TableCell>
                 {activeFields.map((fieldKey) => {
@@ -227,7 +230,7 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
       </TableContainer>
       {!csvContent && page !== undefined && (
         <TablePagination
-          rowsPerPageOptions={[10, 25, 50, 100, { label: 'Todos', value: instrumentos?.length }]}
+          rowsPerPageOptions={[25, 50, 100]}
           component="div"
           count={count || 0}
           rowsPerPage={rowsPerPage}
@@ -235,10 +238,8 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
           onPageChange={handleChangePage}
           onRowsPerPageChange={handleChangeRowsPerPage}
           labelRowsPerPage="Linhas por página"
-          labelDisplayedRows={({ from, to, count }) => 
-            rowsPerPage === -1 
-              ? `${count} de ${count}` 
-              : `${from}-${to} de ${count !== -1 ? count : `mais de ${to}`}`
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} de ${count !== -1 ? count : `mais de ${to}`}`
           }
           sx={{ flexShrink: 0, borderTop: 1, borderColor: 'divider' }}
         />
@@ -249,16 +250,20 @@ const InstrumentoTable = forwardRef(function InstrumentoTable({
 
 InstrumentoTable.propTypes = {
   csvContent: PropTypes.string,
-  selectAll: PropTypes.bool.isRequired,
+  selectionMode: PropTypes.oneOf(['manual', 'all_filtered']).isRequired,
   instrumentos: PropTypes.arrayOf(PropTypes.object),
   valueCheckbox: PropTypes.objectOf(PropTypes.bool).isRequired,
   selected: PropTypes.arrayOf(PropTypes.shape({
     id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
     instrumento: PropTypes.object,
   })).isRequired,
+  selectedIds: PropTypes.arrayOf(
+    PropTypes.oneOfType([PropTypes.number, PropTypes.string])
+  ).isRequired,
+  selectedCount: PropTypes.number.isRequired,
   handleCheckboxSelectAll: PropTypes.func.isRequired,
   handleRowSelect: PropTypes.func.isRequired,
-  isSelectingAll: PropTypes.bool.isRequired,
+  selectionDisabled: PropTypes.bool.isRequired,
   page: PropTypes.number,
   rowsPerPage: PropTypes.number,
   handleChangePage: PropTypes.func,

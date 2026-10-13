@@ -44,6 +44,8 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import { MAX_EXPORT_ITEMS } from '../constants';
 
+const DEFAULT_EXPORT_ERROR = 'Não foi possível exportar os instrumentos. Tente novamente.';
+
 function FilterAccordion({ title, children, openFilter }) {
   const [open, setOpen] = useState(openFilter || false);
 
@@ -99,11 +101,13 @@ function ExportFilter(props) {
     open, 
     handleClose, 
     selected,
+    selection,
+    selectedCount,
+    selectionDisabled,
     handleChangeCheckbox, 
     valueCheckbox, 
     error, 
     setError, 
-    selectAll, 
     assets,
     handleCheckboxSelectAll,
     assetFilterForm,
@@ -113,18 +117,19 @@ function ExportFilter(props) {
     handleChangePage,
     handleChangeRowsPerPage,
     handleRowSelect,
-    isSelectingAll,
   } = props;
 
   const [csvContent, setCsvContent] = useState(null)
   const [parsedCsv, setParsedCsv] = React.useState(null)
   const [loading, setLoading] = useState(false)
+  const [exportError, setExportError] = useState('')
+  const exportRequestInFlight = useRef(false)
   const { CSVDownloader } = useCSVDownloader()
   const status = assetFilterForm?.watch('status')
   const selectedFieldsCount = Object.values(valueCheckbox).filter(Boolean).length
-  const selectedInstrumentsCount = selected?.length || 0
+  const selectedInstrumentsCount = selectedCount
   const foundInstrumentsCount = assets?.count || 0
-  const selectionReachedLimit = selectAll && foundInstrumentsCount > MAX_EXPORT_ITEMS
+  const selectionReachedLimit = selection.mode === 'all_filtered' && foundInstrumentsCount > MAX_EXPORT_ITEMS
 
   useEffect(() => {
     if (!csvContent) return
@@ -149,7 +154,7 @@ function ExportFilter(props) {
     <Dialog
       open={open}
       fullScreen
-      onClose={() => { setCsvContent(null); handleClose() }}
+      onClose={() => { setCsvContent(null); setExportError(''); handleClose() }}
       PaperProps={{
         component: 'form',
         sx: {
@@ -162,31 +167,49 @@ function ExportFilter(props) {
         },
         onSubmit: async (event) => {
           event.preventDefault();
+          if (exportRequestInFlight.current || selectionDisabled) return;
+
           if (!Object.values(valueCheckbox).includes(true)) {
             setError(true);
             return;
           }
-          
+
           const selectedData = {
-            instrumentosSelecionados: selected.map(({ id }) => ({ id })),
+            selection: selection.mode === 'all_filtered'
+              ? {
+                mode: 'all_filtered',
+                filters: selection.filtersSnapshot,
+              }
+              : {
+                mode: 'manual',
+                ids: selection.ids,
+              },
             camposSelecionados: Object.entries(valueCheckbox).filter(([,value]) => !!value).map(([key]) => key)
           };
 
+          exportRequestInFlight.current = true;
+          setExportError('');
+          setError(false);
+          setLoading(true)
           try {
-            setLoading(true)
             const resposta = await axios.post('/instrumentos/exportar/', selectedData);
-            setLoading(false)
             if (resposta.status === 200) {
               setCsvContent(resposta?.data)
             } else {
-              setError(true)
+              setExportError(DEFAULT_EXPORT_ERROR)
             }
           } catch (error) {
             console.error('Erro ao enviar dados para o backend:', error);
-            setError(true)
+            const responseDetail = error?.response?.data?.detail;
+            setExportError(
+              typeof responseDetail === 'string'
+                ? responseDetail
+                : DEFAULT_EXPORT_ERROR
+            )
+          } finally {
+            exportRequestInFlight.current = false;
+            setLoading(false)
           }
-
-          setError(false);
         },
       }}
     >
@@ -206,6 +229,11 @@ function ExportFilter(props) {
           Este relatório está em <strong>formato CSV</strong>. Para abrir corretamente no <strong>Excel</strong>, é preciso converter para <strong>XLSX</strong> ou usar a opção “Texto para colunas”. Também pode ser aberto no <strong>LibreOffice</strong> ou <strong>Google Planilhas</strong>.
         </Alert>
       }
+      {exportError && (
+        <Alert severity="error" sx={{ flexShrink: 0 }}>
+          {exportError}
+        </Alert>
+      )}
       <DialogContent
         sx={{
           flex: { xs: '0 0 auto', md: 1 },
@@ -331,10 +359,12 @@ function ExportFilter(props) {
                 instrumentos={assets?.results}
                 valueCheckbox={valueCheckbox}
                 selected={selected}
-                selectAll={selectAll}
+                selectedIds={selection.mode === 'manual' ? selection.ids : []}
+                selectedCount={selectedCount}
+                selectionMode={selection.mode}
                 handleCheckboxSelectAll={handleCheckboxSelectAll}
                 handleRowSelect={handleRowSelect}
-                isSelectingAll={isSelectingAll}
+                selectionDisabled={selectionDisabled}
                 csvContent={csvContent}
                 ref={printRef}
                 page={page}
@@ -477,8 +507,8 @@ function ExportFilter(props) {
             </Typography>
           </Box>
         )}
-        <Button variant="outlined" onClick={() => { setCsvContent(null); handleClose() }}>Cancelar</Button>
-        {!csvContent  && (loading ? <CircularProgress size={28} sx={{ mx: 2 }} /> : <Button variant="contained" disabled={!selected?.length} type="submit">Exportar</Button>)}
+        <Button variant="outlined" disabled={loading} onClick={() => { setCsvContent(null); setExportError(''); handleClose() }}>Cancelar</Button>
+        {!csvContent  && (loading ? <CircularProgress size={28} sx={{ mx: 2 }} /> : <Button variant="contained" disabled={selectedCount < 1 || selectionDisabled} type="submit">Exportar</Button>)}
         {csvContent && <Button className='button' variant='outlined' endIcon={<PrintIcon />} onClick={handlePrint}>Imprimir</Button>}
         {csvContent && <CSVDownloader style={{ background: 'transparent', border: 0 }} variant="contained" type="button" filename="meus_instrumentos" bom data={parsedCsv}><Button variant='contained' endIcon={<DownloadIcon />}>Download</Button></CSVDownloader>}
       </DialogActions>
@@ -515,11 +545,24 @@ ExportFilter.propTypes = {
     id: PropTypes.oneOfType([PropTypes.number, PropTypes.string]).isRequired,
     instrumento: PropTypes.object,
   })).isRequired,
+  selection: PropTypes.oneOfType([
+    PropTypes.shape({
+      mode: PropTypes.oneOf(['manual']).isRequired,
+      ids: PropTypes.array.isRequired,
+    }),
+    PropTypes.shape({
+      mode: PropTypes.oneOf(['all_filtered']).isRequired,
+      filtersSnapshot: PropTypes.object.isRequired,
+      matchedCount: PropTypes.number.isRequired,
+      selectedCount: PropTypes.number.isRequired,
+    }),
+  ]).isRequired,
+  selectedCount: PropTypes.number.isRequired,
+  selectionDisabled: PropTypes.bool.isRequired,
   handleChangeCheckbox: PropTypes.func.isRequired,
   valueCheckbox: PropTypes.objectOf(PropTypes.bool).isRequired,
   error: PropTypes.oneOfType([PropTypes.bool, PropTypes.object]),
   setError: PropTypes.func.isRequired,
-  selectAll: PropTypes.bool.isRequired,
   assets: PropTypes.shape({
     count: PropTypes.number,
     results: PropTypes.arrayOf(PropTypes.object),
@@ -537,7 +580,6 @@ ExportFilter.propTypes = {
   handleChangePage: PropTypes.func.isRequired,
   handleChangeRowsPerPage: PropTypes.func.isRequired,
   handleRowSelect: PropTypes.func.isRequired,
-  isSelectingAll: PropTypes.bool.isRequired,
 };
 
 export default ExportFilter

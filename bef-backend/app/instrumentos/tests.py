@@ -210,6 +210,16 @@ class InstrumentoPaginationAndExportTest(TestCase):
             format="json",
         )
 
+    def _exportar_novo_contrato(self, selection, campos=None):
+        return self.api.post(
+            "/instrumentos/exportar/",
+            {
+                "selection": selection,
+                "campos_selecionados": campos or ["tag"],
+            },
+            format="json",
+        )
+
     def test_page_size_ate_limite_e_permitido(self):
         request = Request(APIRequestFactory().get(
             "/instrumentos/",
@@ -300,6 +310,129 @@ class InstrumentoPaginationAndExportTest(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("detail", response.data)
+
+    def test_novo_contrato_exporta_selecao_manual(self):
+        response = self._exportar_novo_contrato({
+            "mode": "manual",
+            "ids": [self.instrumento_autorizado.id],
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("EXPORT-AUTORIZADO", response.data)
+        self.assertEqual(response["X-Matched-Count"], "1")
+        self.assertEqual(response["X-Exported-Count"], "1")
+
+    def test_novo_contrato_deduplica_ids_manuais(self):
+        response = self._exportar_novo_contrato({
+            "mode": "manual",
+            "ids": [
+                self.instrumento_autorizado.id,
+                self.instrumento_autorizado.id,
+            ],
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data.count("EXPORT-AUTORIZADO"), 1)
+
+    def test_novo_contrato_manual_rejeita_mais_de_9999_ids(self):
+        response = self._exportar_novo_contrato({
+            "mode": "manual",
+            "ids": list(range(1, MAX_EXPORT_ITEMS + 2)),
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("ids", str(response.data["detail"]))
+
+    def test_novo_contrato_manual_preserva_escopo_do_cliente(self):
+        response = self._exportar_novo_contrato({
+            "mode": "manual",
+            "ids": [
+                self.instrumento_autorizado.id,
+                self.instrumento_outro_cliente.id,
+            ],
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("EXPORT-AUTORIZADO", response.data)
+        self.assertNotIn("EXPORT-NAO-AUTORIZADO", response.data)
+
+    def test_all_filtered_aplica_busca_e_preserva_escopo_do_cliente(self):
+        response = self._exportar_novo_contrato({
+            "mode": "all_filtered",
+            "filters": {"search": "EXPORT-AUTORIZADO"},
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("EXPORT-AUTORIZADO", response.data)
+        self.assertNotIn("EXPORT-NAO-AUTORIZADO", response.data)
+        self.assertEqual(response["X-Matched-Count"], "2")
+
+    def test_all_filtered_combina_status_datas_e_norma(self):
+        norma = Normativo.objects.create(nome="ISO 9001", cliente=self.cliente)
+        correspondente = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_autorizado.instrumento,
+            tag="COMBINADO-CORRETO",
+            data_proxima_calibracao=date.today() - timedelta(days=2),
+        )
+        correspondente.normativos.add(norma)
+        fora_da_data = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_autorizado.instrumento,
+            tag="COMBINADO-FORA",
+            data_proxima_calibracao=date.today() - timedelta(days=20),
+        )
+        fora_da_data.normativos.add(norma)
+
+        response = self._exportar_novo_contrato({
+            "mode": "all_filtered",
+            "filters": {
+                "status": "expired",
+                "date_start": str(date.today() - timedelta(days=5)),
+                "date_stop": str(date.today()),
+                "norma": "ISO 9001",
+            },
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("COMBINADO-CORRETO", response.data)
+        self.assertNotIn("COMBINADO-FORA", response.data)
+        self.assertEqual(response["X-Matched-Count"], "1")
+
+    def test_all_filtered_rejeita_filtro_fora_da_allowlist(self):
+        response = self._exportar_novo_contrato({
+            "mode": "all_filtered",
+            "filters": {"client": self.outro_cliente.id},
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("client", str(response.data["detail"]))
+
+    @patch("instrumentos.views.MAX_EXPORT_ITEMS", 2)
+    def test_all_filtered_limita_e_ordena_por_id_decrescente(self):
+        criados = [
+            InstrumentoDoCliente.objects.create(
+                cliente=self.cliente,
+                instrumento=self.instrumento_autorizado.instrumento,
+                tag=f"ORDEM-EXPORT-{indice}",
+            )
+            for indice in range(3)
+        ]
+
+        response = self._exportar_novo_contrato({
+            "mode": "all_filtered",
+            "filters": {"search": "ORDEM-EXPORT"},
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response["X-Matched-Count"], "3")
+        self.assertEqual(response["X-Exported-Count"], "2")
+        self.assertEqual(response["X-Export-Limit-Applied"], "true")
+        self.assertNotIn(criados[0].tag, response.data)
+        self.assertLess(
+            response.data.index(criados[2].tag),
+            response.data.index(criados[1].tag),
+        )
 
 
 class NumeroUltimoCertificadoTest(TestCase):

@@ -42,11 +42,16 @@ from .serializers import (
     ChecagemWriteSerializer,
     InstrumentoDoClienteListReadSerializer,
     TipoInstrumentoSerializer,
+    InstrumentExportRequestSerializer,
 )
 from .admin import InstrumentoExportResource, RelatorioMovimentacoesResource
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import response
-from .filters import CalibracaoFilter, InstrumentoDoClienteFilter
+from .filters import (
+    CalibracaoFilter,
+    InstrumentoDoClienteFilter,
+    apply_instrument_export_filters,
+)
 from rest_framework.pagination import PageNumberPagination
 from openpyxl import Workbook
 from django.http import HttpResponse
@@ -135,7 +140,10 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         queryset = annotate_numero_ultimo_certificado(
             InstrumentoDoCliente.objects.select_related(
                 'instrumento__tipo_de_instrumento',
-                'cliente'
+                'cliente',
+                'setor',
+                'frequencia_calibracao',
+                'frequencia_checagem',
             ).prefetch_related('normativos')
         )
         
@@ -175,71 +183,44 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"])
     def exportar(self, request, pk=None):
-        dados_selecionados = request.data
-        instrumentos_selecionados = dados_selecionados.get(
-            "instrumentos_selecionados", []
-        )
-        campos_selecionados = dados_selecionados.get("campos_selecionados", [])
-
-        if not isinstance(instrumentos_selecionados, list):
+        payload = InstrumentExportRequestSerializer(data=request.data)
+        if not payload.is_valid():
             return response.Response(
-                {"detail": "instrumentos_selecionados deve ser uma lista."},
+                {"detail": payload.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if len(instrumentos_selecionados) > MAX_EXPORT_ITEMS:
-            return response.Response(
-                {
-                    "detail": (
-                        f"É possível exportar até {MAX_EXPORT_ITEMS} "
-                        "instrumentos por vez."
-                    )
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+        selection = payload.validated_data["selection"]
+        campos_selecionados = payload.validated_data["campos_selecionados"]
+        authorized_queryset = self.get_queryset()
+
+        if selection["mode"] == "manual":
+            instrumentos_filtrados = authorized_queryset.filter(
+                id__in=selection["ids"]
+            ).distinct()
+            matched_count = instrumentos_filtrados.count()
+            export_ids = list(
+                instrumentos_filtrados.order_by("-id").values_list(
+                    "id", flat=True
+                )
+            )
+        else:
+            instrumentos_filtrados = apply_instrument_export_filters(
+                authorized_queryset,
+                selection["filters"],
+            )
+            matched_count = instrumentos_filtrados.count()
+            export_ids = list(
+                instrumentos_filtrados.order_by("-id").values_list(
+                    "id", flat=True
+                )[:MAX_EXPORT_ITEMS]
             )
 
-        ids = []
-        ids_vistos = set()
-        erro_id_invalido = {
-            "detail": (
-                "Cada instrumento selecionado deve possuir um id válido."
-            )
-        }
-        for item in instrumentos_selecionados:
-            if not isinstance(item, dict) or "id" not in item:
-                return response.Response(
-                    erro_id_invalido,
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            item_id = item.get("id")
-            if isinstance(item_id, bool) or (
-                isinstance(item_id, float) and not item_id.is_integer()
-            ):
-                return response.Response(
-                    erro_id_invalido,
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            try:
-                item_id = int(item_id)
-            except (TypeError, ValueError):
-                return response.Response(
-                    erro_id_invalido,
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if item_id <= 0:
-                return response.Response(
-                    erro_id_invalido,
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-            if item_id not in ids_vistos:
-                ids_vistos.add(item_id)
-                ids.append(item_id)
-
-        instrumentos_exportados = self.get_queryset().filter(id__in=ids)
+        exported_count = len(export_ids)
+        limit_applied = matched_count > MAX_EXPORT_ITEMS
+        instrumentos_exportados = authorized_queryset.filter(
+            id__in=export_ids
+        ).order_by("-id")
         resource = InstrumentoExportResource(campos_selecionados=campos_selecionados)
         dataset = resource.export(queryset=instrumentos_exportados)
         csv_content = dataset.csv
@@ -247,6 +228,9 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         csv_response[
             "Content-Disposition"
         ] = 'attachment; filename="instrumentos_exportados.csv"'
+        csv_response["X-Matched-Count"] = str(matched_count)
+        csv_response["X-Exported-Count"] = str(exported_count)
+        csv_response["X-Export-Limit-Applied"] = str(limit_applied).lower()
         return csv_response
     
     @action(detail=True, methods=["get"])

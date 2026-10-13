@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { enqueueSnackbar } from "notistack";
 import { useSectorTreeContext } from "../contexts/SectorTreeContext";
 import useResponsive from '../../theme/hooks/useResponsive';
 import useAsset from "../hooks/useAsset";
@@ -8,6 +7,9 @@ import useDefaultAssets from "../hooks/useDefaultAssets";
 import useAssetMutations from "../hooks/useAssetMutations";
 import useAuth from "../../auth/hooks/useAuth";
 import useAssets from "../hooks/useAssets";
+import { MAX_EXPORT_ITEMS } from "../constants";
+
+const emptyManualSelection = () => ({ mode: 'manual', ids: [] });
 
 const useAssetsVm = (id, idSetor) => {
   const [open, setOpen] = useState(false);
@@ -26,8 +28,8 @@ const useAssetsVm = (id, idSetor) => {
     normativos: true,
     numeroUltimoCertificado: true,
   });
-  const [selected, setSelected] = useState([]);
-  const [selectAll, setSelectAll] = useState(false);
+  const [selection, setSelection] = useState(emptyManualSelection);
+  const [selectedItemsById, setSelectedItemsById] = useState(() => new Map());
   const [openCreateSectorId, setOpenCreateSectorId] = useState(null);
   const [creatingSector, setCreatingSector] = useState(false);
 
@@ -73,17 +75,41 @@ const useAssetsVm = (id, idSetor) => {
     setSearch, 
     assetFilterForm,
     isFetchingAssets,
+    hasAssetsError,
     page,
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
-    fetchAllMatchingAssets,
+    filtersSnapshot,
     filterSignature,
-    isSelectingAll,
+    rawFilterSignature,
+    filtersPending,
   } = useAssets();
-  const activeFilterSignatureRef = useRef(filterSignature);
-  const previousFilterSignatureRef = useRef(filterSignature);
-  activeFilterSignatureRef.current = filterSignature;
+  const previousRawFilterSignatureRef = useRef(rawFilterSignature);
+
+  const selectAll = selection.mode === 'all_filtered';
+  const selectedCount = selectAll
+    ? selection.selectedCount
+    : selection.ids.length;
+  const selected = useMemo(
+    () => selection.mode === 'manual'
+      ? selection.ids
+        .map((selectedId) => selectedItemsById.get(String(selectedId)))
+        .filter(Boolean)
+      : [],
+    [selectedItemsById, selection]
+  );
+  const selectionHasStaleFilters = selectAll
+    && selection.filterSignature !== filterSignature;
+  const selectionDisabled = filtersPending
+    || isFetchingAssets
+    || hasAssetsError
+    || selectionHasStaleFilters;
+
+  const clearSelection = useCallback(() => {
+    setSelection(emptyManualSelection());
+    setSelectedItemsById(new Map());
+  }, []);
   
   const handleCloseCreateSector = () => {
     setOpenCreateSectorId(null)
@@ -149,54 +175,53 @@ const useAssetsVm = (id, idSetor) => {
   };
 
   useEffect(() => {
-    if (previousFilterSignatureRef.current !== filterSignature) {
-      setSelected([]);
-      setSelectAll(false);
-      previousFilterSignatureRef.current = filterSignature;
+    if (previousRawFilterSignatureRef.current !== rawFilterSignature) {
+      if (selection.mode === 'all_filtered') clearSelection();
+      previousRawFilterSignatureRef.current = rawFilterSignature;
     }
-  }, [filterSignature]);
+  }, [clearSelection, rawFilterSignature, selection.mode]);
 
-  const handleCheckboxSelectAll = async () => {
-    if (isSelectingAll) return;
-
+  const handleCheckboxSelectAll = () => {
     if (selectAll) {
-      setSelected([]);
-      setSelectAll(false);
+      clearSelection();
       return;
     }
 
-    try {
-      const result = await fetchAllMatchingAssets(assets?.count || 0);
-      if (!result || result.filterSignature !== activeFilterSignatureRef.current) return;
+    if (selectionDisabled) return;
 
-      const selectedResults = (result.results || []).map((instrumento) => ({
-        id: instrumento.id,
-        instrumento,
-      }));
-      setSelected(selectedResults);
-      setSelectAll(selectedResults.length > 0);
-    } catch {
-      enqueueSnackbar('Não foi possível selecionar todos os instrumentos. Tente novamente.', {
-        variant: 'error',
-        autoHideDuration: 3000,
-      });
-    }
+    const matchedCount = Math.max(0, Number(assets?.count) || 0);
+    if (!matchedCount) return;
+
+    setSelectedItemsById(new Map());
+    setSelection({
+      mode: 'all_filtered',
+      filtersSnapshot: { ...filtersSnapshot },
+      filterSignature,
+      matchedCount,
+      selectedCount: Math.min(matchedCount, MAX_EXPORT_ITEMS),
+    });
   };
 
   const handleRowSelect = (idInstrumento, instrumento) => {
-    setSelectAll(false);
-    setSelected((currentSelection) => {
-      const isSelected = currentSelection.some(
-        (item) => String(item.id) === String(idInstrumento)
-      );
+    if (selection.mode === 'all_filtered') return;
 
-      if (isSelected) {
-        return currentSelection.filter(
-          (item) => String(item.id) !== String(idInstrumento)
-        );
-      }
+    const idKey = String(idInstrumento);
+    const isSelected = selection.ids.some((id) => String(id) === idKey);
 
-      return [...currentSelection, { id: idInstrumento, instrumento }];
+    setSelectedItemsById((currentItems) => {
+      const nextItems = new Map(currentItems);
+      if (isSelected) nextItems.delete(idKey);
+      else nextItems.set(idKey, { id: idInstrumento, instrumento });
+      return nextItems;
+    });
+    setSelection((currentSelection) => {
+      if (currentSelection.mode !== 'manual') return currentSelection;
+      return {
+        mode: 'manual',
+        ids: isSelected
+          ? currentSelection.ids.filter((id) => String(id) !== idKey)
+          : [...currentSelection.ids, idInstrumento],
+      };
     });
   };
 
@@ -222,8 +247,7 @@ const useAssetsVm = (id, idSetor) => {
       numeroUltimoCertificado: true,
     });
     setError(false);
-    setSelectAll(false)
-    setSelected([])
+    clearSelection()
     assetFilterForm.reset()
   };
 
@@ -240,9 +264,11 @@ const useAssetsVm = (id, idSetor) => {
     search, 
     setSearch,
     selectAll,
+    selection,
+    selectedCount,
+    selectionDisabled,
     valueCheckbox,
     selected,
-    setSelected,
     asset, 
     isLoadingAsset,
     mutateDeleteSectors,
@@ -285,7 +311,6 @@ const useAssetsVm = (id, idSetor) => {
     rowsPerPage,
     handleChangePage,
     handleChangeRowsPerPage,
-    isSelectingAll,
     creatingSector,
     setCreatingSector,
   }

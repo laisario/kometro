@@ -1,174 +1,103 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import dayjs from 'dayjs';
+import { act, renderHook } from '@testing-library/react';
 import { useQuery } from 'react-query';
 import { useForm, useWatch } from 'react-hook-form';
 import { axios } from '../../src/api';
 import useAssets, { buildAssetsParams } from '../../src/assets/hooks/useAssets';
-import { MAX_EXPORT_ITEMS } from '../../src/assets/constants';
 
-jest.mock('react-query', () => ({
-  useQuery: jest.fn(),
-}));
+jest.mock('react-query', () => ({ useQuery: jest.fn() }));
+jest.mock('react-hook-form', () => ({ useForm: jest.fn(), useWatch: jest.fn() }));
+jest.mock('../../src/api', () => ({ axios: { get: jest.fn() } }));
 
-jest.mock('react-hook-form', () => ({
-  useForm: jest.fn(),
-  useWatch: jest.fn(),
-}));
-
-jest.mock('../../src/api', () => ({
-  axios: {
-    get: jest.fn(),
-  },
-}));
-
-describe('useAssets - seleção de todos os resultados', () => {
+describe('useAssets - paginação e filtros da exportação', () => {
   let watchedFilters;
-  let assetFilterForm;
+  let queryOptions;
 
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
-    useQuery.mockReturnValue({
-      data: { count: 128, results: [] },
-      isFetching: false,
+    queryOptions = null;
+    useQuery.mockImplementation((options) => {
+      queryOptions = options;
+      return {
+        data: { count: 128, results: [] },
+        isFetching: false,
+        isError: false,
+      };
     });
     axios.get.mockResolvedValue({ data: { count: 128, results: [] } });
     watchedFilters = {
-      status: 'all',
-      dateStart: '',
-      dateStop: '',
-      filterByDate: false,
-      norma: '',
+      status: 'all', dateStart: '', dateStop: '', filterByDate: false, norma: '',
     };
-    assetFilterForm = {
+    useForm.mockReturnValue({
       control: {},
       setValue: jest.fn((name, value) => {
         watchedFilters = { ...watchedFilters, [name]: value };
       }),
-    };
-    useForm.mockReturnValue(assetFilterForm);
+    });
     useWatch.mockImplementation(() => watchedFilters);
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
+  afterEach(() => jest.useRealTimers());
 
-  it('usa uma única função para montar paginação e filtros', () => {
+  it('monta a paginação e os filtros canônicos para a listagem', () => {
     expect(buildAssetsParams({
-      search: 'termometro',
-      status: 'expired',
-      dateStart: 'inicio',
-      dateStop: 'fim',
-      filterByDate: true,
-      norma: 'ISO',
-      page: 1,
-      pageSize: 128,
+      search: 'termometro', status: 'expired', date_start: '2026-01-01',
+      date_stop: '2026-02-01', filter_by_date: true, norma: 'ISO', page: 1,
+      pageSize: 100,
     })).toEqual({
-      search: 'termometro',
-      status: 'expired',
-      dateStart: 'inicio',
-      dateStop: 'fim',
-      filterByDate: true,
-      norma: 'ISO',
-      page: 1,
-      page_size: 128,
+      search: 'termometro', status: 'expired', dateStart: '2026-01-01',
+      dateStop: '2026-02-01', filterByDate: true, norma: 'ISO', page: 1,
+      page_size: 100,
     });
   });
 
-  it('busca todos com page 1, page_size igual ao total e preserva filtros', async () => {
-    const dateStart = dayjs('2026-01-01');
-    const dateStop = dayjs('2026-02-01');
+  it('inicia com 25 linhas e não expõe consulta para buscar todos', () => {
+    const { result } = renderHook(() => useAssets());
+
+    expect(result.current.rowsPerPage).toBe(25);
+    expect(result.current.fetchAllMatchingAssets).toBeUndefined();
+  });
+
+  it('mantém a consulta da tabela paginada após selecionar filtros', async () => {
     const { result, rerender } = renderHook(() => useAssets());
 
-    act(() => {
-      result.current.setSearch('termometro');
-      result.current.assetFilterForm.setValue('status', 'expired');
-      result.current.assetFilterForm.setValue('dateStart', dateStart);
-      result.current.assetFilterForm.setValue('dateStop', dateStop);
-      result.current.assetFilterForm.setValue('filterByDate', true);
-      result.current.assetFilterForm.setValue('norma', 'ISO 9001');
-    });
+    act(() => result.current.setSearch('termometro'));
     rerender();
-    act(() => {
-      jest.advanceTimersByTime(500);
-    });
+    act(() => jest.advanceTimersByTime(400));
+    rerender();
 
-    axios.get.mockResolvedValueOnce({
-      data: { count: 128, results: [{ id: 1 }] },
-    });
+    await act(async () => queryOptions.queryFn({ signal: undefined }));
 
-    await act(async () => {
-      await result.current.fetchAllMatchingAssets(128);
-    });
-
-    expect(axios.get).toHaveBeenCalledWith('/instrumentos/', {
-      params: {
-        search: 'termometro',
-        status: 'expired',
-        dateStart,
-        dateStop,
-        filterByDate: true,
-        norma: 'ISO 9001',
-        page: 1,
-        page_size: 128,
-      },
-    });
-    expect(result.current.rowsPerPage).toBe(25);
-    expect(result.current.page).toBe(0);
-  });
-
-  it('limita a consulta a 9999 quando o total é maior', async () => {
-    const { result } = renderHook(() => useAssets());
-
-    await act(async () => {
-      await result.current.fetchAllMatchingAssets(12345);
-    });
-
-    expect(axios.get).toHaveBeenCalledWith('/instrumentos/', {
-      params: expect.objectContaining({
-        page: 1,
-        page_size: MAX_EXPORT_ITEMS,
-      }),
-    });
-  });
-
-  it('mantém loading durante a consulta e impede requests concorrentes', async () => {
-    let resolveRequest;
-    axios.get.mockReturnValueOnce(new Promise((resolve) => {
-      resolveRequest = resolve;
-    }));
-    const { result } = renderHook(() => useAssets());
-
-    let firstRequest;
-    act(() => {
-      firstRequest = result.current.fetchAllMatchingAssets(128);
-    });
-
-    await waitFor(() => expect(result.current.isSelectingAll).toBe(true));
-
-    let secondResult;
-    await act(async () => {
-      secondResult = await result.current.fetchAllMatchingAssets(128);
-    });
-    expect(secondResult).toBeNull();
     expect(axios.get).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      resolveRequest({ data: { count: 128, results: [] } });
-      await firstRequest;
+    expect(axios.get).toHaveBeenCalledWith('/instrumentos/', {
+      signal: undefined,
+      params: expect.objectContaining({ search: 'termometro', page: 1, page_size: 25 }),
     });
-    expect(result.current.isSelectingAll).toBe(false);
+    expect(axios.get.mock.calls[0][1].params.page_size).not.toBe(9999);
   });
 
-  it('remove o loading quando a consulta falha', async () => {
-    axios.get.mockRejectedValueOnce(new Error('falha de rede'));
+  it('marca filtros como pendentes imediatamente, antes do debounce', () => {
+    const { result, rerender } = renderHook(() => useAssets());
+
+    act(() => result.current.setSearch('novo filtro'));
+    rerender();
+
+    expect(result.current.filtersPending).toBe(true);
+    expect(result.current.rawFilterSignature).not.toBe(result.current.filterSignature);
+
+    act(() => jest.advanceTimersByTime(400));
+    rerender();
+
+    expect(result.current.filtersPending).toBe(false);
+    expect(result.current.filtersSnapshot.search).toBe('novo filtro');
+  });
+
+  it('nunca transforma o tamanho da página em -1', () => {
     const { result } = renderHook(() => useAssets());
 
-    await expect(act(async () => {
-      await result.current.fetchAllMatchingAssets(128);
-    })).rejects.toThrow('falha de rede');
+    act(() => result.current.handleChangeRowsPerPage({ target: { value: '-1' } }));
 
-    expect(result.current.isSelectingAll).toBe(false);
+    expect(result.current.rowsPerPage).toBe(25);
+    expect(result.current.rowsPerPage).not.toBe(-1);
   });
 });

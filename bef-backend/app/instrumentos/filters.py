@@ -3,6 +3,80 @@ from .models import Calibracao, InstrumentoDoCliente, Normativo, TipoInstrumento
 from datetime import timedelta
 from django.utils import timezone
 from datetime import datetime
+from django.db.models import Q
+from django.utils.dateparse import parse_date
+
+
+def _parse_filter_date(value):
+    if not value:
+        return None
+    if hasattr(value, "year") and not isinstance(value, str):
+        return value
+
+    parsed = parse_date(str(value))
+    if parsed:
+        return parsed
+
+    try:
+        return datetime.strptime(
+            str(value), "%a, %d %b %Y %H:%M:%S %Z"
+        ).date()
+    except ValueError:
+        return None
+
+
+def apply_instrument_export_filters(queryset, validated_filters):
+    """Apply the explicit export filter allowlist to an authorized queryset."""
+    status = validated_filters.get("status", "all")
+    date_start = validated_filters.get("date_start")
+    date_stop = validated_filters.get("date_stop")
+    today = timezone.now().date()
+
+    if status == "expired":
+        queryset = queryset.filter(data_proxima_calibracao__lt=today)
+    elif status == "expiringSoon":
+        queryset = queryset.filter(
+            data_proxima_calibracao__gte=today,
+            data_proxima_calibracao__lte=today + timedelta(days=30),
+        )
+
+    if date_start:
+        queryset = queryset.filter(data_proxima_calibracao__gte=date_start)
+    if date_stop:
+        queryset = queryset.filter(data_proxima_calibracao__lte=date_stop)
+
+    norma = validated_filters.get("norma")
+    if norma:
+        queryset = queryset.filter(normativos__nome__icontains=norma)
+
+    expiration_status = validated_filters.get("expiration_status", "all")
+    if expiration_status == "expired":
+        queryset = queryset.filter(expirado=True)
+    elif expiration_status == "up_to_date":
+        queryset = queryset.filter(expirado=False)
+
+    expirado = validated_filters.get("expirado")
+    if expirado is not None:
+        queryset = queryset.filter(expirado=expirado)
+
+    tipo_instrumento = validated_filters.get("tipo_instrumento")
+    if tipo_instrumento:
+        queryset = queryset.filter(
+            instrumento__tipo_de_instrumento_id=tipo_instrumento
+        )
+
+    search = validated_filters.get("search")
+    if search:
+        queryset = queryset.filter(
+            Q(tag__icontains=search)
+            | Q(instrumento__tipo_de_instrumento__descricao__icontains=search)
+            | Q(instrumento__tipo_de_instrumento__modelo__icontains=search)
+            | Q(instrumento__tipo_de_instrumento__fabricante__icontains=search)
+            | Q(normativos__nome__icontains=search)
+            | Q(calibracoes__certificados__numero__icontains=search)
+        )
+
+    return queryset.distinct()
 
 
 class CalibracaoFilter(filters.FilterSet):
@@ -36,10 +110,8 @@ class InstrumentoDoClienteFilter(filters.FilterSet):
         date_start = self.data.get('dateStart')
         date_stop = self.data.get('dateStop')
 
-        if date_start:
-            date_start = datetime.strptime(date_start, "%a, %d %b %Y %H:%M:%S %Z").date()
-        if date_stop:
-            date_stop = datetime.strptime(date_stop, "%a, %d %b %Y %H:%M:%S %Z").date()
+        date_start = _parse_filter_date(date_start)
+        date_stop = _parse_filter_date(date_stop)
 
         field = 'data_proxima_calibracao'
 
