@@ -1,11 +1,17 @@
 from datetime import date, timedelta
 from decimal import Decimal
-from unittest.mock import patch
+import os
+from types import SimpleNamespace
+import tempfile
+from unittest.mock import Mock, patch
 
 from botocore.exceptions import ClientError
+from celery import current_app
 from django.contrib.auth.models import Group, User
+from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, TransactionTestCase
+from django.test import TestCase, TransactionTestCase, override_settings
+from django.utils import timezone
 from rest_framework.request import Request
 from rest_framework.test import APIClient, APIRequestFactory
 
@@ -18,6 +24,7 @@ from instrumentos.models import (
     CalibracaoStatus,
     Instrumento,
     InstrumentoDoCliente,
+    InstrumentExportJob,
     MovimentacaoSetorInstrumento,
     Normativo,
     PontoDeCalibracao,
@@ -31,9 +38,23 @@ from instrumentos.serializers import (
     SetorSerializer,
 )
 from clientes.signals import NORMAS_PADRAO, criar_normas_padrao
-from instrumentos.constants import MAX_EXPORT_ITEMS
-from instrumentos.services import annotate_numero_ultimo_certificado
+from instrumentos.constants import (
+    INSTRUMENT_EXPORT_NOT_STARTED_MESSAGE,
+    INSTRUMENT_EXPORT_PROCESSING_TIMEOUT_MESSAGE,
+    INSTRUMENT_EXPORT_PROCESSING_TIMEOUT_MINUTES,
+    INSTRUMENT_EXPORT_QUEUE_TIMEOUT_MINUTES,
+    MAX_EXPORT_ITEMS,
+)
+from instrumentos.services import (
+    annotate_numero_ultimo_certificado,
+    get_instrument_export_storage,
+)
+from instrumentos.tasks import (
+    cleanup_expired_instrument_exports,
+    generate_instrument_export,
+)
 from instrumentos.views import InstrumentoPagination
+from rkp_platform.storage_backends import InstrumentExportPrivateStorage
 
 
 def _make_cliente():
@@ -178,6 +199,12 @@ class InstrumentoPaginationAndExportTest(TestCase):
         self.outro_cliente = _make_cliente()
         self.user.clientes.add(self.cliente)
         self.api.force_authenticate(user=self.user)
+        queue_patcher = patch(
+            "instrumentos.views.generate_instrument_export.apply_async",
+            return_value=SimpleNamespace(id="celery-export-task"),
+        )
+        self.mock_queue_export = queue_patcher.start()
+        self.addCleanup(queue_patcher.stop)
 
         instrumento_base = _make_instrumento_base()
         self.instrumento_autorizado = InstrumentoDoCliente.objects.create(
@@ -362,10 +389,17 @@ class InstrumentoPaginationAndExportTest(TestCase):
             "filters": {"search": "EXPORT-AUTORIZADO"},
         })
 
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("EXPORT-AUTORIZADO", response.data)
-        self.assertNotIn("EXPORT-NAO-AUTORIZADO", response.data)
-        self.assertEqual(response["X-Matched-Count"], "2")
+        self.assertEqual(response.status_code, 202, response.data)
+        job = InstrumentExportJob.objects.get(id=response.data["job_id"])
+        self.assertEqual(job.matched_count, 2)
+        self.assertEqual(
+            set(job.instrument_ids),
+            {
+                self.instrumento_autorizado.id,
+                self.outro_instrumento_autorizado.id,
+            },
+        )
+        self.assertNotIn(self.instrumento_outro_cliente.id, job.instrument_ids)
 
     def test_all_filtered_combina_status_datas_e_norma(self):
         norma = Normativo.objects.create(nome="ISO 9001", cliente=self.cliente)
@@ -394,10 +428,11 @@ class InstrumentoPaginationAndExportTest(TestCase):
             },
         })
 
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertIn("COMBINADO-CORRETO", response.data)
-        self.assertNotIn("COMBINADO-FORA", response.data)
-        self.assertEqual(response["X-Matched-Count"], "1")
+        self.assertEqual(response.status_code, 202, response.data)
+        job = InstrumentExportJob.objects.get(id=response.data["job_id"])
+        self.assertEqual(job.instrument_ids, [correspondente.id])
+        self.assertNotIn(fora_da_data.id, job.instrument_ids)
+        self.assertEqual(job.matched_count, 1)
 
     def test_all_filtered_rejeita_filtro_fora_da_allowlist(self):
         response = self._exportar_novo_contrato({
@@ -424,15 +459,497 @@ class InstrumentoPaginationAndExportTest(TestCase):
             "filters": {"search": "ORDEM-EXPORT"},
         })
 
-        self.assertEqual(response.status_code, 200, response.data)
-        self.assertEqual(response["X-Matched-Count"], "3")
-        self.assertEqual(response["X-Exported-Count"], "2")
-        self.assertEqual(response["X-Export-Limit-Applied"], "true")
-        self.assertNotIn(criados[0].tag, response.data)
-        self.assertLess(
-            response.data.index(criados[2].tag),
-            response.data.index(criados[1].tag),
+        self.assertEqual(response.status_code, 202, response.data)
+        job = InstrumentExportJob.objects.get(id=response.data["job_id"])
+        self.assertEqual(job.matched_count, 3)
+        self.assertEqual(job.exported_count, 2)
+        self.assertTrue(job.limit_applied)
+        self.assertEqual(job.instrument_ids, [criados[2].id, criados[1].id])
+
+
+class InstrumentExportJobTest(TestCase):
+    def setUp(self):
+        self.private_export_dir = tempfile.TemporaryDirectory()
+        self.settings_override = override_settings(
+            PRIVATE_EXPORT_STORAGE="filesystem",
+            PRIVATE_EXPORT_LOCAL_PATH=self.private_export_dir.name,
         )
+        self.settings_override.enable()
+        self.addCleanup(self.settings_override.disable)
+        self.addCleanup(self.private_export_dir.cleanup)
+
+        self.api = APIClient()
+        self.user = User.objects.create_user(
+            username="gerente-job-exportacao",
+            password="pass",
+        )
+        self.user.groups.add(Group.objects.get_or_create(name="gerente")[0])
+        self.cliente = _make_cliente()
+        self.user.clientes.add(self.cliente)
+        self.api.force_authenticate(user=self.user)
+        self.instrumento_base = _make_instrumento_base()
+        self.instrumento = InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="JOB-EXPORT-1",
+        )
+
+        queue_patcher = patch(
+            "instrumentos.views.generate_instrument_export.apply_async",
+            return_value=SimpleNamespace(id="celery-job-id"),
+        )
+        self.mock_queue_export = queue_patcher.start()
+        self.addCleanup(queue_patcher.stop)
+
+    def _post_export(self, selection, request_id=None, fields=None):
+        payload = {
+            "selection": selection,
+            "campos_selecionados": fields or ["tag"],
+        }
+        if request_id:
+            payload["request_id"] = request_id
+        return self.api.post("/instrumentos/exportar/", payload, format="json")
+
+    def _create_job(self, status=InstrumentExportJob.Status.QUEUED, **overrides):
+        values = {
+            "requested_by": self.user,
+            "cliente": self.cliente,
+            "client_ids": [self.cliente.id],
+            "status": status,
+            "matched_count": 1,
+            "exported_count": 1,
+            "limit_applied": False,
+            "selected_fields": ["tag"],
+            "selection_mode": InstrumentExportJob.SelectionMode.ALL_FILTERED,
+            "filters_snapshot": {"search": "JOB-EXPORT"},
+            "instrument_ids": [self.instrumento.id],
+            "expires_at": timezone.now() + timedelta(hours=24),
+        }
+        values.update(overrides)
+        return InstrumentExportJob.objects.create(**values)
+
+    def test_manual_ate_100_continua_sincrono(self):
+        response = self._post_export({
+            "mode": "manual",
+            "ids": [self.instrumento.id],
+        })
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIn("JOB-EXPORT-1", response.data)
+        self.assertFalse(InstrumentExportJob.objects.exists())
+
+    def test_manual_acima_de_100_cria_job(self):
+        InstrumentoDoCliente.objects.bulk_create([
+            InstrumentoDoCliente(
+                cliente=self.cliente,
+                instrumento=self.instrumento_base,
+                tag=f"JOB-BULK-{index}",
+            )
+            for index in range(101)
+        ])
+        instrument_ids = list(
+            InstrumentoDoCliente.objects.filter(tag__startswith="JOB-BULK-")
+            .order_by("id")
+            .values_list("id", flat=True)
+        )
+        response = self._post_export({
+            "mode": "manual",
+            "ids": instrument_ids,
+        })
+
+        self.assertEqual(response.status_code, 202, response.data)
+        job = InstrumentExportJob.objects.get(id=response.data["job_id"])
+        self.assertEqual(job.status, InstrumentExportJob.Status.QUEUED)
+        self.assertEqual(job.exported_count, 101)
+        self.assertEqual(len(job.instrument_ids), 101)
+        self.mock_queue_export.assert_called_once_with(args=[str(job.id)])
+
+    def test_all_filtered_cria_job_queued_e_preserva_campos(self):
+        response = self._post_export(
+            {"mode": "all_filtered", "filters": {"search": "JOB-EXPORT"}},
+            fields=["tag", "setor"],
+        )
+
+        self.assertEqual(response.status_code, 202, response.data)
+        job = InstrumentExportJob.objects.get(id=response.data["job_id"])
+        self.assertEqual(job.status, InstrumentExportJob.Status.QUEUED)
+        self.assertEqual(job.selected_fields, ["tag", "setor"])
+        self.assertEqual(job.instrument_ids, [self.instrumento.id])
+        self.assertEqual(response.data["status"], "queued")
+
+    def test_request_id_impede_jobs_duplicados(self):
+        request_id = "70d294d8-3441-476c-8630-d32dd2c335e1"
+        selection = {"mode": "all_filtered", "filters": {}}
+
+        first = self._post_export(selection, request_id=request_id)
+        second = self._post_export(selection, request_id=request_id)
+
+        self.assertEqual(first.status_code, 202)
+        self.assertEqual(second.status_code, 202)
+        self.assertEqual(first.data["job_id"], second.data["job_id"])
+        self.assertEqual(InstrumentExportJob.objects.count(), 1)
+        self.mock_queue_export.assert_called_once()
+
+    def test_status_retorna_processing_completed_failed_e_expired(self):
+        job = self._create_job(status=InstrumentExportJob.Status.PROCESSING)
+        url = f"/instrumentos/exportacoes/{job.id}/"
+
+        processing = self.api.get(url)
+        self.assertEqual(processing.status_code, 200)
+        self.assertEqual(processing.data["status"], "processing")
+
+        job.status = InstrumentExportJob.Status.COMPLETED
+        job.file_name = "arquivo.csv"
+        job.save(update_fields=("status", "file_name"))
+        completed = self.api.get(url)
+        self.assertEqual(completed.data["status"], "completed")
+        self.assertIn("download_url", completed.data)
+
+        job.status = InstrumentExportJob.Status.FAILED
+        job.error_message = "Não foi possível gerar o relatório."
+        job.save(update_fields=("status", "error_message"))
+        failed = self.api.get(url)
+        self.assertEqual(failed.data["status"], "failed")
+        self.assertEqual(failed.data["error"], job.error_message)
+
+        job.status = InstrumentExportJob.Status.QUEUED
+        job.expires_at = timezone.now() - timedelta(seconds=1)
+        job.save(update_fields=("status", "expires_at"))
+        expired = self.api.get(url)
+        self.assertEqual(expired.data["status"], "expired")
+
+    def test_outro_usuario_nao_consulta_nem_baixa_job(self):
+        job = self._create_job(status=InstrumentExportJob.Status.COMPLETED)
+        other_user = User.objects.create_user(username="outro-job-user")
+        other_user.groups.add(Group.objects.get_or_create(name="observador")[0])
+        other_client = _make_cliente()
+        other_user.clientes.add(other_client)
+        self.api.force_authenticate(user=other_user)
+
+        status_response = self.api.get(f"/instrumentos/exportacoes/{job.id}/")
+        download_response = self.api.get(
+            f"/instrumentos/exportacoes/{job.id}/download/"
+        )
+
+        self.assertEqual(status_response.status_code, 404)
+        self.assertEqual(download_response.status_code, 404)
+
+    def test_download_autenticado_e_arquivo_expirado(self):
+        storage = get_instrument_export_storage()
+        file_name = storage.save("teste/job.csv", ContentFile(b"TAG\nJOB-EXPORT-1"))
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name=file_name,
+        )
+
+        response = self.api.get(
+            f"/instrumentos/exportacoes/{job.id}/download/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"JOB-EXPORT-1", b"".join(response.streaming_content))
+
+        job.expires_at = timezone.now() - timedelta(seconds=1)
+        job.save(update_fields=("expires_at",))
+        expired_response = self.api.get(
+            f"/instrumentos/exportacoes/{job.id}/download/"
+        )
+        self.assertEqual(expired_response.status_code, 410)
+        self.assertFalse(storage.exists(file_name))
+
+    def test_storage_local_cria_diretorio_automaticamente(self):
+        local_path = os.path.join(self.private_export_dir.name, "novo-diretorio")
+        with override_settings(
+            PRIVATE_EXPORT_STORAGE="filesystem",
+            PRIVATE_EXPORT_LOCAL_PATH=local_path,
+        ):
+            storage = get_instrument_export_storage()
+
+        self.assertTrue(os.path.isdir(local_path))
+        self.assertEqual(
+            os.path.abspath(storage.location),
+            os.path.abspath(local_path),
+        )
+
+    def test_download_de_arquivo_ausente_retorna_410_e_expira_job(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name="arquivo-removido.csv",
+        )
+
+        result = self.api.get(
+            f"/instrumentos/exportacoes/{job.id}/download/"
+        )
+
+        self.assertEqual(result.status_code, 410)
+        self.assertEqual(
+            result.data["detail"],
+            "Este relatório não está mais disponível. Gere uma nova exportação.",
+        )
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(job.file_name, "")
+
+    def test_download_trata_objeto_removido_entre_exists_e_open(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name="objeto-removido.csv",
+        )
+        missing_object = ClientError(
+            {"Error": {"Code": "NoSuchKey", "Message": "Not found"}},
+            "GetObject",
+        )
+        storage = Mock()
+        storage.exists.return_value = True
+        storage.open.side_effect = missing_object
+
+        with patch(
+            "instrumentos.views.get_instrument_export_storage",
+            return_value=storage,
+        ), patch(
+            "instrumentos.services.get_instrument_export_storage",
+            return_value=storage,
+        ):
+            result = self.api.get(
+                f"/instrumentos/exportacoes/{job.id}/download/"
+            )
+
+        self.assertEqual(result.status_code, 410)
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(job.file_name, "")
+
+    def test_task_usa_ids_congelados_e_somente_campos_selecionados(self):
+        job = self._create_job(selected_fields=["tag"])
+        InstrumentoDoCliente.objects.create(
+            cliente=self.cliente,
+            instrumento=self.instrumento_base,
+            tag="JOB-CRIADO-DEPOIS",
+        )
+
+        result = generate_instrument_export(str(job.id))
+
+        self.assertEqual(result["status"], "completed")
+        job.refresh_from_db()
+        storage = get_instrument_export_storage()
+        with storage.open(job.file_name, "rb") as export_file:
+            csv_content = export_file.read().decode("utf-8")
+        self.assertIn("JOB-EXPORT-1", csv_content)
+        self.assertNotIn("JOB-CRIADO-DEPOIS", csv_content)
+        self.assertIn("TAG", csv_content.splitlines()[0])
+        self.assertNotIn("Setor", csv_content.splitlines()[0])
+
+    def test_erro_da_task_atualiza_failed_sem_detalhe_interno(self):
+        job = self._create_job()
+        with patch(
+            "instrumentos.tasks.InstrumentoExportResource.export",
+            side_effect=RuntimeError("segredo interno"),
+        ):
+            result = generate_instrument_export(str(job.id))
+
+        job.refresh_from_db()
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(job.status, InstrumentExportJob.Status.FAILED)
+        self.assertNotIn("segredo", job.error_message)
+
+    def test_cleanup_remove_arquivo_e_e_idempotente(self):
+        storage = get_instrument_export_storage()
+        file_name = storage.save("cleanup/job.csv", ContentFile(b"csv"))
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name=file_name,
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        first = cleanup_expired_instrument_exports()
+        second = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(first["expired_jobs"], 1)
+        self.assertEqual(second["expired_jobs"], 0)
+        self.assertEqual(job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(job.file_name, "")
+        self.assertFalse(storage.exists(file_name))
+
+    def test_cleanup_preserva_queued_dentro_do_timeout(self):
+        job = self._create_job()
+        InstrumentExportJob.objects.filter(id=job.id).update(
+            created_at=timezone.now() - timedelta(
+                minutes=INSTRUMENT_EXPORT_QUEUE_TIMEOUT_MINUTES - 1
+            )
+        )
+
+        result = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.QUEUED)
+        self.assertEqual(result["queued_jobs_failed"], 0)
+
+    def test_cleanup_marca_queued_antigo_como_failed(self):
+        job = self._create_job()
+        InstrumentExportJob.objects.filter(id=job.id).update(
+            created_at=timezone.now() - timedelta(
+                minutes=INSTRUMENT_EXPORT_QUEUE_TIMEOUT_MINUTES + 1
+            )
+        )
+
+        first = cleanup_expired_instrument_exports()
+        second = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.FAILED)
+        self.assertEqual(job.error_message, INSTRUMENT_EXPORT_NOT_STARTED_MESSAGE)
+        self.assertIsNotNone(job.finished_at)
+        self.assertEqual(first["queued_jobs_failed"], 1)
+        self.assertEqual(second["queued_jobs_failed"], 0)
+
+    def test_cleanup_preserva_processing_dentro_do_timeout(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.PROCESSING,
+            started_at=timezone.now() - timedelta(
+                minutes=INSTRUMENT_EXPORT_PROCESSING_TIMEOUT_MINUTES - 1
+            ),
+        )
+
+        result = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.PROCESSING)
+        self.assertEqual(result["processing_jobs_failed"], 0)
+
+    def test_cleanup_marca_processing_antigo_como_failed(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.PROCESSING,
+            started_at=timezone.now() - timedelta(
+                minutes=INSTRUMENT_EXPORT_PROCESSING_TIMEOUT_MINUTES + 1
+            ),
+        )
+
+        first = cleanup_expired_instrument_exports()
+        second = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.FAILED)
+        self.assertEqual(
+            job.error_message,
+            INSTRUMENT_EXPORT_PROCESSING_TIMEOUT_MESSAGE,
+        )
+        self.assertIsNotNone(job.finished_at)
+        self.assertEqual(first["processing_jobs_failed"], 1)
+        self.assertEqual(second["processing_jobs_failed"], 0)
+
+    def test_cleanup_nao_altera_job_concluido_antes_do_ttl(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            finished_at=timezone.now() - timedelta(days=2),
+        )
+
+        result = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(job.status, InstrumentExportJob.Status.COMPLETED)
+        self.assertEqual(result["expired_jobs"], 0)
+        self.assertEqual(result["queued_jobs_failed"], 0)
+        self.assertEqual(result["processing_jobs_failed"], 0)
+
+    def test_novo_request_id_permite_nova_tentativa_apos_job_orfao(self):
+        stale_request_id = "70d294d8-3441-476c-8630-d32dd2c335e1"
+        stale_job = self._create_job(request_id=stale_request_id)
+        InstrumentExportJob.objects.filter(id=stale_job.id).update(
+            created_at=timezone.now() - timedelta(
+                minutes=INSTRUMENT_EXPORT_QUEUE_TIMEOUT_MINUTES + 1
+            )
+        )
+        cleanup_expired_instrument_exports()
+
+        stale_response = self._post_export(
+            {"mode": "all_filtered", "filters": {}},
+            request_id=stale_request_id,
+        )
+        retry_response = self._post_export(
+            {"mode": "all_filtered", "filters": {}},
+            request_id="b6548b7a-4a42-4ac4-a1e7-e18f9a82dad0",
+        )
+
+        self.assertEqual(stale_response.status_code, 202)
+        self.assertEqual(stale_response.data["status"], "failed")
+        self.assertEqual(retry_response.status_code, 202)
+        self.assertEqual(retry_response.data["status"], "queued")
+        self.assertNotEqual(stale_response.data["job_id"], retry_response.data["job_id"])
+        self.assertEqual(InstrumentExportJob.objects.count(), 2)
+        self.mock_queue_export.assert_called_once()
+
+    def test_cleanup_arquivo_ja_ausente_e_e_idempotente(self):
+        job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name="cleanup/arquivo-ausente.csv",
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+
+        first = cleanup_expired_instrument_exports()
+        second = cleanup_expired_instrument_exports()
+
+        job.refresh_from_db()
+        self.assertEqual(first["expired_jobs"], 1)
+        self.assertEqual(second["expired_jobs"], 0)
+        self.assertEqual(job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(job.file_name, "")
+
+    def test_cleanup_continua_e_tenta_novamente_apos_erro_de_storage(self):
+        retry_job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name="cleanup/tentar-novamente.csv",
+            expires_at=timezone.now() - timedelta(seconds=1),
+        )
+        other_job = self._create_job(
+            status=InstrumentExportJob.Status.COMPLETED,
+            file_name="cleanup/arquivo-ausente.csv",
+            expires_at=timezone.now() - timedelta(seconds=1),
+            request_id="2ac95ba9-82de-41a9-a85f-22320ad7068f",
+        )
+        unavailable_storage = Mock()
+
+        def storage_exists(file_name):
+            if file_name == "cleanup/tentar-novamente.csv":
+                raise OSError("indisponível")
+            return False
+
+        unavailable_storage.exists.side_effect = storage_exists
+
+        with patch(
+            "instrumentos.services.get_instrument_export_storage",
+            return_value=unavailable_storage,
+        ):
+            result = cleanup_expired_instrument_exports()
+
+        retry_job.refresh_from_db()
+        other_job.refresh_from_db()
+        self.assertEqual(result["expired_jobs"], 2)
+        self.assertEqual(retry_job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(retry_job.file_name, "cleanup/tentar-novamente.csv")
+        self.assertEqual(other_job.status, InstrumentExportJob.Status.EXPIRED)
+        self.assertEqual(other_job.file_name, "")
+
+    @override_settings(
+        PRIVATE_EXPORT_STORAGE="spaces",
+        PRIVATE_EXPORT_LOCATION="exports/instrumentos",
+        AWS_STORAGE_BUCKET_NAME="bucket-existente",
+    )
+    def test_storage_producao_usa_bucket_existente_prefixo_e_acl_privado(self):
+        storage = get_instrument_export_storage()
+
+        self.assertIsInstance(storage, InstrumentExportPrivateStorage)
+        self.assertEqual(storage.bucket_name, "bucket-existente")
+        self.assertEqual(storage.location, "exports/instrumentos")
+        self.assertEqual(storage.default_acl, "private")
+        self.assertIsNone(storage.custom_domain)
+
+    def test_exportacao_usa_fila_celery_padrao(self):
+        route = current_app.amqp.router.route(
+            {},
+            "instrumentos.tasks.generate_instrument_export",
+        )
+
+        self.assertEqual(route["queue"].name, "celery")
 
 
 class NumeroUltimoCertificadoTest(TestCase):

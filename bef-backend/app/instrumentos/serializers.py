@@ -157,6 +157,7 @@ class InstrumentExportSelectionSerializer(StrictFieldsSerializer):
 
 
 class InstrumentExportRequestSerializer(StrictFieldsSerializer):
+    request_id = serializers.UUIDField(required=False, allow_null=True)
     selection = InstrumentExportSelectionSerializer(required=False)
     campos_selecionados = serializers.ListField(
         child=serializers.ChoiceField(choices=EXPORT_FIELD_KEYS),

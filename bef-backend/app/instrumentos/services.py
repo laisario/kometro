@@ -1,13 +1,23 @@
+import logging
+import os
+
+from django.conf import settings
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Aggregate, CharField, F, OuterRef, Q, Subquery
 
 from .models import (
     Calibracao,
     Certificado,
     CriterioAceitacao,
+    InstrumentExportJob,
+    InstrumentoDoCliente,
     Normativo,
     PontoDeCalibracao,
     Setor,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class GroupConcat(Aggregate):
@@ -48,6 +58,63 @@ def annotate_numero_ultimo_certificado(queryset):
             output_field=CharField(),
         )
     )
+
+
+def get_authorized_instrument_export_queryset(user):
+    """Return the optimized instrument scope the user is currently allowed to see."""
+    queryset = annotate_numero_ultimo_certificado(
+        InstrumentoDoCliente.objects.select_related(
+            "instrumento__tipo_de_instrumento",
+            "cliente",
+            "setor",
+            "frequencia_calibracao",
+            "frequencia_checagem",
+        ).prefetch_related("normativos")
+    )
+    if not user.is_staff:
+        queryset = queryset.filter(cliente__usuarios=user)
+    return queryset.order_by("-id")
+
+
+def user_can_access_instrument_export_job(user, job):
+    if not user.is_authenticated or job.requested_by_id != user.id:
+        return False
+    if user.is_staff:
+        return True
+
+    allowed_client_ids = set(
+        user.clientes.filter(id__in=job.client_ids).values_list("id", flat=True)
+    )
+    return allowed_client_ids == set(job.client_ids)
+
+
+def get_instrument_export_storage():
+    if settings.PRIVATE_EXPORT_STORAGE == "filesystem":
+        os.makedirs(settings.PRIVATE_EXPORT_LOCAL_PATH, exist_ok=True)
+        return FileSystemStorage(location=settings.PRIVATE_EXPORT_LOCAL_PATH)
+
+    from rkp_platform.storage_backends import InstrumentExportPrivateStorage
+
+    return InstrumentExportPrivateStorage()
+
+
+def expire_instrument_export_job(job):
+    """Expire a job and best-effort delete its private artifact."""
+    file_name = job.file_name
+    file_was_removed = True
+    if file_name:
+        try:
+            storage = get_instrument_export_storage()
+            if storage.exists(file_name):
+                storage.delete(file_name)
+        except Exception:
+            file_was_removed = False
+            logger.exception("Failed to delete instrument export file for job %s", job.id)
+
+    job.status = InstrumentExportJob.Status.EXPIRED
+    job.file_name = "" if file_was_removed else file_name
+    job.save(update_fields=("status", "file_name"))
+    return job
 
 
 def normalizar_nome_normativo(nome):

@@ -115,3 +115,26 @@ class MinIOMediaStorage(S3Boto3Storage):
         bucket = os.getenv("MINIO_BUCKET_NAME", "kometro-local")
         clean_name = name.lstrip("/")
         return f"{public_endpoint}/{bucket}/{self.location}/{clean_name}"
+
+
+class InstrumentExportPrivateStorage(S3Boto3Storage):
+    """Private export objects in the project's existing DigitalOcean Space."""
+
+    location = "exports/instrumentos"
+    default_acl = "private"
+    querystring_auth = True
+    file_overwrite = False
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault(
+            "bucket_name",
+            settings.AWS_STORAGE_BUCKET_NAME,
+        )
+        kwargs.setdefault(
+            "location",
+            getattr(settings, "PRIVATE_EXPORT_LOCATION", self.location),
+        )
+        kwargs.setdefault("default_acl", "private")
+        kwargs.setdefault("querystring_auth", True)
+        kwargs.setdefault("custom_domain", None)
+        super().__init__(*args, **kwargs)

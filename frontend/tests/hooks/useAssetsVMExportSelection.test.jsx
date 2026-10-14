@@ -127,4 +127,15 @@ describe('useAssetsVM - estado lógico da seleção de exportação', () => {
     act(() => result.current.handleCheckboxSelectAll());
     expect(result.current.selection).toEqual({ mode: 'manual', ids: [] });
   });
+
+  it('preserva seleção e filtros ao fechar o modal de exportação', () => {
+    const { result } = renderHook(() => useAssetsVm());
+
+    act(() => result.current.handleRowSelect(1, { id: 1 }));
+    act(() => result.current.handleClose());
+
+    expect(result.current.selection).toEqual({ mode: 'manual', ids: [1] });
+    expect(result.current.selected.map((item) => item.id)).toEqual([1]);
+    expect(assetFilterForm.reset).not.toHaveBeenCalled();
+  });
 });

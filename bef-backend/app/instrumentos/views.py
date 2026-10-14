@@ -1,7 +1,11 @@
 import logging
+from datetime import date, datetime, timedelta
 
 from boto3.exceptions import Boto3Error
 from botocore.exceptions import BotoCoreError, ClientError
+from celery import current_app
+from django.http import FileResponse, HttpResponse
+from django.utils import timezone
 from rest_framework import filters, permissions, viewsets, status
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from rest_framework.decorators import action
@@ -18,11 +22,15 @@ from .models import (
     PontoDeCalibracao,
     CriterioAceitacao,
     TipoInstrumento,
+    InstrumentExportJob,
 )
 from .services import (
     annotate_numero_ultimo_certificado,
     deduplicar_normativos,
+    expire_instrument_export_job,
+    get_instrument_export_storage,
     get_or_create_normativo_cliente,
+    user_can_access_instrument_export_job,
 )
 from .serializers import (
     InstrumentoDoClienteWriteSerializer,
@@ -54,7 +62,6 @@ from .filters import (
 )
 from rest_framework.pagination import PageNumberPagination
 from openpyxl import Workbook
-from django.http import HttpResponse
 import re
 from django.db.models import Q
 from django.db import transaction, IntegrityError
@@ -66,7 +73,13 @@ from rest_framework import response, status
 from django.db.models import Prefetch
 from rest_framework import pagination
 from clientes.models import Cliente
-from .constants import MAX_EXPORT_ITEMS
+from .constants import (
+    ASYNC_EXPORT_THRESHOLD,
+    INSTRUMENT_EXPORT_ERROR_MESSAGE,
+    INSTRUMENT_EXPORT_TTL_HOURS,
+    MAX_EXPORT_ITEMS,
+)
+from .tasks import generate_instrument_export
 
 
 logger = logging.getLogger(__name__)
@@ -75,6 +88,9 @@ FILE_STORAGE_EXCEPTIONS = (Boto3Error, BotoCoreError, ClientError, OSError)
 FILE_STORAGE_ERROR_RESPONSE = {
     "error": "file_storage_error",
     "message": "Erro de armazenamento de arquivos.",
+}
+INSTRUMENT_EXPORT_UNAVAILABLE_RESPONSE = {
+    "detail": "Este relatório não está mais disponível. Gere uma nova exportação."
 }
 
 
@@ -94,6 +110,15 @@ def file_storage_error_response(exc, *, operation, calibracao_id, certificado_id
         FILE_STORAGE_ERROR_RESPONSE,
         status=status.HTTP_503_SERVICE_UNAVAILABLE,
     )
+
+
+def _is_missing_export_file_error(exc):
+    if isinstance(exc, FileNotFoundError):
+        return True
+    if isinstance(exc, ClientError):
+        error_code = str(exc.response.get("Error", {}).get("Code", ""))
+        return error_code in {"404", "NoSuchKey", "NotFound"}
+    return False
 
 
 class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
@@ -192,6 +217,26 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
 
         selection = payload.validated_data["selection"]
         campos_selecionados = payload.validated_data["campos_selecionados"]
+        request_id = payload.validated_data.get("request_id")
+
+        if request_id:
+            existing_job = InstrumentExportJob.objects.filter(
+                requested_by=request.user,
+                request_id=request_id,
+            ).first()
+            if existing_job:
+                if not user_can_access_instrument_export_job(request.user, existing_job):
+                    return response.Response(status=status.HTTP_404_NOT_FOUND)
+                if (
+                    existing_job.status != InstrumentExportJob.Status.EXPIRED
+                    and existing_job.expires_at <= timezone.now()
+                ):
+                    expire_instrument_export_job(existing_job)
+                return response.Response(
+                    self._instrument_export_job_payload(existing_job),
+                    status=status.HTTP_202_ACCEPTED,
+                )
+
         authorized_queryset = self.get_queryset()
 
         if selection["mode"] == "manual":
@@ -218,6 +263,86 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
 
         exported_count = len(export_ids)
         limit_applied = matched_count > MAX_EXPORT_ITEMS
+        should_run_async = (
+            selection["mode"] == "all_filtered"
+            or len(selection.get("ids", [])) > ASYNC_EXPORT_THRESHOLD
+        )
+
+        if should_run_async:
+            client_ids = list(
+                authorized_queryset.filter(id__in=export_ids)
+                .order_by()
+                .values_list("cliente_id", flat=True)
+                .distinct()
+            )
+            filters_snapshot = {
+                key: value.isoformat()
+                if isinstance(value, (date, datetime))
+                else value
+                for key, value in selection.get("filters", {}).items()
+            }
+            try:
+                job = InstrumentExportJob.objects.create(
+                    requested_by=request.user,
+                    cliente_id=client_ids[0] if len(client_ids) == 1 else None,
+                    client_ids=client_ids,
+                    matched_count=matched_count,
+                    exported_count=exported_count,
+                    limit_applied=limit_applied,
+                    selected_fields=campos_selecionados,
+                    selection_mode=selection["mode"],
+                    filters_snapshot=filters_snapshot,
+                    instrument_ids=export_ids,
+                    request_id=request_id,
+                    expires_at=timezone.now() + timedelta(
+                        hours=INSTRUMENT_EXPORT_TTL_HOURS
+                    ),
+                )
+            except IntegrityError:
+                if not request_id:
+                    raise
+                job = InstrumentExportJob.objects.get(
+                    requested_by=request.user,
+                    request_id=request_id,
+                )
+                if not user_can_access_instrument_export_job(request.user, job):
+                    return response.Response(status=status.HTTP_404_NOT_FOUND)
+                return response.Response(
+                    self._instrument_export_job_payload(job),
+                    status=status.HTTP_202_ACCEPTED,
+                )
+
+            task_name = generate_instrument_export.name
+            if task_name not in current_app.tasks:
+                job.status = InstrumentExportJob.Status.FAILED
+                job.error_message = INSTRUMENT_EXPORT_ERROR_MESSAGE
+                job.finished_at = timezone.now()
+                job.save(update_fields=("status", "error_message", "finished_at"))
+                return response.Response(
+                    {"detail": "O serviço de exportação está indisponível."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            try:
+                task = generate_instrument_export.apply_async(args=[str(job.id)])
+                job.celery_task_id = task.id
+                job.save(update_fields=("celery_task_id",))
+            except Exception:
+                logger.exception("Failed to queue instrument export job %s", job.id)
+                job.status = InstrumentExportJob.Status.FAILED
+                job.error_message = INSTRUMENT_EXPORT_ERROR_MESSAGE
+                job.finished_at = timezone.now()
+                job.save(update_fields=("status", "error_message", "finished_at"))
+                return response.Response(
+                    {"detail": "Não foi possível iniciar a exportação."},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+
+            return response.Response(
+                self._instrument_export_job_payload(job),
+                status=status.HTTP_202_ACCEPTED,
+            )
+
         instrumentos_exportados = authorized_queryset.filter(
             id__in=export_ids
         ).order_by("-id")
@@ -232,6 +357,98 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
         csv_response["X-Exported-Count"] = str(exported_count)
         csv_response["X-Export-Limit-Applied"] = str(limit_applied).lower()
         return csv_response
+
+    def _get_instrument_export_job(self, request, job_id):
+        job = InstrumentExportJob.objects.select_related(
+            "requested_by", "cliente"
+        ).filter(id=job_id).first()
+        if not job or not user_can_access_instrument_export_job(request.user, job):
+            return None
+        if (
+            job.status != InstrumentExportJob.Status.EXPIRED
+            and job.expires_at <= timezone.now()
+        ):
+            expire_instrument_export_job(job)
+        return job
+
+    def _instrument_export_job_payload(self, job):
+        status_url = f"/instrumentos/exportacoes/{job.id}/"
+        data = {
+            "job_id": str(job.id),
+            "status": job.status,
+            "matched_count": job.matched_count,
+            "exported_count": job.exported_count,
+            "limit_applied": job.limit_applied,
+            "status_url": status_url,
+            "expires_at": job.expires_at,
+        }
+        if job.status == InstrumentExportJob.Status.COMPLETED:
+            data["download_url"] = f"{status_url}download/"
+        elif job.status == InstrumentExportJob.Status.FAILED:
+            data["error"] = job.error_message or INSTRUMENT_EXPORT_ERROR_MESSAGE
+        return data
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"exportacoes/(?P<job_id>[0-9a-f-]+)",
+    )
+    def exportacao_status(self, request, job_id=None):
+        job = self._get_instrument_export_job(request, job_id)
+        if not job:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        return response.Response(self._instrument_export_job_payload(job))
+
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path=r"exportacoes/(?P<job_id>[0-9a-f-]+)/download",
+    )
+    def exportacao_download(self, request, job_id=None):
+        job = self._get_instrument_export_job(request, job_id)
+        if not job:
+            return response.Response(status=status.HTTP_404_NOT_FOUND)
+        if job.status == InstrumentExportJob.Status.EXPIRED:
+            return response.Response(
+                INSTRUMENT_EXPORT_UNAVAILABLE_RESPONSE,
+                status=status.HTTP_410_GONE,
+            )
+        if job.status != InstrumentExportJob.Status.COMPLETED:
+            return response.Response(
+                {"detail": "O relatório ainda não está disponível."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+        storage = get_instrument_export_storage()
+        try:
+            if not job.file_name or not storage.exists(job.file_name):
+                expire_instrument_export_job(job)
+                return response.Response(
+                    INSTRUMENT_EXPORT_UNAVAILABLE_RESPONSE,
+                    status=status.HTTP_410_GONE,
+                )
+            export_file = storage.open(job.file_name, "rb")
+        except FILE_STORAGE_EXCEPTIONS as exc:
+            if _is_missing_export_file_error(exc):
+                expire_instrument_export_job(job)
+                return response.Response(
+                    INSTRUMENT_EXPORT_UNAVAILABLE_RESPONSE,
+                    status=status.HTTP_410_GONE,
+                )
+            logger.exception(
+                "Failed to open instrument export file for job %s", job.id
+            )
+            return response.Response(
+                FILE_STORAGE_ERROR_RESPONSE,
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return FileResponse(
+            export_file,
+            as_attachment=True,
+            filename="instrumentos_exportados.csv",
+            content_type="text/csv",
+        )
     
     @action(detail=True, methods=["get"])
     def exportar_movimentacoes(self, request, pk=None):

@@ -1,4 +1,7 @@
 from datetime import date
+import uuid
+
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from model_utils import FieldTracker
@@ -236,6 +239,73 @@ class InstrumentoDoCliente(models.Model):
             models.Index(fields=['tag']),
             models.Index(fields=['cliente', 'tag']), 
         ]
+
+
+class InstrumentExportJob(models.Model):
+    class Status(models.TextChoices):
+        QUEUED = "queued", _("Na fila")
+        PROCESSING = "processing", _("Processando")
+        COMPLETED = "completed", _("Concluído")
+        FAILED = "failed", _("Falhou")
+        EXPIRED = "expired", _("Expirado")
+
+    class SelectionMode(models.TextChoices):
+        MANUAL = "manual", _("Manual")
+        ALL_FILTERED = "all_filtered", _("Todos os filtrados")
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="instrument_export_jobs",
+    )
+    cliente = models.ForeignKey(
+        "clientes.Cliente",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="instrument_export_jobs",
+    )
+    client_ids = models.JSONField(default=list, blank=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    matched_count = models.PositiveIntegerField(default=0)
+    exported_count = models.PositiveIntegerField(default=0)
+    limit_applied = models.BooleanField(default=False)
+    selected_fields = models.JSONField(default=list)
+    selection_mode = models.CharField(
+        max_length=16,
+        choices=SelectionMode.choices,
+    )
+    filters_snapshot = models.JSONField(default=dict, blank=True)
+    instrument_ids = models.JSONField(default=list)
+    file_name = models.CharField(max_length=1024, blank=True, default="")
+    error_message = models.CharField(max_length=255, blank=True, default="")
+    celery_task_id = models.CharField(max_length=255, blank=True, default="")
+    request_id = models.UUIDField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("requested_by", "request_id"),
+                name="unique_instrument_export_request_per_user",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=("status", "expires_at")),
+        ]
+
+    def __str__(self):
+        return f"{self.id} - {self.status}"
 
 
 class CriterioAceitacao(models.Model):

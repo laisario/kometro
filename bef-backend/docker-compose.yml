@@ -75,6 +75,8 @@ services:
       MINIO_ENDPOINT_URL: ${MINIO_ENDPOINT_URL:-http://minio:9000}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kometro-local}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      PRIVATE_EXPORT_STORAGE: ${PRIVATE_EXPORT_STORAGE:-filesystem}
+      PRIVATE_EXPORT_LOCAL_PATH: ${PRIVATE_EXPORT_LOCAL_PATH:-/tmp/instrument-exports}
     ports:
       - "8000:8000"
       - "8953:8953"
@@ -88,6 +90,7 @@ services:
     restart: always
     volumes:
       - ./app:/kometro
+      - instrument_exports:/tmp/instrument-exports
 
   redis:
     container_name: 'redis'
@@ -121,12 +124,15 @@ services:
       MINIO_ENDPOINT_URL: ${MINIO_ENDPOINT_URL:-http://minio:9000}
       MINIO_BUCKET_NAME: ${MINIO_BUCKET_NAME:-kometro-local}
       MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
+      PRIVATE_EXPORT_STORAGE: ${PRIVATE_EXPORT_STORAGE:-filesystem}
+      PRIVATE_EXPORT_LOCAL_PATH: ${PRIVATE_EXPORT_LOCAL_PATH:-/tmp/instrument-exports}
     depends_on:
       - redis
       - web
       - db
     volumes:
       - ./app:/kometro
+      - instrument_exports:/tmp/instrument-exports
 
   celery_beat:
     container_name: 'celery_beat'
@@ -148,3 +154,4 @@ services:
 volumes:
   db:
   minio_data:
+  instrument_exports:

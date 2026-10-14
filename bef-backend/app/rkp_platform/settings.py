@@ -361,6 +361,24 @@ else:
     )
     DEFAULT_FILE_STORAGE = "rkp_platform.storage_backends.MediaStorage"
 
+PRIVATE_EXPORT_STORAGE = os.getenv(
+    "PRIVATE_EXPORT_STORAGE",
+    "filesystem" if USE_MINIO else "spaces",
+).strip().lower()
+if PRIVATE_EXPORT_STORAGE not in {"filesystem", "spaces"}:
+    raise ValueError(
+        "PRIVATE_EXPORT_STORAGE must be either 'filesystem' or 'spaces'."
+    )
+
+PRIVATE_EXPORT_LOCATION = os.getenv(
+    "PRIVATE_EXPORT_LOCATION",
+    "exports/instrumentos",
+)
+PRIVATE_EXPORT_LOCAL_PATH = os.getenv(
+    "PRIVATE_EXPORT_LOCAL_PATH",
+    "/tmp/instrument-exports",
+)
+
 # celery
 
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")

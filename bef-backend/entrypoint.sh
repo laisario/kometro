@@ -8,9 +8,6 @@ python manage.py migrate
 
 echo "🟢 Iniciando Gunicorn..."
 exec gunicorn rkp_platform.wsgi:application \
-    --bind unix:/run/gunicorn/gunicorn.sock
-
-exec gunicorn rkp_platform.wsgi:application \
     --bind unix:/run/gunicorn/gunicorn.sock \
     --workers 3 \
     --threads 2 \

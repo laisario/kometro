@@ -231,24 +231,7 @@ const useAssetsVm = (id, idSetor) => {
 
   const handleClose = () => {
     setOpen(false);
-    setValueCheckbox({
-      tag: true,
-      numeroDeSerie: true,
-      laboratorio: true,
-      setor: true,
-      posicaoDoInstrumento: true,
-      dataUltimaCalibracao: true,
-      dataDaProximaCalibracao: true,
-      frequenciaDeCalibracao: true,
-      dataUltimaChecagem: true,
-      dataDaProximaChecagem: true,
-      frequenciaDeChecagem: true,
-      normativos: true,
-      numeroUltimoCertificado: true,
-    });
     setError(false);
-    clearSelection()
-    assetFilterForm.reset()
   };
 
   return {

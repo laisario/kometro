@@ -99,6 +99,22 @@ class ExtractDecimalWidget(DecimalWidget):
 
 
 class InstrumentoExportResource(ModelResource):
+    EXPORT_FIELD_MAP = {
+        "tag": "tag",
+        "numero_de_serie": "numeroDeSerie",
+        "laboratorio": "laboratorio",
+        "posicao": "posicaoDoInstrumento",
+        "instrumento": "instrumento",
+        "setor": "setor",
+        "frequencia_calibracao": "frequenciaDeCalibracao",
+        "frequencia_checagem": "frequenciaDeChecagem",
+        "data_proxima_checagem": "dataDaProximaChecagem",
+        "data_ultima_checagem": "dataUltimaChecagem",
+        "data_proxima_calibracao": "dataDaProximaCalibracao",
+        "data_ultima_calibracao": "dataUltimaCalibracao",
+        "normativos": "normativos",
+        "numero_ultimo_certificado": "numeroUltimoCertificado",
+    }
     tag = Field(column_name="TAG", attribute="tag", widget=CharWidget())
     numero_de_serie = Field(column_name="Nº Série", attribute="numero_de_serie", widget=CharWidget())
     laboratorio = Field(column_name="Laboratório", attribute="laboratorio", widget=CharWidget())
@@ -119,8 +135,11 @@ class InstrumentoExportResource(ModelResource):
     )
     
     def __init__(self, campos_selecionados):
-        self.campos_selecionados = campos_selecionados
-        super()
+        super().__init__()
+        self.campos_selecionados = set(campos_selecionados)
+        for resource_field, export_field in self.EXPORT_FIELD_MAP.items():
+            if export_field not in self.campos_selecionados:
+                self.fields.pop(resource_field, None)
 
     class Meta:
         model = InstrumentoDoCliente
@@ -159,32 +178,6 @@ class InstrumentoExportResource(ModelResource):
         if freq:
             return f"{freq.quantidade} {freq.periodo}"
         return ""
-
-    def after_export(self, queryset, dataset, **kwargs):
-        column_names = {
-            "TAG": "tag",
-            "Nº Série": "numeroDeSerie",
-            "Laboratório": "laboratorio",
-            "Status": "posicaoDoInstrumento",
-            "Última calibração": "dataUltimaCalibracao",
-            "Última checagem": "dataUltimaChecagem",
-            "Frequência de Calibração": "frequenciaDeCalibracao",
-            "Frequência de Checagem": "frequenciaDeChecagem",
-            "Próxima calibração": "dataDaProximaCalibracao",
-            "Próxima checagem": "dataDaProximaChecagem",
-            "Instrumento": "instrumento",
-            "Setor": "setor",
-            "Normativos": "normativos",
-            "Número do último certificado": "numeroUltimoCertificado",
-        }
-
-        all_keys = dataset.dict[0].keys() if dataset.dict else []
-        for key in list(all_keys):
-            if column_names.get(key) not in self.campos_selecionados:
-                del dataset[key]
-
-        return dataset
-    
 
 class RelatorioMovimentacoesResource(Resource):
     def export(self, instrumento_id=None, *args, **kwargs):

@@ -28,6 +28,9 @@ import {
 } from '@mui/material';
 import { axios } from '../../api';
 import InstrumentoTable from './InstrumentoTable';
+import InstrumentExportReport, {
+  INSTRUMENT_EXPORT_PRINT_PAGE_STYLE,
+} from './InstrumentExportReport';
 import PrintIcon from '@mui/icons-material/Print';
 import DownloadIcon from '@mui/icons-material/Download';
 import { readString, useCSVDownloader } from "react-papaparse";
@@ -42,9 +45,36 @@ import 'dayjs/locale/pt-br';
 import dayjs from 'dayjs';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import { MAX_EXPORT_ITEMS } from '../constants';
+import { enqueueSnackbar } from 'notistack';
+import {
+  EXPORT_STATUS_POLL_INTERVAL_MS,
+  MAX_EXPORT_ITEMS,
+} from '../constants';
 
 const DEFAULT_EXPORT_ERROR = 'Não foi possível exportar os instrumentos. Tente novamente.';
+const STORED_EXPORT_JOB_KEY = 'instrument-export-job';
+const ACTIVE_EXPORT_STATUSES = new Set(['queued', 'processing']);
+const TERMINAL_EXPORT_STATUSES = new Set(['completed', 'failed', 'expired']);
+
+const createRequestId = () => (
+  globalThis.crypto?.randomUUID?.()
+  || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+);
+
+const loadStoredExportJob = () => {
+  try {
+    const storedJob = globalThis.sessionStorage?.getItem(STORED_EXPORT_JOB_KEY);
+    if (!storedJob) return null;
+    const parsedJob = JSON.parse(storedJob);
+    if (!ACTIVE_EXPORT_STATUSES.has(parsedJob?.status)) {
+      globalThis.sessionStorage?.removeItem(STORED_EXPORT_JOB_KEY);
+      return null;
+    }
+    return parsedJob;
+  } catch {
+    return null;
+  }
+};
 
 function FilterAccordion({ title, children, openFilter }) {
   const [open, setOpen] = useState(openFilter || false);
@@ -123,7 +153,13 @@ function ExportFilter(props) {
   const [parsedCsv, setParsedCsv] = React.useState(null)
   const [loading, setLoading] = useState(false)
   const [exportError, setExportError] = useState('')
+  const [asyncJob, setAsyncJob] = useState(loadStoredExportJob)
+  const [isDownloading, setIsDownloading] = useState(false)
+  const [isPreparingPrint, setIsPreparingPrint] = useState(false)
   const exportRequestInFlight = useRef(false)
+  const exportRequestId = useRef(null)
+  const previousJobStatus = useRef(asyncJob?.status)
+  const printAfterParsing = useRef(false)
   const { CSVDownloader } = useCSVDownloader()
   const status = assetFilterForm?.watch('status')
   const selectedFieldsCount = Object.values(valueCheckbox).filter(Boolean).length
@@ -132,7 +168,131 @@ function ExportFilter(props) {
   const selectionReachedLimit = selection.mode === 'all_filtered' && foundInstrumentsCount > MAX_EXPORT_ITEMS
 
   useEffect(() => {
-    if (!csvContent) return
+    try {
+      if (asyncJob && ACTIVE_EXPORT_STATUSES.has(asyncJob.status)) {
+        globalThis.sessionStorage?.setItem(
+          STORED_EXPORT_JOB_KEY,
+          JSON.stringify(asyncJob)
+        );
+      } else {
+        globalThis.sessionStorage?.removeItem(STORED_EXPORT_JOB_KEY);
+      }
+    } catch {
+      // Polling still works when session storage is unavailable.
+    }
+  }, [asyncJob]);
+
+  useEffect(() => {
+    const statusChanged = previousJobStatus.current !== asyncJob?.status;
+    if (statusChanged && asyncJob?.status === 'completed') {
+      enqueueSnackbar('Relatório pronto para download.', { variant: 'success' });
+    } else if (statusChanged && asyncJob?.status === 'failed') {
+      enqueueSnackbar('Não foi possível gerar o relatório.', { variant: 'error' });
+    } else if (statusChanged && asyncJob?.status === 'expired') {
+      enqueueSnackbar('O relatório expirou.', { variant: 'warning' });
+    }
+    previousJobStatus.current = asyncJob?.status;
+  }, [asyncJob?.status]);
+
+  useEffect(() => {
+    if (
+      !asyncJob?.statusUrl
+      || TERMINAL_EXPORT_STATUSES.has(asyncJob.status)
+    ) return undefined;
+
+    let cancelled = false;
+    let timer;
+    const pollStatus = async () => {
+      try {
+        const statusResponse = await axios.get(asyncJob.statusUrl);
+        if (cancelled) return;
+        setAsyncJob(statusResponse.data);
+        if (!TERMINAL_EXPORT_STATUSES.has(statusResponse.data.status)) {
+          timer = setTimeout(pollStatus, EXPORT_STATUS_POLL_INTERVAL_MS);
+        }
+      } catch (pollError) {
+        if (cancelled) return;
+        if ([401, 403, 404, 410].includes(pollError?.response?.status)) {
+          setAsyncJob((currentJob) => ({
+            ...currentJob,
+            status: 'expired',
+          }));
+          return;
+        }
+        setExportError('Não foi possível atualizar o estado do relatório. Tentaremos novamente.');
+        timer = setTimeout(pollStatus, EXPORT_STATUS_POLL_INTERVAL_MS);
+      }
+    };
+
+    timer = setTimeout(pollStatus, EXPORT_STATUS_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [asyncJob?.jobId, asyncJob?.status, asyncJob?.statusUrl]);
+
+  const resetAsyncExport = () => {
+    setAsyncJob(null);
+    setExportError('');
+    exportRequestId.current = null;
+  };
+
+  const closeExportDialog = () => {
+    setCsvContent(null);
+    setExportError('');
+    if (asyncJob && TERMINAL_EXPORT_STATUSES.has(asyncJob.status)) {
+      resetAsyncExport();
+    }
+    handleClose();
+  };
+
+  const downloadAsyncExport = async () => {
+    if (!asyncJob?.downloadUrl || isDownloading) return;
+    setIsDownloading(true);
+    setExportError('');
+    try {
+      const downloadResponse = await axios.get(asyncJob.downloadUrl, {
+        responseType: 'blob',
+      });
+      const objectUrl = window.URL.createObjectURL(
+        new Blob([downloadResponse.data], { type: 'text/csv' })
+      );
+      const link = document.createElement('a');
+      link.href = objectUrl;
+      link.setAttribute('download', 'instrumentos_exportados.csv');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch {
+      setExportError('Não foi possível baixar o relatório. Tente novamente.');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const prepareAsyncPrint = async () => {
+    if (!asyncJob?.downloadUrl || isPreparingPrint) return;
+    setIsPreparingPrint(true);
+    setExportError('');
+    try {
+      const reportResponse = await axios.get(asyncJob.downloadUrl, {
+        responseType: 'text',
+      });
+      printAfterParsing.current = true;
+      setCsvContent(reportResponse.data);
+    } catch {
+      setExportError('Não foi possível preparar o relatório para impressão. Tente novamente.');
+    } finally {
+      setIsPreparingPrint(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!csvContent) {
+      setParsedCsv(null);
+      return;
+    }
     readString(csvContent, {
       header: true,
       worker: true,
@@ -142,19 +302,26 @@ function ExportFilter(props) {
         setParsedCsv(results?.data)
       }
     })
-  }, [csvContent, selected])
+  }, [csvContent])
   const printRef = useRef();
 
   const handlePrint = useReactToPrint({
     contentRef: printRef,
     documentTitle: 'Instrumentos',
     removeAfterPrint: true,
+    pageStyle: INSTRUMENT_EXPORT_PRINT_PAGE_STYLE,
   });
+
+  useEffect(() => {
+    if (!parsedCsv || !printAfterParsing.current) return;
+    printAfterParsing.current = false;
+    handlePrint();
+  }, [handlePrint, parsedCsv]);
   return (
     <Dialog
       open={open}
       fullScreen
-      onClose={() => { setCsvContent(null); setExportError(''); handleClose() }}
+      onClose={closeExportDialog}
       PaperProps={{
         component: 'form',
         sx: {
@@ -175,6 +342,7 @@ function ExportFilter(props) {
           }
 
           const selectedData = {
+            requestId: exportRequestId.current || createRequestId(),
             selection: selection.mode === 'all_filtered'
               ? {
                 mode: 'all_filtered',
@@ -186,6 +354,7 @@ function ExportFilter(props) {
               },
             camposSelecionados: Object.entries(valueCheckbox).filter(([,value]) => !!value).map(([key]) => key)
           };
+          exportRequestId.current = selectedData.requestId;
 
           exportRequestInFlight.current = true;
           setExportError('');
@@ -195,6 +364,9 @@ function ExportFilter(props) {
             const resposta = await axios.post('/instrumentos/exportar/', selectedData);
             if (resposta.status === 200) {
               setCsvContent(resposta?.data)
+              exportRequestId.current = null;
+            } else if (resposta.status === 202) {
+              setAsyncJob(resposta.data)
             } else {
               setExportError(DEFAULT_EXPORT_ERROR)
             }
@@ -232,6 +404,27 @@ function ExportFilter(props) {
       {exportError && (
         <Alert severity="error" sx={{ flexShrink: 0 }}>
           {exportError}
+        </Alert>
+      )}
+      {asyncJob && ['queued', 'processing'].includes(asyncJob.status) && (
+        <Alert severity="info" icon={<CircularProgress size={18} />} sx={{ flexShrink: 0 }}>
+          Preparando relatório de {asyncJob.exportedCount?.toLocaleString('pt-BR')} instrumentos...
+          {asyncJob.limitApplied && ` Limite aplicado sobre ${asyncJob.matchedCount?.toLocaleString('pt-BR')} encontrados.`}
+        </Alert>
+      )}
+      {asyncJob?.status === 'completed' && (
+        <Alert severity="success" sx={{ flexShrink: 0 }}>
+          Relatório de {asyncJob.exportedCount?.toLocaleString('pt-BR')} instrumentos pronto para download.
+        </Alert>
+      )}
+      {asyncJob?.status === 'failed' && (
+        <Alert severity="error" sx={{ flexShrink: 0 }}>
+          {asyncJob.error || DEFAULT_EXPORT_ERROR}
+        </Alert>
+      )}
+      {asyncJob?.status === 'expired' && (
+        <Alert severity="warning" sx={{ flexShrink: 0 }}>
+          Este relatório expirou. Solicite uma nova exportação.
         </Alert>
       )}
       <DialogContent
@@ -355,24 +548,26 @@ function ExportFilter(props) {
                 order: { xs: 2, md: 1 },
               }}
             >
-              <InstrumentoTable
-                instrumentos={assets?.results}
-                valueCheckbox={valueCheckbox}
-                selected={selected}
-                selectedIds={selection.mode === 'manual' ? selection.ids : []}
-                selectedCount={selectedCount}
-                selectionMode={selection.mode}
-                handleCheckboxSelectAll={handleCheckboxSelectAll}
-                handleRowSelect={handleRowSelect}
-                selectionDisabled={selectionDisabled}
-                csvContent={csvContent}
-                ref={printRef}
-                page={page}
-                rowsPerPage={rowsPerPage}
-                handleChangePage={handleChangePage}
-                handleChangeRowsPerPage={handleChangeRowsPerPage}
-                count={assets?.count}
-              />
+              {csvContent ? (
+                <InstrumentExportReport ref={printRef} rows={parsedCsv || []} />
+              ) : (
+                <InstrumentoTable
+                  instrumentos={assets?.results}
+                  valueCheckbox={valueCheckbox}
+                  selected={selected}
+                  selectedIds={selection.mode === 'manual' ? selection.ids : []}
+                  selectedCount={selectedCount}
+                  selectionMode={selection.mode}
+                  handleCheckboxSelectAll={handleCheckboxSelectAll}
+                  handleRowSelect={handleRowSelect}
+                  selectionDisabled={selectionDisabled}
+                  page={page}
+                  rowsPerPage={rowsPerPage}
+                  handleChangePage={handleChangePage}
+                  handleChangeRowsPerPage={handleChangeRowsPerPage}
+                  count={assets?.count}
+                />
+              )}
             </Paper>
           )}
 
@@ -507,33 +702,14 @@ function ExportFilter(props) {
             </Typography>
           </Box>
         )}
-        <Button variant="outlined" disabled={loading} onClick={() => { setCsvContent(null); setExportError(''); handleClose() }}>Cancelar</Button>
-        {!csvContent  && (loading ? <CircularProgress size={28} sx={{ mx: 2 }} /> : <Button variant="contained" disabled={selectedCount < 1 || selectionDisabled} type="submit">Exportar</Button>)}
+        <Button variant="outlined" disabled={loading || isDownloading || isPreparingPrint} onClick={closeExportDialog}>{asyncJob ? 'Fechar' : 'Cancelar'}</Button>
+        {!csvContent && !asyncJob && (loading ? <CircularProgress size={28} sx={{ mx: 2 }} /> : <Button variant="contained" disabled={selectedCount < 1 || selectionDisabled} type="submit">Exportar</Button>)}
+        {asyncJob?.status === 'completed' && !csvContent && <Button variant="outlined" disabled={isPreparingPrint || isDownloading} startIcon={isPreparingPrint ? <CircularProgress size={16} /> : <PrintIcon />} onClick={prepareAsyncPrint}>Imprimir relatório</Button>}
+        {asyncJob?.status === 'completed' && !csvContent && <Button variant="contained" disabled={isDownloading || isPreparingPrint} startIcon={isDownloading ? <CircularProgress size={16} /> : <DownloadIcon />} onClick={downloadAsyncExport}>Baixar relatório</Button>}
+        {asyncJob && ['failed', 'expired'].includes(asyncJob.status) && <Button variant="contained" onClick={resetAsyncExport}>Tentar novamente</Button>}
         {csvContent && <Button className='button' variant='outlined' endIcon={<PrintIcon />} onClick={handlePrint}>Imprimir</Button>}
         {csvContent && <CSVDownloader style={{ background: 'transparent', border: 0 }} variant="contained" type="button" filename="meus_instrumentos" bom data={parsedCsv}><Button variant='contained' endIcon={<DownloadIcon />}>Download</Button></CSVDownloader>}
       </DialogActions>
-      <style>
-        {`
-          @media print {
-            body {
-              background: white !important;
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-              margin: 1;
-            }
-
-            #print-content {
-              width: 100%;
-              margin: 0;
-              padding: 0;
-            }
-
-            button, .no-print, .MuiDialog-root, header, footer {
-              display: none !important;
-            }
-          }
-        `}
-      </style>
     </Dialog >
   )
 }

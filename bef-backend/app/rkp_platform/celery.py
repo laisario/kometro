@@ -38,5 +38,9 @@ app.conf.beat_schedule = {
         "task": "clientes.tasks.update_clients",
         "schedule": crontab(minute=0, hour=6),
     },
+    "cleanup-expired-instrument-exports": {
+        "task": "instrumentos.tasks.cleanup_expired_instrument_exports",
+        "schedule": crontab(minute="*/5"),
+    },
   
 }

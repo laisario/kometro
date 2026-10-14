@@ -1,1 +1,2 @@
 export const MAX_EXPORT_ITEMS = 9999;
+export const EXPORT_STATUS_POLL_INTERVAL_MS = 2500;
