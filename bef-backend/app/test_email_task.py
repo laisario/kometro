@@ -26,4 +26,4 @@ try:
 except Exception as e:
     print(f"Erro ao enviar task: {e}")
     print("NOTA: Certifique-se de que o Celery worker está rodando!")
-
+# teste 
