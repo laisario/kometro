@@ -25,6 +25,7 @@ from .models import (
     InstrumentExportJob,
 )
 from .services import (
+    annotate_matched_calibration,
     annotate_numero_ultimo_certificado,
     deduplicar_normativos,
     expire_instrument_export_job,
@@ -162,14 +163,17 @@ class InstrumentoDoClienteViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Optimize with select_related and prefetch_related for search fields
-        queryset = annotate_numero_ultimo_certificado(
-            InstrumentoDoCliente.objects.select_related(
-                'instrumento__tipo_de_instrumento',
-                'cliente',
-                'setor',
-                'frequencia_calibracao',
-                'frequencia_checagem',
-            ).prefetch_related('normativos')
+        queryset = annotate_matched_calibration(
+            annotate_numero_ultimo_certificado(
+                InstrumentoDoCliente.objects.select_related(
+                    'instrumento__tipo_de_instrumento',
+                    'cliente',
+                    'setor',
+                    'frequencia_calibracao',
+                    'frequencia_checagem',
+                ).prefetch_related('normativos')
+            ),
+            self.request.query_params.get("search"),
         )
         
         if self.request.method == 'DELETE':

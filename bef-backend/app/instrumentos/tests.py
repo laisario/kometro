@@ -1182,24 +1182,24 @@ class BuscaInstrumentoPorCertificadoTest(TestCase):
             "TAG-CERTIFICADO-OUTRO-CLIENTE",
         )
 
-        calibracao_antiga = self._calibracao(
+        self.calibracao_antiga = self._calibracao(
             self.instrumento,
             date(2025, 1, 10),
         )
-        calibracao_recente = self._calibracao(
+        self.calibracao_recente = self._calibracao(
             self.instrumento,
             date(2026, 2, 15),
         )
         Certificado.objects.create(
-            calibracao=calibracao_antiga,
+            calibracao=self.calibracao_antiga,
             numero="CERT-2025-001",
         )
         Certificado.objects.create(
-            calibracao=calibracao_recente,
+            calibracao=self.calibracao_recente,
             numero="CERT-2026-0152",
         )
         Certificado.objects.create(
-            calibracao=calibracao_recente,
+            calibracao=self.calibracao_recente,
             numero="CERT-DUPLICADO-0152",
         )
 
@@ -1248,6 +1248,9 @@ class BuscaInstrumentoPorCertificadoTest(TestCase):
             [item["id"] for item in response_tag.data["results"]],
             [self.instrumento.id],
         )
+        self.assertIsNone(
+            response_tag.data["results"][0]["matched_calibration_id"]
+        )
         self.assertEqual(
             {
                 self.instrumento.id,
@@ -1255,6 +1258,34 @@ class BuscaInstrumentoPorCertificadoTest(TestCase):
             },
             {item["id"] for item in response_descricao.data["results"]},
         )
+
+    def test_tag_tem_precedencia_quando_tambem_aparece_em_certificado(self):
+        Certificado.objects.create(
+            calibracao=self.calibracao_antiga,
+            numero="TAG-BUSCA-CERTIFICADO",
+        )
+
+        response = self._buscar("TAG-BUSCA-CERTIFICADO")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertIsNone(
+            response.data["results"][0]["matched_calibration_id"]
+        )
+
+    def test_descricao_tem_precedencia_quando_tambem_aparece_em_certificado(self):
+        Certificado.objects.create(
+            calibracao=self.calibracao_antiga,
+            numero="Termometro",
+        )
+
+        response = self._buscar("Termometro")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertTrue(response.data["results"])
+        self.assertTrue(all(
+            item["matched_calibration_id"] is None
+            for item in response.data["results"]
+        ))
 
     def test_busca_encontra_certificados_de_calibracoes_antiga_e_recente(self):
         response_antigo = self._buscar("CERT-2025-001")
@@ -1267,8 +1298,35 @@ class BuscaInstrumentoPorCertificadoTest(TestCase):
             [self.instrumento.id],
         )
         self.assertEqual(
+            response_antigo.data["results"][0]["matched_calibration_id"],
+            self.calibracao_antiga.id,
+        )
+        self.assertEqual(
             [item["id"] for item in response_recente.data["results"]],
             [self.instrumento.id],
+        )
+        self.assertEqual(
+            response_recente.data["results"][0]["matched_calibration_id"],
+            self.calibracao_recente.id,
+        )
+
+    def test_numero_repetido_escolhe_calibracao_mais_recente(self):
+        Certificado.objects.create(
+            calibracao=self.calibracao_antiga,
+            numero="CERT-MESMO-NUMERO",
+        )
+        Certificado.objects.create(
+            calibracao=self.calibracao_recente,
+            numero="CERT-MESMO-NUMERO",
+        )
+
+        response = self._buscar("CERT-MESMO-NUMERO")
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["matched_calibration_id"],
+            self.calibracao_recente.id,
         )
 
     def test_busca_parcial_nao_duplica_instrumentos_e_respeita_cliente(self):

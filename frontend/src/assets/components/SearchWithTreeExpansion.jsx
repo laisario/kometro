@@ -1,4 +1,5 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
+import PropTypes from 'prop-types';
 import SearchWithDropdown from './SearchWithDropdown';
 import { useSectorTreeContext } from '../contexts/SectorTreeContext';
 
@@ -36,7 +37,8 @@ function SearchWithTreeExpansion({
       onSelectInstrument({
         id: `instrument-${item?.id}`,
         type: 'instrument',
-        parentId: sectorId
+        parentId: sectorId,
+        matchedCalibrationId: item?.matchedCalibrationId ?? null,
       });
     }
   }, [expandPathToSector, onSelectInstrument, selectNode]);
@@ -51,5 +53,15 @@ function SearchWithTreeExpansion({
     />
   );
 }
+
+SearchWithTreeExpansion.propTypes = {
+  isFetching: PropTypes.bool,
+  search: PropTypes.string,
+  setSearch: PropTypes.func.isRequired,
+  data: PropTypes.shape({
+    results: PropTypes.arrayOf(PropTypes.object),
+  }),
+  onSelectInstrument: PropTypes.func,
+};
 
 export default SearchWithTreeExpansion;

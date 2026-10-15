@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async';
 import { Box, Button, Container, Stack, Typography, Tabs, Tab } from '@mui/material';
 import GetAppIcon from '@mui/icons-material/GetApp';
@@ -20,6 +20,7 @@ function AssetsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [currentTab, setCurrentTab] = useState(searchParams.get('tab') || 'tree');
   const selectedCalibrationId = searchParams.get('calibracaoId');
+  const [searchCalibrationTarget, setSearchCalibrationTarget] = useState(null);
 
   useEffect(() => {
     const tabParam = searchParams.get('tab');
@@ -88,6 +89,35 @@ function AssetsPage() {
     setSearch,
     creatingSector,
   } = useAssetsVm(id, idSetor);
+  const previousSelectedItemId = useRef(selectedItem?.id);
+
+  const handleSearchInstrumentSelect = (item) => {
+    if (!item?.matchedCalibrationId) {
+      setSearchCalibrationTarget(null);
+      return;
+    }
+
+    setSearchCalibrationTarget({
+      instrumentNodeId: item.id,
+      calibrationId: item.matchedCalibrationId,
+    });
+  };
+
+  useEffect(() => {
+    if (previousSelectedItemId.current === selectedItem?.id) return;
+    previousSelectedItemId.current = selectedItem?.id;
+    if (selectedItem?.id) {
+      setSearchCalibrationTarget((current) => (
+        current?.instrumentNodeId === selectedItem.id ? current : null
+      ));
+    }
+  }, [selectedItem?.id]);
+
+  const activeCalibrationId = (
+    searchCalibrationTarget?.instrumentNodeId === selectedItem?.id
+      ? searchCalibrationTarget.calibrationId
+      : selectedCalibrationId
+  );
 
   return (
     <Box
@@ -141,6 +171,7 @@ function AssetsPage() {
                   search={search}
                   setSearch={setSearch}
                   data={assets}
+                  onSelectInstrument={handleSearchInstrumentSelect}
                 />
               )}
               <Button
@@ -255,7 +286,7 @@ function AssetsPage() {
                   isLoadingUpdateClient={isLoadingUpdateClient}
                   mutateDeleteClient={mutateDeleteClient}
                   mutateChangePosition={mutateChangePosition}
-                  selectedCalibrationId={selectedCalibrationId}
+                  selectedCalibrationId={activeCalibrationId}
                 />
                 </Box>
             )}

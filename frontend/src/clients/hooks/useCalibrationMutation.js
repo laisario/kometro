@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import _, {debounce} from 'lodash';
 import { useMutation, useQueryClient } from 'react-query';
 import dayjs from 'dayjs';
@@ -56,7 +56,7 @@ const useCalibrationsMutations = (id, instrumento, checagem) => {
     });
   };
 
-  useEffect(() => { setSelectedCalibration({}) }, [instrumento])
+  useLayoutEffect(() => { setSelectedCalibration({}) }, [instrumento])
 
   
   const handleSearchOS = useMemo(

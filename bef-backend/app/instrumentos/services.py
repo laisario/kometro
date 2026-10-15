@@ -3,7 +3,19 @@ import os
 
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
-from django.db.models import Aggregate, CharField, F, OuterRef, Q, Subquery
+from django.db.models import (
+    Aggregate,
+    Case,
+    CharField,
+    Exists,
+    F,
+    IntegerField,
+    OuterRef,
+    Q,
+    Subquery,
+    Value,
+    When,
+)
 
 from .models import (
     Calibracao,
@@ -56,6 +68,64 @@ def annotate_numero_ultimo_certificado(queryset):
         numero_ultimo_certificado=Subquery(
             calibracao_mais_recente,
             output_field=CharField(),
+        )
+    )
+
+
+def annotate_matched_calibration(queryset, search):
+    """Identify the calibration whose certificate matched the current search."""
+    search = str(search or "").strip()
+    if not search:
+        return queryset.annotate(
+            matched_calibration_id=Value(None, output_field=IntegerField())
+        )
+
+    matched_certificate = (
+        Certificado.objects.filter(
+            calibracao__instrumento_id=OuterRef("pk"),
+            calibracao__checagem=False,
+            numero__icontains=search,
+        )
+        .annotate(
+            exact_match=Case(
+                When(numero__iexact=search, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by(
+            "-exact_match",
+            F("calibracao__data").desc(nulls_last=True),
+            F("calibracao_id").desc(),
+            F("id").desc(),
+        )
+        .values("calibracao_id")[:1]
+    )
+
+    normativo_match = InstrumentoDoCliente.normativos.through.objects.filter(
+        instrumentodocliente_id=OuterRef("pk"),
+        normativo__nome__icontains=search,
+    )
+    ordinary_match = (
+        Q(tag__icontains=search)
+        | Q(instrumento__tipo_de_instrumento__descricao__icontains=search)
+        | Q(instrumento__tipo_de_instrumento__modelo__icontains=search)
+        | Q(instrumento__tipo_de_instrumento__fabricante__icontains=search)
+    )
+
+    return queryset.annotate(
+        _search_matches_normativo=Exists(normativo_match)
+    ).annotate(
+        matched_calibration_id=Case(
+            When(
+                ordinary_match | Q(_search_matches_normativo=True),
+                then=Value(None),
+            ),
+            default=Subquery(
+                matched_certificate,
+                output_field=IntegerField(),
+            ),
+            output_field=IntegerField(),
         )
     )
 

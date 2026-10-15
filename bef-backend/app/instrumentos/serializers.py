@@ -1594,6 +1594,10 @@ class InstrumentoDoClienteReadAdminSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    matched_calibration_id = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = InstrumentoDoCliente
@@ -1623,6 +1627,7 @@ class InstrumentoDoClienteReadAdminSerializer(serializers.ModelSerializer):
             "historico_setores",
             "historico_posicoes",
             "numero_ultimo_certificado",
+            "matched_calibration_id",
         )
 
 class SetorSerializer(serializers.ModelSerializer):
@@ -1678,6 +1683,10 @@ class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
         read_only=True,
         allow_null=True,
     )
+    matched_calibration_id = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+    )
 
     class Meta:
         model = InstrumentoDoCliente
@@ -1697,6 +1706,7 @@ class InstrumentoDoClienteListReadSerializer(serializers.ModelSerializer):
             "data_ultima_checagem",
             "expirado",
             "numero_ultimo_certificado",
+            "matched_calibration_id",
         )
 
 class InstrumentoBaseClienteSerializer(serializers.ModelSerializer):
