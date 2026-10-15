@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import AssetsPage from '../../src/assets/pages/AssetsPage';
 
 let mockSelectedItem = { id: 'instrument-7', type: 'instrument' };
+let mockSearchParams = new URLSearchParams();
+const mockSetSearch = jest.fn();
 
 jest.mock('react-helmet-async', () => ({
   Helmet: ({ children }) => children,
@@ -10,7 +12,7 @@ jest.mock('react-helmet-async', () => ({
 
 jest.mock('react-router', () => ({
   useParams: () => ({}),
-  useSearchParams: () => [new URLSearchParams(), jest.fn()],
+  useSearchParams: () => [mockSearchParams, jest.fn()],
 }));
 
 jest.mock('../../src/assets/viewModels/useAssetsVM', () => ({
@@ -46,13 +48,13 @@ jest.mock('../../src/assets/viewModels/useAssetsVM', () => ({
     handleChangePage: jest.fn(),
     handleChangeRowsPerPage: jest.fn(),
     search: '',
-    setSearch: jest.fn(),
+    setSearch: mockSetSearch,
   }),
 }));
 
 jest.mock('../../src/assets/components/SearchWithTreeExpansion', () => ({
   __esModule: true,
-  default: ({ onSelectInstrument }) => (
+  default: ({ onSelectInstrument, setSearch }) => (
     <>
       <button type="button" onClick={() => onSelectInstrument({
         id: 'instrument-7',
@@ -67,10 +69,24 @@ jest.mock('../../src/assets/components/SearchWithTreeExpansion', () => ({
         Resultado normal
       </button>
       <button type="button" onClick={() => onSelectInstrument({
+        id: 'instrument-7',
+        matchedCalibrationId: null,
+      })}>
+        Certificado sem calibração correspondente
+      </button>
+      <button type="button" onClick={() => onSelectInstrument({
+        id: 'instrument-7',
+      })}>
+        Resultado sem campo de calibração
+      </button>
+      <button type="button" onClick={() => onSelectInstrument({
         id: 'instrument-8',
         matchedCalibrationId: 44,
       })}>
         Outro instrumento
+      </button>
+      <button type="button" onClick={() => setSearch('')}>
+        Limpar busca
       </button>
     </>
   ),
@@ -92,6 +108,65 @@ jest.mock('../../src/assets/components/InstrumentosTable', () => () => null);
 describe('AssetsPage - calibração encontrada pela busca', () => {
   beforeEach(() => {
     mockSelectedItem = { id: 'instrument-7', type: 'instrument' };
+    mockSearchParams = new URLSearchParams();
+    mockSetSearch.mockClear();
+  });
+
+  it('não quebra ao abrir a tela sem instrumento selecionado', () => {
+    mockSelectedItem = null;
+
+    render(<AssetsPage />);
+
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('nenhuma');
+  });
+
+  it('aguarda a seleção do instrumento sem perder a calibração encontrada', async () => {
+    const user = userEvent.setup();
+    mockSelectedItem = null;
+    const { rerender } = render(<AssetsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Resultado por certificado' }));
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('nenhuma');
+
+    mockSelectedItem = { id: 'instrument-7', type: 'instrument' };
+    rerender(<AssetsPage />);
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('31');
+  });
+
+  it('usa a seleção padrão quando o backend não informa a calibração correspondente', async () => {
+    const user = userEvent.setup();
+    mockSearchParams = new URLSearchParams('calibracaoId=50');
+    const { rerender } = render(<AssetsPage />);
+
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('50');
+    await user.click(screen.getByRole('button', { name: 'Resultado por certificado' }));
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('31');
+
+    await user.click(screen.getByRole('button', { name: 'Certificado sem calibração correspondente' }));
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('50');
+
+    await user.click(screen.getByRole('button', { name: 'Resultado sem campo de calibração' }));
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('50');
+
+    await user.click(screen.getByRole('button', { name: 'Resultado normal' }));
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('50');
+
+    mockSelectedItem = null;
+    rerender(<AssetsPage />);
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('50');
+  });
+
+  it('não quebra ao limpar a busca e remover a seleção atual', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<AssetsPage />);
+
+    await user.click(screen.getByRole('button', { name: 'Resultado por certificado' }));
+    await user.click(screen.getByRole('button', { name: 'Limpar busca' }));
+    expect(mockSetSearch).toHaveBeenCalledWith('');
+
+    mockSelectedItem = null;
+    rerender(<AssetsPage />);
+    expect(screen.getByTestId('selected-calibration')).toHaveTextContent('nenhuma');
   });
 
   it('aplica somente a calibração do certificado no instrumento selecionado', async () => {

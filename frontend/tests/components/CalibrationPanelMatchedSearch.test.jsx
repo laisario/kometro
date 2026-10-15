@@ -12,12 +12,13 @@ const mockCalibrationsByAsset = {
     { id: 44, data: '2025-01-10', certificados: [{ numero: 'OUTRO' }] },
   ],
 };
+let mockIsLoadingCalibrations = false;
 
 jest.mock('../../src/clients/hooks/useCalibration', () => ({
   __esModule: true,
   default: (id, search, assetId) => ({
-    data: mockCalibrationsByAsset[assetId] || [],
-    isLoadingCalibrations: false,
+    data: mockIsLoadingCalibrations ? undefined : mockCalibrationsByAsset[assetId] || [],
+    isLoadingCalibrations: mockIsLoadingCalibrations,
     isFetchingCalibrations: false,
   }),
 }));
@@ -70,20 +71,44 @@ const renderPanel = (ui) => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      {ui}
-    </QueryClientProvider>
-  );
+  return {
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        {ui}
+      </QueryClientProvider>
+    ),
+    queryClient,
+  };
 };
 
 describe('CalibrationPanel - seleção originada pela busca', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsLoadingCalibrations = false;
   });
 
   it('seleciona exatamente a calibração antiga indicada pelo backend', async () => {
     renderPanel(<Harness assetId={7} selectedCalibrationId={31} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('preview-calibration')).toHaveTextContent('31');
+    });
+  });
+
+  it('espera as calibrações carregarem antes de aplicar o match', async () => {
+    mockIsLoadingCalibrations = true;
+    const { rerender, queryClient } = renderPanel(
+      <Harness assetId={7} selectedCalibrationId={31} />
+    );
+
+    expect(screen.getByTestId('preview-calibration')).toHaveTextContent('nenhuma');
+
+    mockIsLoadingCalibrations = false;
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <Harness assetId={7} selectedCalibrationId={31} />
+      </QueryClientProvider>
+    );
 
     await waitFor(() => {
       expect(screen.getByTestId('preview-calibration')).toHaveTextContent('31');

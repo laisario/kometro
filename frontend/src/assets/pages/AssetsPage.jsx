@@ -114,7 +114,9 @@ function AssetsPage() {
   }, [selectedItem?.id]);
 
   const activeCalibrationId = (
-    searchCalibrationTarget?.instrumentNodeId === selectedItem?.id
+    searchCalibrationTarget !== null &&
+    selectedItem?.id !== undefined &&
+    searchCalibrationTarget.instrumentNodeId === selectedItem.id
       ? searchCalibrationTarget.calibrationId
       : selectedCalibrationId
   );
